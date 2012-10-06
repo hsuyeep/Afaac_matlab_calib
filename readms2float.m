@@ -4,8 +4,19 @@
 % NOTE: If recoffset=-1, implies return the next record, for any other 
 % positive number, return the record with that number offset from beginning
 % of file.
+
+% Arguments:
+%   fid      : fid of the binary data file.
+%   recoffset: Offset (in units of records) of the desired timeslice.
+%   rettime  : Time in MJD seconds of the desired timeslice.
+% Returns  :
+%   acc      : The complex, Hermitean symmetric Array Correlation Matrix with 
+%              autocorrelations removed,corresponding to chosen timeslice.
+%   tobs     : Time of observation, in MJD seconds, as a double.
+%   freq     : Frequency of observation, in Hz.
 % pep/01May12
 % function [acc, tobs, freqobs] = readms2float (filename, recoffset, rettime)
+
 function [acc, tobs, freqobs] = readms2float (fid, recoffset, rettime)
 	Nelem = 288; 
 	nblines = Nelem * (Nelem + 1)/2; 
@@ -16,16 +27,16 @@ function [acc, tobs, freqobs] = readms2float (fid, recoffset, rettime)
 	% NOTE: Currently ms2float handles only one channel data
 	if (recoffset > 0)
 		fseek (fid, (recoffset-1)*recsize, 'bof');
-%		for recs = 1:recoffset
-		  tobs = fread (fid, 1, 'double');
-	          freqobs = fread (fid, 1, 'double');
-		  a  = fread (fid, 2*nblines, 'float'); % Read one ccm worth
-%		end
-		disp (['Time at offset ', num2str(recoffset), ' recs: ', num2str(tobs)]);
-	% end
+		tobs = fread (fid, 1, 'double');
+	    freqobs = fread (fid, 1, 'double');
+        % Reading real and imaginary, available as a stream of floats.
+        % even floats being real parts, odd floats being imag
+		a  = fread (fid, 2*nblines, 'float'); % Read one ccm worth
+		disp (['Time at offset ', num2str(recoffset), ' recs: ', ...
+			  num2str(tobs)]);
 	elseif (recoffset == -1) % Return next record
 		tobs = fread (fid, 1, 'double');
-	        freqobs = fread (fid, 1, 'double');
+	    freqobs = fread (fid, 1, 'double');
 		a  = fread (fid, 2*nblines, 'float'); % Read one ccm worth
 		% disp (['Time: ', num2str(tobs), ' Freq: ', num2str(freqobs)]);
 	end	
@@ -49,10 +60,13 @@ function [acc, tobs, freqobs] = readms2float (fid, recoffset, rettime)
 %		disp (['Found closest time to ', num2str(rettime), ':', num2str(tobs), ' at offset:', num2str(recs2time)]);
 %	end
 
-        comp = complex (a(1:2:length(a)), a(2:2:length(a))); % to complex
-        % create instantaneous ccm from vector
-        acm = triu (ones (Nelem));
-        acm (acm == 1) = comp;
-        acc = acm + acm' - diag(diag(acm));
+    comp = complex (a(1:2:length(a)), a(2:2:length(a))); % to complex
+
+    % create instantaneous ccm from vector
+    acm = triu (ones (Nelem));
+    acm (acm == 1) = comp;
+
+    % Removing autocorrelations
+    acc = acm + acm' - diag(diag(acm));
 	%fclose (fid);
 end

@@ -1,5 +1,8 @@
-%function [cal, sigmahat, Sigman] = statcal_stefcal(acc, t_obs, freq, pos, srcsel, normal, restriction, maxrestriction, uvflag, debug)
-function [cal, sigmas, Sigman] = statcal_stefcal(acc, t_obs, freq, pos, srcsel, normal, restriction, maxrestriction, uvflag, debug)
+% CHANGE IN FUNCTION CALL to return sigmas (instead of sigmahat), which has a zero for sources
+% not above the horizon.
+% function [cal, sigmahat, Sigman] = statcal_stefcal(acc, t_obs, freq, pos, srcsel, normal, restriction, maxrestriction, uvflag, debug)
+function [cal, sigmas, Sigman] = statcal_stefcal(acc, t_obs, freq, pos, ...
+					 srcsel, normal, restriction, maxrestriction, uvflag, debug)
 
 % [cal, sigmas, Sigman] =
 %     statcal(acc, t_obs, freq, pos, srcsel, normal, restriction,
@@ -69,10 +72,12 @@ for idx = 1:length(freq)
     A = exp(-(2 * pi * 1i * freq(idx) / c) * (pos * srcpos(up, :).'));
     Rhat = squeeze(acc(:, :, idx));
 
-    mask = reshape(uvdist, [Nelem, Nelem]) < min([restriction * (c / freq(idx)), maxrestriction]);
+    mask = reshape(uvdist, [Nelem, Nelem]) < ... 
+				   min([restriction * (c / freq(idx)), maxrestriction]);
     mask = mask | uvflag;
 
-    flux = real(((abs(A' * A).^2) \ khatrirao(conj(A), A)') * (Rhat(:) .* (1 - mask(:))));
+    flux = real(((abs(A' * A).^2) \ khatrirao(conj(A), A)') * (Rhat(:) .* ...
+			(1 - mask(:))));
     flux = flux / flux(1);
     flux(flux < 0) = 0;
     if (debug > 0)
@@ -83,7 +88,8 @@ for idx = 1:length(freq)
     % implementation of WALS method
     % estimate direction independent gains, apparent source powers and
     % receiver noise powers assuming that the source locations are correct
-    [ghat, sigmahat, Sigmanhat] = cal_ext_stefcal(Rhat, A, flux, mask, debug, diffstop, maxiter);
+    [ghat, sigmahat, Sigmanhat] = cal_ext_stefcal(Rhat, A, flux, mask, debug,...
+									diffstop, maxiter);
     
     cal(idx, :) = conj(1./ghat);
     sigmas(idx, up) = sigmahat; % Returning sigmahat

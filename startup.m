@@ -1,6 +1,6 @@
-addpath /dop147_1/wijnholds/data-reduction/matlab/cvx
-addpath /dop147_1/wijnholds/data-reduction/matlab/cvx/structures
-addpath /dop147_1/wijnholds/data-reduction/matlab/cvx/lib
-addpath /dop147_1/wijnholds/data-reduction/matlab/cvx/functions
-addpath /dop147_1/wijnholds/data-reduction/matlab/cvx/commands
-addpath /dop147_1/wijnholds/data-reduction/matlab/cvx/builtins
+addpath ~/WORK/AARTFAAC/Matlab/cvx
+addpath ~/WORK/AARTFAAC/Matlab/cvx/structures
+addpath ~/WORK/AARTFAAC/Matlab/cvx/lib
+addpath ~/WORK/AARTFAAC/Matlab/cvx/functions
+addpath ~/WORK/AARTFAAC/Matlab/cvx/commands
+addpath ~/WORK/AARTFAAC/Matlab/cvx/builtins
