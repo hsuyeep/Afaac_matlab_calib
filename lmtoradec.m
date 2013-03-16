@@ -1,13 +1,16 @@
-function [alpha, delta] = lmtoradec(l, m, JD)
+function [alpha, delta] = lmtoradec(l, m, JD, L, B)
 
-% [alpha, delta] = lmtoradec(l, m, JD)
+% [alpha, delta] = lmtoradec(l, m, JD, L, B)
 %
-% conversion from (l,m) to (ra,dec) for Dwingeloo
+% conversion from (l,m) to (ra,dec) for the geographical location specified in 
+% L, B.
 %
 % Arguments
 % l  : vector containing l-coordinates
 % m  : vector containing the corresponding m-coordinates
 % JD : GMT in Julian days
+% L     : geographical longitude in degrees
+% B     : geographical latitude in degrees
 %
 % Return values
 % alpha : length(l)-by-length(m) matrix with values for the RA coordinate
@@ -21,19 +24,30 @@ function [alpha, delta] = lmtoradec(l, m, JD)
 %
 % SJW, 2004
 
-L = (6 + 23/60 + 41/3600);  % geographic latitude Dwingeloo in degrees
-B = (52 + 48/60 + 42/3600); % geographic longitude Dwingeloo in degrees
+% L = (6 + 23/60 + 41/3600);  % geographic latitude Dwingeloo in degrees
+% B = (52 + 48/60 + 42/3600); % geographic longitude Dwingeloo in degrees
 
 a1 = 24110.54841;
 a2 = 8640184.812866;
 a3 = 0.093104;
 a4 = -6.2e-6;
 
+% Original code for LST calculation, without polyeval.
 % Time in Julian centuries
-TU = (JD - 2451545)/36525;
+%TU = (JD - 2451545)/36525;
 
 % Greenwich Star Time in seconds
-GST = (JD+0.5)*86400 + a1 + a2*TU + a3*TU^2 + a4*TU^3;
+%GST = (JD+0.5)*86400 + a1 + a2*TU + a3*TU^2 + a4*TU^3;
+
+
+% Code taken from radectolm.m for calculation of LST.
+polcoeff = [a4, a3, a2, a1];
+
+% Time in Julian centuries
+TU = (floor(JD) + 0.5 - 2451545) / 36525;
+
+% Greenwich Star Time in seconds
+GST = (JD - floor(JD) - 0.5) * 86400 * 1.002737811906 + polyval(polcoeff, TU);
 
 % Local Siderderial Time in radians
 % 240: number of seconds per degree
@@ -47,8 +61,10 @@ for lidx = 1:length(l)
   for midx = 1:length(m)
     dist = l(lidx)^2 + m(midx)^2;
     if (dist < 1)
-      alpha(lidx, midx) = atan2(l(lidx), cos(delta0) * sqrt(1 - dist) - m(midx) * sin(delta0));;
-      delta(lidx, midx) = asin(sqrt(1 - dist) * sin(delta0) + m(midx) * cos(delta0));
+      alpha(lidx, midx) = atan2(l(lidx), cos(delta0) * sqrt(1 - dist) ...
+								- m(midx) * sin(delta0));
+      delta(lidx, midx) = asin(sqrt(1 - dist) * sin(delta0) + m(midx) ...
+								* cos(delta0));
     else
       delta(lidx, midx) = NaN;
       alpha(lidx, midx) = NaN;

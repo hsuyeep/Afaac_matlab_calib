@@ -3,7 +3,7 @@ function [l, m] = radectolm(alpha, delta, JD, L, B)
 % [l, m] = radectolm(alpha, delta, JD, L, B)
 %
 % Converts (ra, dec) coordinates to (l, m) coordinates assuming the
-% specified time and the geographical location of Dwingeloo.
+% specified time and the geographical location specified in L,B.
 %
 % Arguments
 % alpha : vector or matrix with RA coordinates in radians

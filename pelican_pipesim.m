@@ -10,15 +10,19 @@
 % pep/23Mar12
 
 function pelican_pipesim (fname, ntslices, filestore)
-    Nelem = 288; 
-    nblines = Nelem * (Nelem + 1)/2; 
+    TotalNelem = 288;        % Default number of antenna elements.
+	Nelem = 0;
     uvflag = eye (288); % Flag only the autocorrelations
     freq = 59756469;    % Initialization, actual freq. is part of bin file.
-    mins2cal = 2;       % Time interval of calib. sliding window.
-    debuglev = 2;       % Control of level of debug messages.
-    % flagant = [6, 103]; % Antennas to flag, before carrying out calibration
-    flagant = [1:12, 51, 206]; % Antennas to flag, before carrying out calibration
-    ptSun = 0;          % Use point source model of the Sun
+    mins2cal = 2;       % Time interval of calib. sliding window, in mins.
+	tslices2win = 0;    % Records to hold within calibration window.
+    debuglev = 4;       % Control of level of debug messages.
+    % Antennas to flag, before carrying out calibration
+    % flagant = [6, 103]; 
+    flagant = [1:12, 51, 206]; 
+	Nelem = TotalNelem - length (flagant);
+    nblines = Nelem * (Nelem + 1)/2; 
+    ptSun = 1;          % Use point source model of the Sun
     radec = 0;          % Not create RA/Dec images
     skiprecs = 91;      % Initial number of records to skip.
 	% Record size in bytes, 2 doubles (time/freq), followed by a complex float 
@@ -56,7 +60,7 @@ function pelican_pipesim (fname, ntslices, filestore)
 		    'Badcalsol to file: ' badcalfilename]);
     else
        disp (['Displaying calibrated images.']);
-       figure; % If not writing to file, display images.
+       calsubimg = figure; % If not writing to file, display images.
     end
 
 	% Read in a record.
@@ -66,8 +70,10 @@ function pelican_pipesim (fname, ntslices, filestore)
 	% Read in another record to determine the integration time.
     [acc, t_obs1, freq] = readms2float (fid, -1, -1);
 
-	% recalibrate every 2 mins 
+	% recalibrate every mins2cal mins 
     tslices2cal = floor ((mins2cal*60)/(t_obs1 - t_obs)); 
+	tslices2win = tslices2cal;
+ 	window = zeros (tslices2win, Nelem) + j*ones(tslices2win, Nelem);
     disp (['Time resolution of observations: ' num2str(t_obs1 - t_obs) ...
 		  ' secs']);
     disp (['Calibrating every ' num2str(tslices2cal) ' timeslices']);
@@ -83,13 +89,17 @@ function pelican_pipesim (fname, ntslices, filestore)
        return;
     end
 
-	% Calibrate currentl timeslice.
-    % [calvis, gainsol, sigmas, sigman, good] = ... 
-	% 								pelican_calib (acc, t_obs, freq, uvflag);
+    % Fill window of calibration solutions.
+	winind = 0;
 
-    [thsrc_cat, phisrc_cat, thsrc_wsf, phisrc_wsf, suncomps, calvis, gainsol,...
-					sigmas, sigman, good] = ... 
-	pelican_sunAteamsub (acc, t_obs, freq, uvflag, flagant, debuglev, ptSun);
+	%for ind = 1:tslices2win
+		% Calibrate current timeslice.
+	 ind = 0;
+%		 win(ind, :), sigmas, sigman, good] =  
+   	 [thsrc_cat, phisrc_cat, thsrc_wsf, phisrc_wsf, suncomps, calvis, ... 
+		 gainsol, sigmas, sigman, good] = ... 
+	   pelican_sunAteamsub (acc, t_obs, freq, uvflag, flagant, debuglev, ptSun);
+	%end
 
 	% Image current timeslice.
     [radecmap, calmap, calvis] = ... 
@@ -113,13 +123,16 @@ function pelican_pipesim (fname, ntslices, filestore)
         badimage_store (:,:,1) = calmap; 
         badcalrun = 1;
     else
+		figure(calsubimg);
 		imagesc (real(calmap));
 		colorbar ();
 		title (['Timeslice: 0, (MJD): ' num2str(t_obs) 'Freq: ' ...
 				num2str(freq, '%f')]);
 		pause (1);
     end
-        % Quality of calibration solutions, as determined by the phase solutions
+
+    % Quality of calibration solutions, as determined by the phase solutions
+	
 %     for station=1:6
 %         ph_var (station) = var (angle(gainsol (1+(station-1)*48:station*48)));
 %     end
@@ -195,24 +208,9 @@ function pelican_pipesim (fname, ntslices, filestore)
 			% diffimg = imgdiff (calmap, calmap_prev, t_obs, freq);
   		    diffimg = calmap - calmap_prev;
             calmap_prev = calmap;
-			diff_fname = sprintf ('%8.0f_%10.0f_diff.mat', freq, t_obs);
-			save (diff_fname, 't_obs', 'freq', 'diffimg', 'calmap', ... 
-				  'suncomps', 'phisrc_wsf', 'thsrc_wsf');
-
-%           if sum(ph_var > 1) ~= 0 
-%           	good_cal (calrun) = false;
-%           	disp ('CALIBRATION SOLUTION DETERMINED TO BE BAD!!')
-%           	disp ('Storing to badcal file!');
-%           	badcalrun = badcalrun + 1;            
-%           	badt_obs_store (badcalrun) = t_obs;           
-%           	badcal_store (:,badcalrun) = gainsol;
-%           	badsigmas_store {badcalrun} = sigmas;
-%           	badsigman_store (:,:,calrun) = sigman;            
-%           	badimage_store (:,:,calrun) = calmap;
-%           else
-%           	good_cal (calrun) = true;
-%           	disp ('Good calibration solution found');
-%           end 
+			% diff_fname = sprintf ('%8.0f_%10.0f_diff.mat', freq, t_obs);
+			% save (diff_fname, 't_obs', 'freq', 'diffimg', 'calmap', ... 
+	   		%		  'suncomps', 'phisrc_wsf', 'thsrc_wsf');
 
             
 %            for t_ind = 1:tslices2cal

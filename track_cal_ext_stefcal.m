@@ -1,3 +1,9 @@
+% Script to carry out tracking  calibration. 
+% Modification of cal_ext_stefcal.m. Main difference is
+% carrying out a single iteration of calibration, using previous solutions as
+% a starting point.
+% pep/25Jan13.
+
 % Array calibration assuming the model
 % R = G * A * Sigma_s * A' * G' + Sigma_n
 % where
@@ -17,7 +23,7 @@
 % Arguments:
 %	Rhat     : Nelem x Nelem measured array covariance matrix
 %	A        : Nelem x Nsrc known geometrical delays
-%	sigmas   : Nsrc x 1 vector with initial source power estimates
+%   sel		 : Vector containing mask for sky-model sources actually used.
 %	mask     : Nelem x Nelem matrix with ones marking the entries for which
 %	           the noise covariance matrix should be estimated and zeros
 %	           elsewhere
@@ -26,21 +32,13 @@
 %	           iterations, default value is 1e-10
 %	calim.maxiter: optional argument defining the maximum number of iterations,
 %	           default value is 10
+%	prevsol : Structure containing best estimates from a previous timeslice.
  	
 % Return values:
-%	g       : Nelem x 1 vector with estimated complex receiver gains
-%	sigmas  : Nsrc x 1 vector with estimated apparent source powers
-%	Sigma_n : Nelem x Nelem estimated noise covariance matrix
-%       --- Returned solution structure; above is obsolete --- 
-%	sol.gainsol:Nelem x 1 vector with estimated complex receiver gains from 
-%				final iteration.
-%	sol.sigmas: Nsrc x 1 vector with estimated apparent source powers from 
-%			    final iteration.
-%	sol.sigman: Nelem X Nelem estimated noise covariance matrix.
-%	sol.calext_iters: Number of cal_ext iterations for convergence.
-%	sol.pinv_sol: Convergence condition on final iteration.
-%   sol_gainsolv: Solution structure from the gainsolv call in the *final* 
-%				  cal_ext. iteration.
+%	sol.g       : Nelem x 1 vector with estimated complex receiver gains
+%	sol.sigmas  : size (rodata.srclist) x 1 vector with estimated apparent 
+%				  source powers, at the location of selected sources.
+%	sol.Sigma_n : Nelem x Nelem estimated noise covariance matrix
  
 % References:
 % 	[1] Stefan J. Wijnholds and Alle-Jan van der Veen, "Multisource
@@ -54,28 +52,46 @@
 % SJW, 16 June 2010
 % Routine modified to utilize the StefCal implementation provided by SJW.
 % Pep, sometime Mar, 2012
-%
-%  Modified to return a structured gain solution, including stefcal gains.
 
-% function [g, sigmas, Sigma_n] = cal_ext_stefcal(Rhat, A, sigmas, mask, calim)
-function [sol, sol_gainsolv] = cal_ext_stefcal(Rhat, A, sigmas, mask, calim)
+function [sol, sol_gainsolv] = track_cal_ext_stefcal(Rhat, A, sel, mask, ... 
+								calim, prevsol)
 	% parameters
 	[Nelem, Nsrc] = size(A);
 	
-	% initialization
+	% initialization now from prevsol.
 	ghat = zeros(Nelem, calim.maxiter+1);    % Scalar gain
-	ghat(:, 1) = 1;                          % Set first iteration to unit gain.
+
+	% Set first iteration to prev. estimated gain.
+ 	ghat(:, 1) = 1 ./ prevsol.gainsol'; 
+	% ghat(:, 1) = 1;                        % Set first iteration to unit gain.
 	sigmahat = zeros(Nsrc, calim.maxiter+1); % Model src. flux estimates.
+	sigmahat(:, 1) = prevsol.sigmas(sel);    % Initialize model src. estimate.
+
+	sol.sigman = prevsol.sigman; %zeros(Nelem);	   % Initialize noise matrix.
+	
+	if (calim.debug > 0)
+		fprintf (1, 'track_cal_ext: Sigmas from prev. solution: \n');
+		disp (sigmahat(:,1)');
+	end;
 
     % Incoming model src. flux estimates, set invalid entries to 1.
-	sigmas(~isfinite(sigmas)) = 1;           
+	% sigmas(~isfinite(sigmas)) = 1;           
 
-	sigmahat(:, 1) = sigmas;                 % Initialize model src. estimate.
-	Sigma_n = zeros(Nelem);					 % Initialize noise matrix.
+% % TO EXPT. WITH CONVERGENCE, BUT WITH INITIAL GUESSES FROM PREV. SOLU.
+%	ghat = zeros(Nelem, 2);    % Scalar gain, current and previous values.
+% 	ghat(:, 1) = 1 ./ prevsol.gainsol; % Set first iteration to prev. estimated gain.
+% 	% ghat(:, 1) = 1; % Set first iteration gains to 1.
+%
+%	sigmahat = zeros(Nsrc, 2); % Model src. flux estimates.
+%	sigmahat(:, 1) = prevsol.sigmas(sel);   % Initialize model src. estimate.
+%	% Sigma_n = zeros(Nelem);	   % Initialize noise matrix.
+%	Sigma_n = prevsol.sigman;	   % Initialize noise matrix with prev. sol.
+%
 	
+	% implementation of a single iteration of calibration using WALS
 	total_stefcal_iters = 0;
-	% implementation using WALS
-	for iter = 2:calim.maxiter+1
+	iter = 2;
+	% for iter = 2:calim.maxiter+1
 	    
 		%------------ Per sensor gain estimation -------------
 	    % estimate g using baseline restriction (eq. 36 of [1])
@@ -92,10 +108,10 @@ function [sol, sol_gainsolv] = cal_ext_stefcal(Rhat, A, sigmas, mask, calim)
 		%------------ Per sensor gain estimation -------------
 	    % gain estimation using StefCal - experimental
  	    sol_gainsolv = gainsolv (1e-6, (A * diag(sigmahat(:, iter-1)) * A')...
- 			.* (1 - mask), Rhat .* (1 - mask), ghat(:, iter-1),...  
-			calim.maxiter_gainsolv, calim.debug);
+ 						.* (1 - mask), Rhat .* (1 - mask), ghat(:, iter-1), ...
+						calim.maxiter_gainsolv, calim.debug);
 		total_stefcal_iters = total_stefcal_iters + sol_gainsolv.iter;
- 	    ghat(:, iter) = sol_gainsolv.ghat;
+		ghat(:, iter) = sol_gainsolv.ghat;
 
 	    GA = diag(ghat(:, iter)) * A;
 	    Rest = GA * diag(sigmahat(:, iter-1)) * GA';
@@ -108,13 +124,12 @@ function [sol, sol_gainsolv] = cal_ext_stefcal(Rhat, A, sigmas, mask, calim)
 	
 		%------------ Model source flux estimation -------------
 	    % estimate sigmahat using sigmanhat and ghat (eq. 42 of [1])
-        % fprintf (1, 'cal_ext: iter=%d, Rank/rcond(Rhat)=%f/%f\n', ...
-		% 			iter, rank(Rhat), rcond(Rhat));
+        % disp (['cal_ext: iter= ' num2str(iter) ', Rank/rcond(Rhat) = ' num2str(rank(Rhat)) ' ' num2str(rcond(Rhat))]);
 	    invR = inv(Rhat);
         
 	    GA = diag(ghat(:, iter)) * A; % new line, use normalized G
 	    sigmahat(:, iter) = real(inv(abs(conj(GA' * invR * GA)).^2) ... 
-							* diag(GA' * invR * (Rhat - Sigma_n) * invR * GA));
+							* diag(GA' * invR * (Rhat - sol.sigman) * invR * GA));
 	    if sum(~isfinite(sigmahat(:, iter))) ~= 0
 	        sigmahat(:, iter) = sigmahat(:, iter-1);
 	    end
@@ -130,31 +145,22 @@ function [sol, sol_gainsolv] = cal_ext_stefcal(Rhat, A, sigmas, mask, calim)
 		%------------ Noise covariance estimation -------------
 		%i----------- assuming Sigma_n = diag(sig_n)-------------
 	    % estimate sigmanhat using sigmahat and ghat (eq. 44 of [1])
-	    Sigma_n = (Rhat - GA * diag(sigmahat(:, iter)) * GA') .* mask;
-	    % Sigma_n = (Rhat - GA * diag(sigmahat(:, iter)) * GA') .* (1-mask);
+	    sol.sigman = (Rhat - GA * diag(sigmahat(:, iter)) * GA') .* mask;
 	
 	    % test for convergence
 	    theta_prev = [ghat(:, iter-1); sigmahat(:, iter-1)];
 	    theta = [ghat(:, iter); sigmahat(:, iter)];
 		pinv_sol = abs(pinv(theta_prev) * theta - 1);
-	    % if (abs(pinv(theta_prev) * theta - 1) < calim.diffstop)
-
-		if (calim.debug > 1)
-			fprintf (1, 'cal_ext: Iteration %d\n', iter);
-		end;
-	    if (pinv_sol < calim.diffstop)
-	        break;
-	    end
-	end
+%	    if (pinv_sol < calim.diffstop)
+%	        break;
+%	    end
+	    fprintf (1, 'track_cal_ext: Iteration difference: %g.\n', pinv_sol);
+ 	% end
 	
-	if (calim.debug > 0)
-	  fprintf(1,'Cal_ext_stefcal:stop after %d iter, pinv: %.4f.\n', ... 
-				iter, pinv_sol);
-	end
-	sol.gainsol = (1 ./ ghat(:, iter))';   % NOTE: inverse of estimated gain!
-	sol.sigmas = sigmahat(:, iter);
-	sol.sigman = Sigma_n;
-	sol.calext_iters = iter;
 	sol.pinv_sol = pinv_sol;
+	sol.calext_iters = calim.maxiter;
+	sol.gainsol = (1 ./ ghat(:, iter))';
+	sol.sigmas = zeros (size (prevsol.sigmas));
+	sol.sigmas(sel) = sigmahat(:, iter);
 	sol.stefcal_iters = total_stefcal_iters;
 	sol.stefcal_tol = sol_gainsolv.tol;

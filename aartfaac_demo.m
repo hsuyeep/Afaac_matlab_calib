@@ -83,4 +83,4 @@ ylabel('East \leftarrow l \rightarrow West');
 
 %% Save relevant variables
 outfilename = strrep (tok, '.mat', '_var.mat');
-save (outfilename, 'cal', 'sigmas', 'Sigman', 'skymap', 'skymapcal', 'tobs', 'freq', 'l', 'm');
+% save (outfilename, 'cal', 'sigmas', 'Sigman', 'skymap', 'skymapcal', 'tobs', 'freq', 'l', 'm');

@@ -19,13 +19,14 @@ function cost = WSFcostfunITRF(theta, EsWEs, G, freq, posITRF)
 %
 % SJW, 27 March 2012
 
-nsrc = length(theta)/2;
-c = 2.99792e8;
-nelem = size(posITRF, 1);
-phisrc = theta(1:nsrc);
-thsrc = theta(nsrc+1:end);
-srcpos = [cos(phisrc) .* cos(thsrc), sin(phisrc) .* cos(thsrc), sin(thsrc)];
-
-A = G * exp(-2 * pi * 1i * freq/c * (posITRF * srcpos.'));
-PAperp = eye(nelem) - A * inv(A' * A) * A';
-cost = trace(PAperp * EsWEs);
+	nsrc = length(theta)/2;
+	c = 2.99792e8;
+	nelem = size(posITRF, 1);
+	phisrc = theta(1:nsrc);
+	thsrc = theta(nsrc+1:end);
+	srcpos = [cos(phisrc) .* cos(thsrc), sin(phisrc) .* cos(thsrc), sin(thsrc)];
+	
+	A = G * exp(-2 * pi * 1i * freq/c * (posITRF * srcpos.'));
+	PAperp = eye(nelem) - A * inv(A' * A) * A';
+	cost = trace(PAperp * EsWEs);
+	% fprintf (2, 'WSF cost = %f + %f\n', real(cost), imag (cost));
