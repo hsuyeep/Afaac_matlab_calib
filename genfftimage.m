@@ -94,7 +94,8 @@ function [img_l, img_m, img] =  ...
 	mask (meshgrid (img.l).^2 + meshgrid(img.m).'.^2 < 0.9) = 1;
 	disp ('NOTE! NOTE! Working only with LBA X-dipoles primary beam correction now!');
 	addpath 'LBA_beam/CS1/';
-	elembeam = calculateLBAbeam (img.l, img.m, img.freq, [1:2:96]); 
+	% elembeam = calculateLBAbeam (img.l, img.m, img.freq, [1:2:96]); 
+	elembeam = ones (size (mask));
 	elembeam = max(max(elembeam(:,:,1))) ./ elembeam (:,:,1);
 
 	for ts = 1:ntslices
@@ -129,7 +130,7 @@ function [img_l, img_m, img] =  ...
 				%									 100, hdl);
 	        	set(gca, 'FontSize', 16);
 			
-		        title(sprintf('Rec: %d, Time:%f, Freq:%f',offset+ts,img.tobs, ...
+		        title(sprintf('Rec: %d, Time:%.2f, Freq:%f',offset+ts,img.tobs, ...
 						img.freq));
 		        axis equal
 		        axis tight

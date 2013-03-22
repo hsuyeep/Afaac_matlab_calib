@@ -3,13 +3,12 @@
 % pep/20Jan13
 function [rec] = readcalsol (fid)
 	if (fid < 0)
-		disp ('File not readable! Quitting!');
-		return;
+		error ('File not readable! Quitting!');
 	end;
 
 	rec.tobs = fread (fid, 1, 'double');	
 	if (isempty(rec.tobs) == 1) 
-		disp('readcalsol: End of file reached!'); 
+		error ('readcalsol: End of file reached!'); 
 		err = MException('readcalsol:EoF', 'EoF reached!');
 		throw (err);
 		return ;
@@ -19,7 +18,7 @@ function [rec] = readcalsol (fid)
 	% off!
 	rec.freq 		 = fread (fid, 1, 'double');	
 	rec.numflagants  = single(fread (fid, 1, 'float32'));
-	rec.flagants     = single(fread (fid, rec.numflagants, 'float32'));
+	rec.flagant     = single(fread (fid, rec.numflagants, 'float32'));
 	rec.gainsol_len  = single(fread (fid, 1, 'float32'));
 	rec.real_gainsol = single(fread (fid, rec.gainsol_len, 'float32'));
 	rec.imag_gainsol = single(fread (fid, rec.gainsol_len, 'float32'));
@@ -30,11 +29,11 @@ function [rec] = readcalsol (fid)
 	rec.calsrcs 	 = single(fread (fid, 1, 'float32'));
 	rec.sigmas  	 = single(fread (fid, rec.calsrcs, 'float32')); 
 	rec.poslen  	 = single(fread (fid, 1, 'float32'));
-	rec.thsrc_cat  = single(fread (fid, rec.poslen, 'float32'));
-	rec.phisrc_cat = single(fread (fid, rec.poslen, 'float32'));
-	rec.thsrc_wsf  = single(fread (fid, rec.poslen, 'float32'));
-	rec.phisrc_wsf = single(fread (fid, rec.poslen, 'float32'));
-	rec.sigmanlen  = single(fread (fid, 1, 'float32'));
-	rec.real_sigman= single(fread (fid, rec.sigmanlen, 'float32'));
-	rec.imag_sigman= single(fread (fid, rec.sigmanlen, 'float32'));
+	rec.thsrc_cat    = single(fread (fid, rec.poslen, 'float32'));
+	rec.phisrc_cat   = single(fread (fid, rec.poslen, 'float32'));
+	rec.thsrc_wsf    = single(fread (fid, rec.poslen, 'float32'));
+	rec.phisrc_wsf   = single(fread (fid, rec.poslen, 'float32'));
+	rec.sigmanlen    = single(fread (fid, 1, 'float32'));
+	rec.real_sigman  = single(fread (fid, rec.sigmanlen, 'float32'));
+	rec.imag_sigman  = single(fread (fid, rec.sigmanlen, 'float32'));
 	return;

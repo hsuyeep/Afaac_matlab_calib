@@ -49,8 +49,8 @@ function [srcflux, re_gain, im_gain] = pltcalsol (fname, nrecs, showplt)
 	end;
 
 	gainsol = complex (rec0.real_gainsol, rec0.imag_gainsol);
-	% flagant = rec.flagants; % (abs(gainsol) == 0);
-	rem_ants = Nelem - length (rec0.flagants);
+	% flagant = rec.flagant; % (abs(gainsol) == 0);
+	rem_ants = Nelem - length (rec0.flagant);
 	currgain = gainsol; % (flagant == 0);
 	gaindiff = currgain - prevgain;
 	gainratio = currgain ./ prevgain;
@@ -60,6 +60,8 @@ function [srcflux, re_gain, im_gain] = pltcalsol (fname, nrecs, showplt)
 	sigman = reshape (sigman_vec, rem_ants, rem_ants);
 	caliter = zeros (2, nrecs); % holds number of cal_ext iterations per sol
 	stefiter = caliter;
+	gainerr = zeros (1, nrecs);
+	flagmask = zeros (1, 288);
 
 	rec = readcalsol (fid);
 	dt = rec.tobs - t_first;
@@ -68,6 +70,7 @@ function [srcflux, re_gain, im_gain] = pltcalsol (fname, nrecs, showplt)
 	fseek (fid, 0, 'bof');
 	re_gain = zeros (nrecs, Nelem); 
 	im_gain = zeros (nrecs, Nelem); 
+	tstamp  = zeros (nrecs);
 	srcflux = zeros (nrecs, rec.calsrcs);
 	% pause;
 
@@ -105,13 +108,20 @@ function [srcflux, re_gain, im_gain] = pltcalsol (fname, nrecs, showplt)
 			disp('End of file reached!'); break;
 		end;
 		gainsol = complex (rec.real_gainsol, rec.imag_gainsol);
-		rem_ants = Nelem - length (rec.flagants);
+		rem_ants = Nelem - length (rec.flagant);
 		re_gain(ts, :) = rec.real_gainsol;
 		im_gain(ts, :) = rec.imag_gainsol;
+		tstamp (ts) = rec.tobs - t_first;
 		caliter (1, ts) = rec.calext_iters;
 		caliter (2, ts) = rec.pinv_sol;
 		stefiter (1, ts) = rec.stefcal_iters;
 		stefiter (2, ts) = rec.stefcal_tol;
+
+		flag1 = zeros (1, 288); flag1 (rec.flagant) = 1;
+		srcsel = (rec.sigmas ~= 0);
+		rec0sol = [complex(rec0.real_gainsol(flag1 == 0), rec0.imag_gainsol(flag1 == 0)); rec0.sigmas(srcsel); rec0.thsrc_wsf(srcsel); rec0.phisrc_wsf(srcsel)];
+		recsol = [complex(rec.real_gainsol(flag1 == 0), rec.imag_gainsol(flag1 == 0)); rec.sigmas(srcsel); rec.thsrc_wsf(srcsel); rec.phisrc_wsf(srcsel)];
+		gainerr (ts) = (100/length(rec0sol))*sum( abs(rec0sol - recsol) ./ abs(rec0sol));
 
 		% srcflux (ts, :) = rec.sigmas';
 		sigman_vec = complex (rec.real_sigman, rec.imag_sigman);
@@ -119,8 +129,8 @@ function [srcflux, re_gain, im_gain] = pltcalsol (fname, nrecs, showplt)
 
 		ind = ind + 1;
 		t = whos ('rec');
-		fprintf (1, 'Time: %.2f (rec: %03d), recsize: %d, flagants: %03d.', ... 
-				 rec.tobs, ts, t.bytes, length(rec.flagants));
+		fprintf (1, 'Time: %.2f (rec: %03d), recsize: %d, flagant: %03d.', ... 
+				 rec.tobs, ts, t.bytes, length(rec.flagant));
 		fprintf (1, 'Calextiter:%02d, pinv:%f, stefiter:%02d, tol:%f\n', ... 
   		 rec.calext_iters, rec.pinv_sol, rec.stefcal_iters, rec.stefcal_tol); 
 
@@ -181,18 +191,18 @@ function [srcflux, re_gain, im_gain] = pltcalsol (fname, nrecs, showplt)
 	
 			subplot (2,2,3);
 			for ind = 1:rec.calsrcs
-				plot (ts, rec.thsrc_cat(ind) - rec.thsrc_wsf (ind), char(col(ind)));
+				plot (ts, 180/pi*(rec.thsrc_cat(ind) - rec.thsrc_wsf (ind)), char(col(ind)));
 				hold on;
 			end;
-			title (sprintf ('Catalog - WSF zenith angle for %d sources', ...
+			title (sprintf ('Catalog - WSF elevation angle residuals (deg) for %d sources', ...
 					rec.calsrcs));
 	
 			subplot (2,2,4);
 			for ind = 1:rec.calsrcs
-				plot(ts, rec.phisrc_cat(ind) - rec.phisrc_wsf (ind), char(col(ind)));
+				plot(ts, 180/pi*(rec.phisrc_cat(ind) - rec.phisrc_wsf (ind)), char(col(ind)));
 				hold on;
 			end;
-			title (sprintf ('Catalog - WSF azimuth angle for %d sources', ...
+			title (sprintf ('Catalog - WSF azimuth angle residuals (deg) for %d sources', ...
 					rec.calsrcs));
 			% text(.75,1.25, sprintf ('File : %s', fname));
 	
@@ -248,15 +258,16 @@ function [srcflux, re_gain, im_gain] = pltcalsol (fname, nrecs, showplt)
 	figure;
 	subplot (2,1,1);
 	for ind = 1:6 % 6 stations
-		plot (amp_ts(:,24*ind), char(col(ind)));
-		title ('Timeseries of gain magnitudes from individual antennas');
+		plot (tstamp, amp_ts(:,24*ind), char(col(ind)));
 		hold on;
 	end;
 	hold off;
+	title (sprintf ('Timeseries of gain magnitudes from individual antennas:%s', fname));
+	xlabel (sprintf ('Time offset (in %0.2sec) from %.2f', dt, t_first));
 
 	subplot (2,1,2);
 	for ind = 1:6 % 6 stations
-		plot (ph_ts(:,24*ind), char(col(ind)));
+		plot (tstamp, ph_ts(:,24*ind), char(col(ind)));
 		title ('Timeseries of gain phases from individual antennas');
 		hold on;
 	end;
@@ -264,9 +275,28 @@ function [srcflux, re_gain, im_gain] = pltcalsol (fname, nrecs, showplt)
 	hold off;
 
 	figure;
-	subplot (1,2,1)
-	hist (caliter(1,:));
-	subplot (1,2,2)
-	hist (stefiter(1,:));
+	subplot (2,2,1)
+	plot (tstamp, caliter(1,:), '-ob');
+	title ('Major cycle iterations over time');
+%	hist (caliter(1,:));
+%	title ('Histogram of cal_ext iterations');
+	subplot (2,2,2)
+	plot (tstamp, caliter(2,:), '-ob');
+	title ('Major cycle residuals');
+%	hist (stefiter(1,:));
+%	title ('Histogram of stefcal iterations');
+
+	subplot (2,2,3)
+	plot (tstamp, stefiter(1,:), '-ob');
+	title ('Minor cycle iterations over time');
+		
+	subplot (2,2,4)
+	plot (tstamp, stefiter(2,:), '-ob');
+	title ('Minor cycle residuals');
 	% plotyy ([1:nrecs], caliter(1,:), [1:nrecs], stefiter(1,:)) ;
-	
+
+	figure;
+	plot (tstamp, gainerr, '-ob');
+	xlabel ('Time slices');
+	ylabel ('Gain error (%)');
+	title ('Error in gain solutions wrt. first solution');

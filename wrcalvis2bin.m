@@ -85,7 +85,7 @@ function wrcalvis2bin (fname, offset, ntslices, wrcalsol, trackcal)
 
 	% Flagging section: Define antennas to flag.
 	% For day-time observations over 3hr (2011 data)
-    % flagant = [6, 103];  
+    flagant = [6, 103];  
 
 	% For LBA_INNER_BAND60 data
     % flagant = [1:12, 47, 48, 95,96, 143, 144, 191, 192, 239, 240, 287, 288 ];   
@@ -96,13 +96,13 @@ function wrcalvis2bin (fname, offset, ntslices, wrcalsol, trackcal)
     % flagant = [1:48, 51, 239]; 
 
 	% For LBA_OUTER_BAND_SPREAD, 18min data
-    flagant = [51, 238, 273]; 
+    % flagant = [51, 238, 273]; 
 	
 	% For 03285_dawn_spread data
     % flagant = [49:96, 239, 241:288]; 
 
 	% For *_dawn_spread data (only 03285 has station 2 issues)
-    % flagant = [239, 241:288]; 
+    % flagant = [51, 239, 240, 241:288]; 
 
 	% [uvflag, missant] = flagdeadcorr (acc, t_obs, freq, visamphithresh, ...
 	%									visamplothresh);
@@ -240,7 +240,7 @@ function wrcalvis2bin (fname, offset, ntslices, wrcalsol, trackcal)
 
 	   	    currsol = pelican_tracking_cal (acc, t_obs, freq, uvflag, ... 
 						currflagant, debuglev, ptSun, prevsol, 1, 2);
-		end;
+		end; 
 
 		fprintf (1, 'wrcalvis:currsol calext (iter/pinv): %d, %f\n', ...
 						currsol.calext_iters, currsol.pinv_sol);
@@ -248,6 +248,7 @@ function wrcalvis2bin (fname, offset, ntslices, wrcalsol, trackcal)
 						currsol.stefsol.iter, currsol.stefsol.tol);
 
 
+		if (trackcal == 1)
 		% Check generated solution over window of solutions for consistency
 		% Vector comparison => any antenna breaking limits throws the sol. away
 		% meansol = mean (abs(solwindow(:, gainmask==0)));
@@ -276,9 +277,9 @@ function wrcalvis2bin (fname, offset, ntslices, wrcalsol, trackcal)
 
 %			figure (gainplt);
 %			subplot (1, 2, 1);
-%			plot (abs(solwindow));
+%			plot (abs(solwindow)');
 %			subplot (1, 2, 2);	
-%			plot (abs (solwindow)');
+%			plot (angle (solwindow)');
 %
 %			figure (currsolplt);
 %			subplot (1,2,1);
@@ -318,25 +319,42 @@ function wrcalvis2bin (fname, offset, ntslices, wrcalsol, trackcal)
 			else % (err > 10) % Handle a bad solution.
 				fprintf (2, '-->Rejecting sol at rec %03d, tobs: %.2f, err: %d.\n', ...
 						 ts+offset, currsol.tobs, err);
-				fprintf (2, '   --> Calibrating to convergence.\n');
-				prevsol = pelican_sunAteamsub (acc, t_obs, freq, uvflag, ... 
-								currflagant, debuglev, ptSun, [], []);
-				% Check if this solution is any better...
-				err=100*sum(abs(meansol - prevsol.gainsol)) / sum(abs(meansol));
-				goodcal = 1;
-				for sta = 0:5
-					sta_ind = [sta*48+1 : (sta+1)*48];
-					stat_std = std(prevsol.gainsol(gainmask(sta_ind)== 0));
-					solwin_std = std (meansol (gainmask(sta_ind) == 0));
-					if ((stat_std  < solwin_std - solthresh*solwin_std)||...
-					    (stat_std  > solwin_std + solthresh*solwin_std)) 
-						goodcal = 0;
-						break;
-					end;
-					stat_std_arr(sta+1) = stat_std;
-					solwin_std_arr(sta+1) = solwin_std;
-				end;
 
+				if (trackcal == 1) % Do so only for tracking calibration.
+					fprintf (2, '   --> Calibrating to convergence\n');
+					currsol = pelican_sunAteamsub (acc, t_obs, freq, uvflag, ... 
+									currflagant, debuglev, ptSun, [], []);
+	%				figure (currsolplt);
+	%				subplot (1,2,1);
+	%				plot (abs(meansol), '-b');
+	%				hold on;
+	%				plot (abs(currsol.gainsol), '-r');
+	%				hold off;
+	%				subplot (1,2,2);
+	%				plot (angle(meansol), '-b');
+	%				hold on;
+	%				plot (angle(currsol.gainsol), '-r');
+	%				hold off;
+	
+					% Check if this solution is any better...
+					err=100*sum(abs(meansol - currsol.gainsol)) / sum(abs(meansol));
+					goodcal = 1;
+					for sta = 0:5
+						sta_ind = [sta*48+1 : (sta+1)*48];
+						stat_std = std(currsol.gainsol(gainmask(sta_ind)== 0));
+						solwin_std = std (meansol (gainmask(sta_ind) == 0));
+						if ((stat_std  < solwin_std - solthresh*solwin_std)||...
+						    (stat_std  > solwin_std + solthresh*solwin_std)) 
+							goodcal = 0;
+							break;
+						end;
+						stat_std_arr(sta+1) = stat_std;
+						solwin_std_arr(sta+1) = solwin_std;
+					end;
+					fprintf (2, 'Rel err: %f, goodcal: %d\n', err, goodcal);
+				end;
+	
+				% Common block to tracking and convergent calibration.
 				if (err > 10)
 					fprintf (2, '   --> Rejecting timeslice.\n');
 					badtimes = badtimes + 1;
@@ -347,10 +365,12 @@ function wrcalvis2bin (fname, offset, ntslices, wrcalsol, trackcal)
 				else
 					nconvcals = nconvcals + 1;
 					badsols = badsols + 1;
-					solwindow (mod(ts,solwinsize) + 1, :) = prevsol.gainsol;
+					solwindow (mod(ts,solwinsize) + 1, :) = currsol.gainsol;
 				end;
 			end;
 		end;
+		end; %% NOTE: Temporary condition to eliminate windowing from conv.cal.
+
 		% pause;
 		% Arbitrarily declaring bad if more than half the antennas show badness.
 %	(sum(abs(real(currsol.gainsol))>(meanresol+solthresh*stdresol))>Nelem/2)...
@@ -388,7 +408,7 @@ function wrcalvis2bin (fname, offset, ntslices, wrcalsol, trackcal)
 		% whos acc;
 		wracm2bin (fout, acc, currflagant, t_obs, freq);
 		if wrcalsol == 1
-			wrcalsol2bin (fsol, currsol, gainmask);
+			wrcalsol2bin (fsol, currsol);
 		end;
 
 		% Update solutions with currently obtained tracking cal solution.

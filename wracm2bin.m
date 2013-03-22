@@ -3,13 +3,12 @@
 % correct rows and columns are filled with 0s, based on the antenna number of 
 % the dipoles which are flagged, specified in flagants.
 % pep/18Oct12
-
 % Arguments:
 %	fid: File id of the binary file to which calibrated visibilities should be
 %		 written.
-%	acc: Calibrated ACM to write to file. NOTE: Size INcludes flagged ants, which
-%		 have NaN as values!
-% flagants: Vector containing indices of flagged antennas.
+%	acc: Calibrated ACM to write to file. 
+%		 NOTE: Size INcludes flagged ants, which have NaN as values!
+%flagants: Vector containing indices of flagged antennas.
 %	tobs: The MJD sec. time corresponding to this calibrated ACM.
 %	freq: The Freq. in Hz. corresponding to this calibrated ACM.
 %

@@ -90,7 +90,7 @@ function [avg_re_gain, avg_im_gain] = applyavgcal2bin (fname, calsolfname, ...
 	end;
    	antmask = zeros (size (acc));
 	gainmask = zeros (1, size (acc,1));
-    rem_ants = length(acc) - length(rec.flagants);
+    rem_ants = length(acc) - length(rec.flagant);
 	recsize = whos ('rec');
 	% re_gain = zeros (rec.gainsol_len, avgover);
 	% im_gain = zeros (rec.gainsol_len, avgover);
@@ -129,13 +129,13 @@ function [avg_re_gain, avg_im_gain] = applyavgcal2bin (fname, calsolfname, ...
 
 
 	% Create a flagged mask for dealing with flagged antennas.
-	disp (['## Flagging dipole numbers : ' num2str(rec.flagants')]);
-    for ind = 1:length(rec.flagants)
-    	antmask (rec.flagants(ind), :) = 1; antmask (:,rec.flagants(ind)) = 1;
+	disp (['## Flagging dipole numbers : ' num2str(rec.flagant')]);
+    for ind = 1:length(rec.flagant)
+    	antmask (rec.flagant(ind), :) = 1; antmask (:,rec.flagant(ind)) = 1;
 		% disp (['ind, flagant(ind), sum(sum(antmask)): ' num2str(ind) ' ' ...
 		% num2str(flagant(ind)) ' ' num2str(sum(sum(antmask)))]);
     end
-	gainmask (rec.flagants) = 1;
+	gainmask (rec.flagant) = 1;
 	
 	% Operate on input visibilities.
 	re_sigman = zeros (rec.sigmanlen, 1);
@@ -185,7 +185,7 @@ function [avg_re_gain, avg_im_gain] = applyavgcal2bin (fname, calsolfname, ...
 				%NOTE!NOTE!NOTE!THIS IS REQUIRED FOR wracm2bin TO FUNCTION CORRECTLY!
 				% wr_acm (antmask == 1) = NaN; % Flagged visibilities get a NaN.
 				wr_acm (antmask == 1) = 0; % Flagged visibilities get a 0, as NaN screws up svds...
-				wracm2bin (fout, wr_acm, rec.flagants, tobs, freq);
+				wracm2bin (fout, wr_acm, rec.flagant, tobs, freq);
 			end;
 		end;
 

@@ -3,14 +3,19 @@
 % calibration strategies, or under different observation conditions.
 %
 % Arguments:
-%   nrecs : Number of solution records to compare, -1 for smallest calsol file.
+%   nrecs : Number of solution records to compare, -1 for full length of 
+%			smallest calsol file.
 % varargin: list of calib. solution filenames to compare. Expect convcal file
 %			name to be the first, as that is used as a reference.	
 % pep/07Feb12
+%  Added check for timestamp of solution files being compared, to cater to
+%  timeslices which can be missed by the tracking calibration.
+% pep/17Mar13
 
 function cmpcalsol (nrecs, varargin)
 
 	nfiles = nargin - 1;
+	misstimes = 0;
 	histbins = 30;
 	ampmean = 0; phmean = 0;
 	amphisthi = 0.5; amphistlo = -0.5;
@@ -21,15 +26,31 @@ function cmpcalsol (nrecs, varargin)
 	phxaxis = linspace (phhistlo, phhisthi, histbins);
 	fprintf (1, 'Total number of files specified: %d.\n', nfiles);
 	fid  = zeros (1, nfiles);
+
+	% Indicates waiting a timeslice as a nop, for temporal alignment of sols. 
+	% If waitind (ind) == 1 for a given file, at a given time, ignore it.
+	waitind = zeros (1, nfiles); 
 	col = {'bo', 'mx', 'r+', 'k*', 'gs', 'yd', 'wv', 'c^'};
 
 	% Open all files.
 	for ind = 1:nfiles;
+		fprintf (1, 'Opening file: %s at index %d\n', varargin{ind}, ind);
 		fid(ind) = fopen (varargin{ind}, 'rb'); 
 		if (fid(ind) < 0)
 			fprintf (2, 'Unable to open file %s\n', varargin{ind});
+			return;
 		end;
 	end;
+
+	% Determine number of records to operate on
+	if (nrecs == -1)
+		for ind = 1:nfiles
+			[ntimes, tmin, tmax, dt] = getnrecs (varargin{ind});
+			fsize (ind) = ntimes;
+		end;
+		nrecs = int32(min (fsize));
+	end;
+	fprintf (1, 'Setting number of records to %d\n', nrecs);
 
 	% Reach the same time instant on all files.
 	for ind = 1:nfiles % NOTE: Assuming all files are good!
@@ -37,6 +58,7 @@ function cmpcalsol (nrecs, varargin)
 		tobs(ind) = sol(ind).tobs;
 	end;
 	t_first = max (tobs);
+	sol_first = sol(1); % NOTE: Gain deviations wrt. first time record!.
 
 	for ind = 1:nfiles 
 		toff = t_first- sol(ind).tobs + 1;
@@ -75,7 +97,7 @@ function cmpcalsol (nrecs, varargin)
 	amp_err_hist = ph_err_hist;
 	noise_amp_err_hist = zeros (length(sol(ind).real_sigman), histbins);
 	noise_ph_err_hist = noise_amp_err_hist;
-	err = zeros (nrecs);
+	err = zeros (1, nrecs);
 
 	% Process timeslices
 	for ts = 1:nrecs 
@@ -83,123 +105,137 @@ function cmpcalsol (nrecs, varargin)
 			disp('End of *some* file reached!'); break;
 		end;
 		toff = sol(ind).tobs - t_first;
-		fprintf (1, 'Rec: %04d Time: %.2f, flag ants: %03d.\n', ... 
-				 ts, tobs(1), length(sol(1).flagants)); % Assuming same flagged ants
+		fprintf (1, '\nRec: %04d, Time:', ts);
+		for ind=1:nfiles 
+			fprintf (1, '%.2f/%d ', tobs(ind), length(sol(ind).flagant));
+		end;
 
 		% Plot LS imaging source fluxes from all calsol files.
 		% All sources from a single calsol file are plotted with the same color.
-		figure (fluxplt);
-		set (gca, 'Fontsize', 14);
-		for ind = 2:nfiles
-			for src = 1:sol(ind).calsrcs
-				plot (toff, sol(1).sigmas(src) - sol(ind).sigmas(src), ... 
-					  char(col(src)));
-					 %  char(col(ind)));
-				hold on;
+ 		if (sum (waitind == 0) >= 2) % At least 2 files needed for comparison!
+			figure (fluxplt);
+			set (gca, 'Fontsize', 14);
+			for ind = 2:nfiles
+				for src = 1:sol(ind).calsrcs
+					plot (toff, sol(1).sigmas(src) - sol(ind).sigmas(src), ... 
+						  char(col(src)));
+						 %  char(col(ind)));
+					hold on;
+				end;
 			end;
+			title (sprintf ('Extracted fluxes of model sources.'));
+			xlabel ('Time (sec from obs. commencement)');
+			ylabel ('Flux ratio normalized to CasA flux');
 
-		end;
-		title (sprintf ('Extracted fluxes of model sources.'));
-		xlabel ('Time (sec from obs. commencement)');
-		ylabel ('Flux ratio normalized to CasA flux');
-
-		% Percent error between the gain solutions from the two files.
-		% NOTE: Assuming there are only two files for now!! FIXME TODO 
-		sol1 = complex (sol(1).real_gainsol, sol(1).imag_gainsol);
-		sol2 = complex (sol(2).real_gainsol, sol(2).imag_gainsol);
-		err (ts) = 100*sum(abs(sol1 - sol2)) / sum(abs(sol1));
-
-		figure (noiseplt);
-		plot (err, '-mo');
-		xlabel ('Timeslice number');
-		ylabel ('Relative percent error');
-		title ('Temporal variation of relative error between calib. solutions');
-
-		% Plot gain and phase differences between different solution records.
-		figure (gainplt);
-		subplot (2,3,1);
-		% NOTE: We always use the first calsol file as the reference.
-		amp_ts_ref = sol(1).real_gainsol;
-		ph_ts_ref = sol(1).imag_gainsol;
-
-		% amp_ts_ref = hypot (sol(1).real_gainsol, sol(1).imag_gainsol);
-		% ph_ts_ref = angle (complex (sol(1).real_gainsol, ... 
-	    %							sol(1).imag_gainsol));
-
-		noise_amp_ref =  sol(1).real_sigman;
-		noise_ph_ref = sol(1).imag_sigman;
-
-		% noise_amp_ref =  hypot (sol(1).real_sigman, sol(1).imag_sigman);
-		% noise_ph_ref = angle (complex (sol(ind).real_sigman, ... 
-		% 							sol(ind).imag_sigman));
-
-		for ind = 2:nfiles % But currently working on only two...
-			amp_ts = sol(ind).real_gainsol;
-			% amp_ts = hypot (sol(ind).real_gainsol, sol(ind).imag_gainsol);
-			cal_diff = amp_ts_ref - amp_ts; % NOTE: Always assumed 0-mean.
-			for ant=1:length(amp_ts) % Generate running histi of all ampdiffs
-				bin = int32(histbins/2 + cal_diff(ant)/ampbinwid);
-				% Cutoff outliers.
-				if (bin > histbins) bin = histbins; end;
-				if (bin < 1) bin = 1; end;
-				
-				amp_err_hist (ant,bin) = amp_err_hist(ant,bin) + 1;
-			end;
-			plot (ampxaxis, amp_err_hist(43,:), '-o'); % Some random antenna's
-			 										   % histogram.
-			% hold on;
-			plot (ampxaxis, amp_err_hist (80, :), '-ro');
-			title ('Calibration solution error histogram');
-			xlabel ('Gain solution amplitude error');
-			subplot (2,3,2);
-			imagesc (amp_err_hist');          % All amp. errors for all antennas.
-			title ('Calibration solution error histogram');
-			xlabel ('Gain solution amplitude error');
+			% Percent error between the gain solutions from the two files.
+			% NOTE: Assuming there are only two files for now!! FIXME TODO 
+			flag1 = zeros (1, 288); flag1 (sol(1).flagant) = 1;
+			srcsel = (sol(1).sigmas ~= 0);
+			% flag2 = zeros (1, 288); flag2 (sol(2).flagant) = 1;
+%			sol1 = complex (sol(1).real_gainsol(flag1 == 0), ...
+%							sol(1).imag_gainsol(flag1 == 0));
+%			sol2 = complex (sol(2).real_gainsol(flag1 == 0), ...
+%							sol(2).imag_gainsol(flag1 == 0));
 			
-			subplot (2,3,3);
-			plot (cal_diff, 'o');
-			xlabel ('Antenna number');
-			ylabel ('Gain amplitude difference');
-
-%			for stat = 1:6 % 6 stations
-%				plot (toff, amp_ts_ref(24*stat) - amp_ts(24*stat), ... 
-%					  char(col(ind)));
-%				hold on;
-%			end;
-%			title ('Timeseries of gain magnitudes from individual antennas');
-		end;	
-
-		subplot (2,3,4);
-		for ind = 1:nfiles
-			ph_ts = sol(ind).imag_gainsol;
-			% ph_ts = angle (complex (sol(ind).real_gainsol, ... 
-		  	% 						sol(ind).imag_gainsol));
-			cal_diff = ph_ts_ref - ph_ts; % NOTE: Always assumed 0-mean.
-			for ant=1:length(ph_ts)
-				bin = int32(histbins/2 + cal_diff(ant)/phbinwid);
-				% Cutoff outliers.
-				if (bin > histbins) bin = histbins; end;
-				if (bin < 1) bin = 1; end;
-				ph_err_hist (ant,bin) = ph_err_hist(ant,bin) + 1;
+			sol1 = [complex(sol(1).real_gainsol(flag1 == 0), sol(1).imag_gainsol(flag1 == 0)); sol(1).sigmas(srcsel); sol(1).thsrc_wsf(srcsel); sol(1).phisrc_wsf(srcsel)];
+			sol2 = [complex(sol(2).real_gainsol(flag1 == 0), sol(2).imag_gainsol(flag1 == 0)); sol(2).sigmas(srcsel); sol(2).thsrc_wsf(srcsel); sol(2).phisrc_wsf(srcsel)];
+			% err (ts) = 100*sum(abs(sol1 - sol2)) / sum(abs(sol1));
+			err (ts) = (100/length(sol1))*sum( abs(sol1 - sol2) ./ abs(sol1));
+			fprintf (1, 'Err: %f.', err(ts));
+	
+			figure (noiseplt);
+			plot (toff, err(ts), '-ro');
+			hold on;
+			xlabel ('Timeslice number');
+			ylabel ('Relative percent error');
+			title ('Temporal variation of relative error between calib. sols.');
+	
+			% Plot gain and phase differences between different sol. records.
+			figure (gainplt);
+			subplot (2,3,1);
+			% NOTE: We always use the first calsol file as the reference.
+			amp_ts_ref = sol(1).real_gainsol;
+			ph_ts_ref = sol(1).imag_gainsol;
+	
+			% amp_ts_ref = hypot (sol(1).real_gainsol, sol(1).imag_gainsol);
+			% ph_ts_ref = angle (complex (sol(1).real_gainsol, ... 
+		    %							sol(1).imag_gainsol));
+	
+			noise_amp_ref =  sol(1).real_sigman;
+			noise_ph_ref = sol(1).imag_sigman;
+	
+			% noise_amp_ref =  hypot (sol(1).real_sigman, sol(1).imag_sigman);
+			% noise_ph_ref = angle (complex (sol(ind).real_sigman, ... 
+			% 							sol(ind).imag_sigman));
+	
+			for ind = 2:nfiles % But currently working on only two...
+				amp_ts = sol(ind).real_gainsol;
+				% amp_ts = hypot (sol(ind).real_gainsol, sol(ind).imag_gainsol);
+				cal_diff = amp_ts_ref - amp_ts; % NOTE: Always assumed 0-mean.
+				for ant=1:length(amp_ts) % Gen. running histi of all ampdiffs
+					bin = int32(histbins/2 + cal_diff(ant)/ampbinwid);
+					% Cutoff outliers.
+					if (bin > histbins) bin = histbins; end;
+					if (bin < 1) bin = 1; end;
+					
+					amp_err_hist (ant,bin) = amp_err_hist(ant,bin) + 1;
+				end;
+				plot (ampxaxis, amp_err_hist(43,:), '-o'); % Some random ant's
+				 										   % histogram.
+				% hold on;
+				plot (ampxaxis, amp_err_hist (80, :), '-ro');
+				title ('Calibration solution error histogram');
+				xlabel ('Gain solution amplitude error');
+				subplot (2,3,2);
+				imagesc (amp_err_hist');     % All amp. errors for all antennas.
+				title ('Calibration solution error histogram');
+				xlabel ('Gain solution amplitude error');
+				
+				subplot (2,3,3);
+				plot (cal_diff, 'o');
+				xlabel ('Antenna number');
+				ylabel ('Gain amplitude difference');
+	
+	%			for stat = 1:6 % 6 stations
+	%				plot (toff, amp_ts_ref(24*stat) - amp_ts(24*stat), ... 
+	%					  char(col(ind)));
+	%				hold on;
+	%			end;
+	%			title ('Timeseries of gain magnitudes from individual ants');
+			end;	
+	
+			subplot (2,3,4);
+			for ind = 1:nfiles
+				ph_ts = sol(ind).imag_gainsol;
+				% ph_ts = angle (complex (sol(ind).real_gainsol, ... 
+			  	% 						sol(ind).imag_gainsol));
+				cal_diff = ph_ts_ref - ph_ts; % NOTE: Always assumed 0-mean.
+				for ant=1:length(ph_ts)
+					bin = int32(histbins/2 + cal_diff(ant)/phbinwid);
+					% Cutoff outliers.
+					if (bin > histbins) bin = histbins; end;
+					if (bin < 1) bin = 1; end;
+					ph_err_hist (ant,bin) = ph_err_hist(ant,bin) + 1;
+				end;
+				plot (phxaxis, ph_err_hist (43, :), '-o');
+				% hold on;
+				plot (phxaxis, ph_err_hist (80, :), '-ro');
+				xlabel ('Gain solution phase error');
+				subplot (2,3,5);
+				imagesc (ph_err_hist');      % All amp. errors for all antennas.
+				xlabel ('Gain solution phase error');
+	
+				subplot (2,3,6);
+				plot (cal_diff, 'o');
+				xlabel ('Antenna number');
+				ylabel ('Gain phase difference (rad)');
+	%			for stat = 1:6 % 6 stations
+	%				plot (toff, ph_ts_ref (24*stat) - ph_ts(24*stat), ... 
+	%					  char(col(ind)));
+	%				hold on;
+	%			end;
+	%			title ('Timeseries of gain phases from individual antennas');
 			end;
-			plot (phxaxis, ph_err_hist (43, :), '-o');
-			% hold on;
-			plot (phxaxis, ph_err_hist (80, :), '-ro');
-			xlabel ('Gain solution phase error');
-			subplot (2,3,5);
-			imagesc (ph_err_hist');          % All amp. errors for all antennas.
-			xlabel ('Gain solution phase error');
-
-			subplot (2,3,6);
-			plot (cal_diff, 'o');
-			xlabel ('Antenna number');
-			ylabel ('Gain phase difference (rad)');
-%			for stat = 1:6 % 6 stations
-%				plot (toff, ph_ts_ref (24*stat) - ph_ts(24*stat), ... 
-%					  char(col(ind)));
-%				hold on;
-%			end;
-%			title ('Timeseries of gain phases from individual antennas');
 		end;
 
 %{
@@ -261,13 +297,71 @@ function cmpcalsol (nrecs, varargin)
 		end;
 %}
 
-		% Read in the next record.
-		for ind = 1:nfiles % NOTE: Assuming all files are good!
-			sol(ind) = readcalsol (fid(ind));
-			tobs(ind) = sol(ind).tobs;
+		% Read in the next record of the reference file..
+		try
+			sol(1) = readcalsol (fid(1));
+		catch
+			fprintf (2, 'cmpcalsol: Error in reading file, quitting.\n');
+			fprintf (1, 'Total missing times between files: %d.\n', misstimes);
+
+			for nfile = 1:nfiles
+				fclose (fid(nfile));
+			end;
 		end;
+
+		tobs(1) = sol(1).tobs;
+		for ind = 2:nfiles % NOTE: Assuming all files are good to read!
+			% Only read if we're not waiting.
+			if (waitind(ind) == 0) 
+				try
+					sol(ind) = readcalsol (fid(ind));
+				catch
+					fprintf (2,'cmpcalsol: Error in reading file, quitting.\n');
+					fprintf (1,'Total missing times between files: %d.\n', ...
+							 misstimes);
+					for nfile = 1:nfiles
+						fclose (fid(nfile));
+						break;
+					end;
+				end;
+			end;
+			tobs(ind) = sol(ind).tobs;
+			waitind (ind) = 0; % Will be reset to 1 if there is still an offset.
+
+			if (tobs(ind) ~= tobs(1)) % NOTE: Always wrt. first file!
+				misstimes = misstimes + 1;
+				offset = int32 (tobs(1) - tobs(ind));
+				fprintf (2, '\n<--Missing Time:%.2f   %.2f, offset: %f.', ...
+						 tobs(1), tobs(ind), offset);
+				if (offset < 0)
+					% Moved ahead of ref. file, need to wait.
+					waitind (ind) = 1;
+				else
+					% Move till we reach the ref. position.
+					fprintf (2, 'Skipping %d recs on file %d.', offset, ind);
+					for ts=1:offset
+						try
+							sol(ind) = readcalsol (fid(ind));
+						catch 
+							fprintf (2, 'cmpcalsol: EoF on sol file!\n');
+							break;
+						end;
+						% NOTE: We may not have to move all 'offset' records, as
+						% we may be missing records ourselves!
+						if (sol(ind).tobs >= tobs(1))
+							break;
+						end;
+					end;
+					tobs(ind) = sol(ind).tobs;
+				end;
+			end;
+		end;
+		% pause; 
 	end;
+	fprintf (1, 'Total missing times between files: %d.\n', misstimes);
 
 	for ind = 1:nfiles
-		fclose (fid(ind));
+		if (fid (ind) > 0)
+			fclose (fid(ind));
+		end;
 	end;

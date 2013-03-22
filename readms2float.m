@@ -4,18 +4,18 @@
 % NOTE: If recoffset=-1, implies return the next record, for any other 
 % positive number, return the record with that number offset from beginning
 % of file.
-
 % Arguments:
 %   fid      : fid of the binary data file.
 %   recoffset: Offset (in units of records) of the desired timeslice.
 %   rettime  : Time in MJD seconds of the desired timeslice.
+%   Nelems   : Number of elements making up a record in the data file.
 % Returns  :
 %   acc      : The complex, Hermitean symmetric Array Correlation Matrix with 
 %              autocorrelations removed,corresponding to chosen timeslice.
 %   tobs     : Time of observation, in MJD seconds, as a double.
 %   freq     : Frequency of observation, in Hz.
+% NOTE: Autocorrelations are removed before returning the data!
 % pep/01May12
-% function [acc, tobs, freqobs] = readms2float (filename, recoffset, rettime)
 
 function [acc, tobs, freqobs] = readms2float (fid, recoffset, rettime, Nelem)
 	if (isempty(Nelem) == 1) 
@@ -25,11 +25,15 @@ function [acc, tobs, freqobs] = readms2float (fid, recoffset, rettime, Nelem)
 	nblines = Nelem * (Nelem + 1)/2; 
 	tobs = 1; freqobs = 1;
 	recsize = 8*(2+nblines); % Bytes, assumed double =8, float=4 bytes.
-	% fid = fopen (filename, 'rb');
 
 	% NOTE: Currently ms2float handles only one channel data
 	if (recoffset > 0)
-		fseek (fid, (recoffset-1)*recsize, 'bof');
+		if (fseek (fid, (recoffset-1)*recsize, 'bof') < 0)
+			err = MException('readms2float:fseek OutOfRange', ...
+        			'recoffset is outside expected range');	
+			error ('readms2float: seek error!');
+			throw (err);
+		end;
 		tobs = fread (fid, 1, 'double');
 		if (isempty (tobs) == true)
  			disp ('readms2float: EoF reached!'); 
