@@ -44,20 +44,17 @@ function [srcflux, re_gain, im_gain] = pltcalsol (fname, nrecs, showplt)
 		recsize = t.bytes; 
 		d = dir (fname);
 		nrecs = int32 (d.bytes/t.bytes);
-		fprintf (1, '-->Filesize: %d, recsize: %d, nrecs: %d', ... 
+		fprintf (1, '-->Filesize: %d, recsize: %d, nrecs: %d\n', ... 
 				 d.bytes, t.bytes, nrecs);
 	end;
 
-	gainsol = complex (rec0.real_gainsol, rec0.imag_gainsol);
 	% flagant = rec.flagant; % (abs(gainsol) == 0);
 	rem_ants = Nelem - length (rec0.flagant);
-	currgain = gainsol; % (flagant == 0);
+	currgain = rec0.gainsol; % (flagant == 0);
 	gaindiff = currgain - prevgain;
 	gainratio = currgain ./ prevgain;
 
 	prevgain = currgain;
-	sigman_vec = complex (rec0.real_sigman, rec0.imag_sigman);
-	sigman = reshape (sigman_vec, rem_ants, rem_ants);
 	caliter = zeros (2, nrecs); % holds number of cal_ext iterations per sol
 	stefiter = caliter;
 	gainerr = zeros (1, nrecs);
@@ -107,10 +104,9 @@ function [srcflux, re_gain, im_gain] = pltcalsol (fname, nrecs, showplt)
 		if (isempty(rec.tobs) == 1) 
 			disp('End of file reached!'); break;
 		end;
-		gainsol = complex (rec.real_gainsol, rec.imag_gainsol);
 		rem_ants = Nelem - length (rec.flagant);
-		re_gain(ts, :) = rec.real_gainsol;
-		im_gain(ts, :) = rec.imag_gainsol;
+		re_gain(ts, :) = real (rec.gainsol);
+		im_gain(ts, :) = imag (rec.gainsol);
 		tstamp (ts) = rec.tobs - t_first;
 		caliter (1, ts) = rec.calext_iters;
 		caliter (2, ts) = rec.pinv_sol;
@@ -119,13 +115,11 @@ function [srcflux, re_gain, im_gain] = pltcalsol (fname, nrecs, showplt)
 
 		flag1 = zeros (1, 288); flag1 (rec.flagant) = 1;
 		srcsel = (rec.sigmas ~= 0);
-		rec0sol = [complex(rec0.real_gainsol(flag1 == 0), rec0.imag_gainsol(flag1 == 0)); rec0.sigmas(srcsel); rec0.thsrc_wsf(srcsel); rec0.phisrc_wsf(srcsel)];
-		recsol = [complex(rec.real_gainsol(flag1 == 0), rec.imag_gainsol(flag1 == 0)); rec.sigmas(srcsel); rec.thsrc_wsf(srcsel); rec.phisrc_wsf(srcsel)];
+		rec0sol = [rec0.gainsol(flag1 == 0); rec0.sigmas(srcsel); rec0.thsrc_wsf(srcsel); rec0.phisrc_wsf(srcsel)];
+		recsol = [rec.gainsol(flag1 == 0); rec.sigmas(srcsel); rec.thsrc_wsf(srcsel); rec.phisrc_wsf(srcsel)];
 		gainerr (ts) = (100/length(rec0sol))*sum( abs(rec0sol - recsol) ./ abs(rec0sol));
 
 		% srcflux (ts, :) = rec.sigmas';
-		sigman_vec = complex (rec.real_sigman, rec.imag_sigman);
-		sigman = reshape (sigman_vec, rem_ants, rem_ants);
 
 		ind = ind + 1;
 		t = whos ('rec');
@@ -145,18 +139,18 @@ function [srcflux, re_gain, im_gain] = pltcalsol (fname, nrecs, showplt)
 			ylabel ('Flux ratio normalized to CasA flux');
 	
 			figure (gainplt);
-			currgain = gainsol; % (flagant == 0);
+			currgain = rec.gainsol; % (flagant == 0);
 			gaindiff = currgain - prevgain;
 			gainratio = currgain ./ prevgain;
 			prevgain = currgain;
 	
 			subplot (2,3,1);
 			plot (abs (gaindiff), 'ro');
-			title (sprintf ('Gain temporal difference abs: Time: %f', rec.tobs));
+			title (sprintf ('Gain time diff abs: Time: %.2f', rec.tobs));
 	
 			subplot (2,3,2);
 			plot (angle (gaindiff), 'ro');
-			title (sprintf ('Gain temporal difference phase: Time: %f', rec.tobs));
+			title (sprintf ('Gain time diff phase: Time: %.2f', rec.tobs));
 	
 			subplot (2,3,3);
 			plot (abs(currgain), 'bo');
@@ -177,9 +171,9 @@ function [srcflux, re_gain, im_gain] = pltcalsol (fname, nrecs, showplt)
 	
 			figure (noiseplt);
 			subplot (2,2,1);
-			plot (rec.tobs-t_first, norm (sigman, 'fro'), 'ro');
+			plot (rec.tobs-t_first, norm (rec.sigman, 'fro'), 'ro');
 			hold on;
-			title (sprintf ('Estimated noise norm: Time: %f', rec.tobs));
+			title (sprintf ('Estimated noise norm: Time: %.2f', rec.tobs));
 			% imagesc(abs(sigman)); % estimated noise absolute value
 			% colorbar;
 			% title (sprintf ('Estimated Noise magnitude. Time: %f', rec.tobs));
@@ -194,7 +188,7 @@ function [srcflux, re_gain, im_gain] = pltcalsol (fname, nrecs, showplt)
 				plot (ts, 180/pi*(rec.thsrc_cat(ind) - rec.thsrc_wsf (ind)), char(col(ind)));
 				hold on;
 			end;
-			title (sprintf ('Catalog - WSF elevation angle residuals (deg) for %d sources', ...
+			title (sprintf ('Cat-WSF ele. resid(deg), %d srcs', ...
 					rec.calsrcs));
 	
 			subplot (2,2,4);
@@ -202,7 +196,7 @@ function [srcflux, re_gain, im_gain] = pltcalsol (fname, nrecs, showplt)
 				plot(ts, 180/pi*(rec.phisrc_cat(ind) - rec.phisrc_wsf (ind)), char(col(ind)));
 				hold on;
 			end;
-			title (sprintf ('Catalog - WSF azimuth angle residuals (deg) for %d sources', ...
+			title (sprintf ('Cat-WSF azi. resid(deg), %d srcs', ...
 					rec.calsrcs));
 			% text(.75,1.25, sprintf ('File : %s', fname));
 	

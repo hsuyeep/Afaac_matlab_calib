@@ -35,9 +35,11 @@ function wrcalvis2bin (fname, offset, ntslices, wrcalsol, trackcal)
 	medianthresh = 2.5; % Reject timeslices with median > medianthresh*movmed;
 	visamphithresh= 1.5;% Reject visibilities with median >visampthresh*median.
 	visamplothresh= 0.5;% Reject visibilities with median >visampthresh*median.
-	solthresh = 0.15;   % Reject calibration solutions with std. across antennas
-						% in a station > 20 percent from mean solutions.
-						%  solthresh*mean over solwindow;
+	solparm.solthresh=0.15;% Reject calsolutions with std. across antennas
+						% in a station > solthresh percent from mean solutions.
+	solparm.errthresh = 10; % Tolerance as offset from mean gainsol, in percent
+	solparm.gainplt = figure;
+	solparm.currsolplt = figure;
 
 	window = zeros (1, winsize); % Actual norm sliding window.
 
@@ -85,7 +87,7 @@ function wrcalvis2bin (fname, offset, ntslices, wrcalsol, trackcal)
 
 	% Flagging section: Define antennas to flag.
 	% For day-time observations over 3hr (2011 data)
-    flagant = [6, 103];  
+    % flagant = [6, 103];  
 
 	% For LBA_INNER_BAND60 data
     % flagant = [1:12, 47, 48, 95,96, 143, 144, 191, 192, 239, 240, 287, 288 ];   
@@ -96,7 +98,7 @@ function wrcalvis2bin (fname, offset, ntslices, wrcalsol, trackcal)
     % flagant = [1:48, 51, 239]; 
 
 	% For LBA_OUTER_BAND_SPREAD, 18min data
-    % flagant = [51, 238, 273]; 
+    flagant = [51, 238, 273]; 
 	
 	% For 03285_dawn_spread data
     % flagant = [49:96, 239, 241:288]; 
@@ -118,7 +120,8 @@ function wrcalvis2bin (fname, offset, ntslices, wrcalsol, trackcal)
 	fprintf (2, '--> Median thresh (Time flagging):%f\n', medianthresh);
 	fprintf (2, '--> Vis. ampl thresh range (Vis flagging):(%f, %f)\n', ...
 			 visamphithresh,  visamplothresh);
-	fprintf (2, '--> Solution phase thresh (Solu. flagging):%f\n', solthresh); 
+	fprintf (2, '--> Solution phase thresh (Solu. flagging):%f\n', ... 
+			 solparm.solthresh); 
 	fprintf (2, '--> Default flagged antennas: %s\n', num2str(flagant));
 	
 	acc = single (acc);
@@ -273,43 +276,27 @@ function wrcalvis2bin (fname, offset, ntslices, wrcalsol, trackcal)
 %			plot (angle(solwindow)');
 
 		else % Window filled!
-			meansol = mean(solwindow);
-
-%			figure (gainplt);
-%			subplot (1, 2, 1);
-%			plot (abs(solwindow)');
-%			subplot (1, 2, 2);	
-%			plot (angle (solwindow)');
+			[goodcal, err] = goodcalsol (solwindow, currsol, gainmask, ... 
+											solparm, 4);	
+%			meansol = mean(solwindow);
 %
-%			figure (currsolplt);
-%			subplot (1,2,1);
-%			plot (abs(meansol), '-b');
-%			hold on;
-%			plot (abs(currsol.gainsol), '-r');
-%			hold off;
-%			subplot (1,2,2);
-%			plot (angle(meansol), '-b');
-%			hold on;
-%			plot (angle(currsol.gainsol), '-r');
-%			hold off;
-
-			err = 100*sum(abs(meansol - currsol.gainsol)) / sum(abs(meansol));
-			% Compute per station gain variances
-			goodcal = 1;
-			for sta=0:5
-				sta_ind = [sta*48+1 : (sta+1)*48];
-				stat_std = std(currsol.gainsol (gainmask(sta_ind) == 0));
-				solwin_std = std (meansol (gainmask(sta_ind) == 0));
-				if ((stat_std  < solwin_std-solthresh*solwin_std) ||  ...
-				    (stat_std  > solwin_std+solthresh*solwin_std)) 
-					goodcal = 0;
-					break;
-				end;
-				stat_std_arr(sta+1) = stat_std;
-				solwin_std_arr(sta+1) = solwin_std;
-			end;
-			fprintf (2, 'stat std: %s\nmean std: %s\nRel. Err: %f, goodcal:%d\n', ...
-				 num2str(stat_std_arr), num2str(solwin_std_arr), err, goodcal);
+%			err = 100*sum(abs(meansol - currsol.gainsol)) / sum(abs(meansol));
+%			% Compute per station gain variances
+%			goodcal = 1;
+%			for sta=0:5
+%				sta_ind = [sta*48+1 : (sta+1)*48];
+%				stat_std = std(currsol.gainsol (gainmask(sta_ind) == 0));
+%				solwin_std = std (meansol (gainmask(sta_ind) == 0));
+%				if ((stat_std  < solwin_std-solthresh*solwin_std) ||  ...
+%				    (stat_std  > solwin_std+solthresh*solwin_std)) 
+%					goodcal = 0;
+%					break;
+%				end;
+%				stat_std_arr(sta+1) = stat_std;
+%				solwin_std_arr(sta+1) = solwin_std;
+%			end;
+%			fprintf (2, 'stat std: %s\nmean std: %s\nRel. Err: %f, goodcal:%d\n', ...
+%				 num2str(stat_std_arr), num2str(solwin_std_arr), err, goodcal);
 			% if (goodcal == 1 && err < 10)
 			if (goodcal == 1) % Take solutions with offset
 				% Update gain solution temporal window, if good solution.
@@ -320,10 +307,14 @@ function wrcalvis2bin (fname, offset, ntslices, wrcalsol, trackcal)
 				fprintf (2, '-->Rejecting sol at rec %03d, tobs: %.2f, err: %d.\n', ...
 						 ts+offset, currsol.tobs, err);
 
+				% Try to do a calibration to convergence on this data.
 				if (trackcal == 1) % Do so only for tracking calibration.
 					fprintf (2, '   --> Calibrating to convergence\n');
-					currsol = pelican_sunAteamsub (acc, t_obs, freq, uvflag, ... 
+					currsol = pelican_sunAteamsub (acc, t_obs, freq, uvflag, ...
 									currflagant, debuglev, ptSun, [], []);
+					[goodcal, err] = goodcalsol (solwindow,currsol,gainmask, ...
+											solparm, debuglev);	
+
 	%				figure (currsolplt);
 	%				subplot (1,2,1);
 	%				plot (abs(meansol), '-b');
@@ -337,25 +328,26 @@ function wrcalvis2bin (fname, offset, ntslices, wrcalsol, trackcal)
 	%				hold off;
 	
 					% Check if this solution is any better...
-					err=100*sum(abs(meansol - currsol.gainsol)) / sum(abs(meansol));
-					goodcal = 1;
-					for sta = 0:5
-						sta_ind = [sta*48+1 : (sta+1)*48];
-						stat_std = std(currsol.gainsol(gainmask(sta_ind)== 0));
-						solwin_std = std (meansol (gainmask(sta_ind) == 0));
-						if ((stat_std  < solwin_std - solthresh*solwin_std)||...
-						    (stat_std  > solwin_std + solthresh*solwin_std)) 
-							goodcal = 0;
-							break;
-						end;
-						stat_std_arr(sta+1) = stat_std;
-						solwin_std_arr(sta+1) = solwin_std;
-					end;
+%					err=100*sum(abs(meansol - currsol.gainsol)) / sum(abs(meansol));
+%					goodcal = 1;
+%					for sta = 0:5
+%						sta_ind = [sta*48+1 : (sta+1)*48];
+%						stat_std = std(currsol.gainsol(gainmask(sta_ind)== 0));
+%						solwin_std = std (meansol (gainmask(sta_ind) == 0));
+%						if ((stat_std  < solwin_std - solthresh*solwin_std)||...
+%						    (stat_std  > solwin_std + solthresh*solwin_std)) 
+%							goodcal = 0;
+%							break;
+%						end;
+%						stat_std_arr(sta+1) = stat_std;
+%						solwin_std_arr(sta+1) = solwin_std;
+%					end;
 					fprintf (2, 'Rel err: %f, goodcal: %d\n', err, goodcal);
 				end;
 	
 				% Common block to tracking and convergent calibration.
 				if (err > 10)
+					% Could not find a good tracking or convergent cal sol.
 					fprintf (2, '   --> Rejecting timeslice.\n');
 					badtimes = badtimes + 1;
 					% Use the mean gain solution as the output of this

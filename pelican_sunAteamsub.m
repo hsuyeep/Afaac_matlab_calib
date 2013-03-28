@@ -133,7 +133,7 @@ function [currsol] = pelican_sunAteamsub (acc, t_obs, ...
 	currsol.freq = freq;
     
     % Basic sanity check.
-    if (isempty (acc) | isempty (t_obs))
+    if (isempty (acc) || isempty (t_obs))
         disp ('ACM or time missing!');   
         return;
     end
@@ -402,7 +402,6 @@ function [currsol] = pelican_sunAteamsub (acc, t_obs, ...
       % solar component estimation using sparse reconstruction
       A = exp(-(2 * pi * 1i * freq / rodata.C) * ... 
 			 (rodata.posITRF_fl * sunpos.'));
-      A = double (A);
       accsubAteam = double (accsubAteam);
       % fluxSun = 1.20 * sigmas2(visibleAteamsun == 0);
       fluxSun = 1.20 * currsol.sigmas(visibleAteamsun == 0);

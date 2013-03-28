@@ -151,10 +151,10 @@ function [avg_re_gain, avg_im_gain] = applyavgcal2bin (fname, calsolfname, ...
 				break;
 			end;
 
-			re_gain (:, ind) = rec.real_gainsol (gainmask == 0);
-			im_gain (:, ind) = rec.imag_gainsol (gainmask == 0);
-			re_sigman = re_sigman + rec.real_sigman;
-			im_sigman = im_sigman + rec.imag_sigman;
+			re_gain (:, ind) = real (rec.gainsol (gainmask == 0));
+			im_gain (:, ind) = imag (rec.gainsol (gainmask == 0));
+			re_sigman = re_sigman + real (rec.sigman);
+			im_sigman = im_sigman + imag (rec.sigman);
 		end
 		avg_re_gain (:, avgcycle) = mean (re_gain, 2);
 		avg_im_gain (:, avgcycle)  = mean (im_gain, 2);
