@@ -276,8 +276,7 @@ function wrcalvis2bin (fname, offset, ntslices, wrcalsol, trackcal)
 %			plot (angle(solwindow)');
 
 		else % Window filled!
-			[goodcal, err] = goodcalsol (solwindow, currsol, gainmask, ... 
-											solparm, 4);	
+			solstat = goodcalsol (solwindow, currsol, gainmask, solparm, 4);	
 %			meansol = mean(solwindow);
 %
 %			err = 100*sum(abs(meansol - currsol.gainsol)) / sum(abs(meansol));
@@ -298,7 +297,7 @@ function wrcalvis2bin (fname, offset, ntslices, wrcalsol, trackcal)
 %			fprintf (2, 'stat std: %s\nmean std: %s\nRel. Err: %f, goodcal:%d\n', ...
 %				 num2str(stat_std_arr), num2str(solwin_std_arr), err, goodcal);
 			% if (goodcal == 1 && err < 10)
-			if (goodcal == 1) % Take solutions with offset
+			if (solstat.goodstncal == 1) % Take solutions with offset
 				% Update gain solution temporal window, if good solution.
 				solwindow (mod(ts,solwinsize) + 1, :) = currsol.gainsol;
 	
@@ -312,7 +311,7 @@ function wrcalvis2bin (fname, offset, ntslices, wrcalsol, trackcal)
 					fprintf (2, '   --> Calibrating to convergence\n');
 					currsol = pelican_sunAteamsub (acc, t_obs, freq, uvflag, ...
 									currflagant, debuglev, ptSun, [], []);
-					[goodcal, err] = goodcalsol (solwindow,currsol,gainmask, ...
+					solstat = goodcalsol (solwindow,currsol,gainmask, ...
 											solparm, debuglev);	
 
 	%				figure (currsolplt);
@@ -342,11 +341,12 @@ function wrcalvis2bin (fname, offset, ntslices, wrcalsol, trackcal)
 %						stat_std_arr(sta+1) = stat_std;
 %						solwin_std_arr(sta+1) = solwin_std;
 %					end;
-					fprintf (2, 'Rel err: %f, goodcal: %d\n', err, goodcal);
+					fprintf (2, 'Rel err: %f, goodcal: %d\n',  ... 
+							solstat.err, solstat.goodstncal);
 				end;
 	
 				% Common block to tracking and convergent calibration.
-				if (err > 10)
+				if (solstat.err > 10)
 					% Could not find a good tracking or convergent cal sol.
 					fprintf (2, '   --> Rejecting timeslice.\n');
 					badtimes = badtimes + 1;

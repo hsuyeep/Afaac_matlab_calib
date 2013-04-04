@@ -17,6 +17,17 @@ function func_goodcalsol (fname, offset, nrecs, wrbad)
 	if (debuglev >= 4)
 		solparm.gainplt = figure;
 		solparm.currsolplt = figure;
+		set(0,'Units','pixels') 
+		scnsize = get(0,'ScreenSize');
+		position = get(solparm.gainplt,'Position');
+		outerpos = get(solparm.gainplt,'OuterPosition');
+		borders = outerpos - position;
+		edge = -borders(1)/2;
+		% pos = [left bottom width height]
+		pos1 = [edge, 0, scnsize(3)/2 - edge, scnsize(4)/2];
+		set(solparm.gainplt,'OuterPosition',pos1);
+		pos1 = [edge+scnsize(3)*(1/2), 0, scnsize(3)/2 - edge, scnsize(4)/2];
+		set(solparm.currsolplt,'OuterPosition',pos1);
 	end;
 
 	% Open the calib. solutions file
@@ -62,8 +73,7 @@ function func_goodcalsol (fname, offset, nrecs, wrbad)
 	gainmask (sol0.flagant) = 1;
 	meangain = zeros (Nelem, nrecs);
 	meanerr = meangain;
-	goodcal = zeros (1, nrecs);
-	err = zeros (1, nrecs);
+	% solstat = zeros (1, nrecs); % NOTE: Trying to create an array of structures here!
 	badsols = 0;
 	col = {'bo-', 'mo-', 'ro-', 'ko-', 'go-', 'yo-', 'wo-', 'co-'};
 
@@ -108,11 +118,11 @@ function func_goodcalsol (fname, offset, nrecs, wrbad)
 	% xaxis = linspace (rehistlo, rehisthi, histbins);
 
 	% gainsol = complex (sol.real_gainsol', sol.imag_gainsol');
-	[goodcal(1), err(1), stnstd] = goodcalsol (solwindow, sol.gainsol.', ... 
+	solstat(1) = goodcalsol (solwindow, sol.gainsol.', ... 
 												gainmask, solparm, debuglev);
 	% setup histograms for stn. std. devs.
-	stnstdhi = stnstd + 1; % max (stnstd);
-	stnstdlo =  stnstd - 1; %min (stnstd);
+	stnstdhi = solstat(1).stat_std_arr + 1; % max (stnstd);
+	stnstdlo = solstat(1).stat_std_arr - 1; %min (stnstd);
 	stnbinwid = (stnstdhi - stnstdlo)/histbins;
 	% stnxaxis = linspace (stnstdhi, stnstdlo, histbins);
 
@@ -156,13 +166,13 @@ function func_goodcalsol (fname, offset, nrecs, wrbad)
 		meanerr (:, ts) = meansol - sol.gainsol.';
 
 		% Decide whether to update the solution buffer with current solution.
-		[goodcal(ts), err(ts), stat_std_arr] = ... 
-				goodcalsol (solwindow, sol.gainsol.', gainmask, solparm, debuglev);
+		solstat(ts) = goodcalsol (solwindow, sol.gainsol.', gainmask, ... 
+									solparm, debuglev);
 
 		% Handle a bad timeslice.
-		if (goodcal(ts) == 0)
+		if (solstat(ts).goodstncal == 0)
 			fprintf (2, 'Rec: %03d, Time: %.2f, good = %d.\n', ...
-				 ts+offset, sol.tobs, goodcal(ts));
+				 ts+offset, sol.tobs, solstat(ts).goodstncal);
 			% fprintf (1, '%s\n', num2str(stat_std_arr, '%5.3f '));
 			if (wrbad == 1)
 				wrcalsol2bin (fsol, sol);
@@ -170,14 +180,14 @@ function func_goodcalsol (fname, offset, nrecs, wrbad)
 			badsols = badsols + 1;
 		else	
 			fprintf (1, 'Rec: %03d, Time: %.2f, good = %d.\n', ...
-				 ts+offset, sol.tobs, goodcal(ts));
+				 ts+offset, sol.tobs, solstat(ts).goodstncal);
 			solwindow (mod(ts,solwinsize) + 1, :) = sol.gainsol;
 			% fprintf (1, '%s\n', num2str(stat_std_arr, '%5.3f '));
 		end;
 
 		% update std. histograms.
 		for stn = 1:6
-			bin = int32 (histbins/2 + (stat_std_arr (stn) - stnstd(stn)) ./ stnbinwid(stn));
+			bin = int32 (histbins/2 + (solstat(ts).stat_std_arr (stn) - solstat(1).stat_std_arr(stn)) ./ stnbinwid(stn));
 			% Cutoff outliers.
 			if (bin > histbins) bin = histbins; end;
 			if (bin < 1) bin = 1; end;

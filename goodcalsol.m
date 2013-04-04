@@ -16,12 +16,16 @@
 %   debug  : Debug level of script. Uses handles passed in solparm for plotting 
 %			 thresholds against data.
 % Returns:
-%     goodstncal : Bool desc. the goodness of a calsol wrt. intra station test.
-%     err        : Relative error wrt. mean solution over the window.
-%     stat_std   : Complex stds. of each station over window.
+% solstat.goodstncal:Bool desc. the goodness of a calsol wrt.intra station test.
+% solstat.err       : Relative error in percent. wrt. mean solution over window.
+% solstat.stat_std_arr: Complex stds. of each station over window.
+% solstat.mse_amp   : MSE over amplitudes
+% solstat.mse_ph
+% solstat.mse_re
+% solstat.mse_im
+% solstat.mse
 
-function [goodstncal, err, stat_std_arr] =  goodcalsol (solwindow, currsol, ... 
-													gainmask, solparm, debug)
+function [solstat] =  goodcalsol (solwindow, currsol, gainmask, solparm, debug)
 	
 	% Compute mean of real and imaginary components separately.
 	meansol = mean(solwindow);
@@ -62,23 +66,23 @@ function [goodstncal, err, stat_std_arr] =  goodcalsol (solwindow, currsol, ...
 	diffph = diffph * (180/pi); % Convert to degrees.
 
 	npar = length(meansol); 
-	mse = (diffcart * diffcart')/(2*npar); % 2 for re/im, avg. err per ant.
+	solstat.mse = (diffcart * diffcart')/(2*npar); % 2 for re/im, avg. err per ant.
 	% Currently not being used.   
-	mse_re  = sum (real (diffcart).^2)/npar; % avg. err in real component
-	mse_im  = sum (imag (diffcart).^2)/npar; % avg. err in imag component
+	solstat.mse_re  = sum (real (diffcart).^2)/npar; % avg. err in real component
+	solstat.mse_im  = sum (imag (diffcart).^2)/npar; % avg. err in imag component
 
-	mse_amp = sum (diffamp.^2)/npar;         % avg. err in amp.
-	mse_ph  = sum (diffph.^2)/npar;          % avg. err in ph, in deg.
+	solstat.mse_amp = sum (diffamp.^2)/npar;         % avg. err in amp.
+	solstat.mse_ph  = sum (diffph.^2)/npar;          % avg. err in ph, in deg.
 
 	% Compute relative error of this solution wrt. mean solution.
-	err = 100*sum(abs(meansol - currsol)) / sum(abs(meansol));
+	solstat.err = 100*sum(abs(meansol - currsol)) / sum(abs(meansol));
 	% If phases are constant, but amplitudes change, it is still a good sol.
-	pherr = 100*sum(angle(meansol - currsol)) / sum(abs(meansol));
+	solstat.pherr = 100*sum(angle(meansol - currsol)) / sum(abs(meansol));
 
 	% Compute per station gain variances. NOTE: All solution always have 288 
 	% elements. Also, std (complex number) = sqrt (std(re).^2 + std(im).^2);
-	goodstncal = 1;
-	stat_std_arr = zeros (1, 6);
+	solstat.goodstncal = 1;
+	solstat.stat_std_arr = zeros (1, 6);
 	for sta=0:5
 		sta_ind = [sta*48+1 : (sta+1)*48];
 		% Use only unflagged antennas per station
@@ -90,7 +94,7 @@ function [goodstncal, err, stat_std_arr] =  goodcalsol (solwindow, currsol, ...
 		solwin_std_re = std(real (meansol(gainmask(sta_ind) == 0)));
 		solwin_std_im = std(imag (meansol(gainmask(sta_ind) == 0)));
 
-		stat_std_arr(sta+1) = stat_std;
+		solstat.stat_std_arr(sta+1) = stat_std;
 
 		% Print the offending stds.
 %		fprintf (1, '%3.1f/%3.1f [%3.1f/%3.1f, %3.1f/%3.1f] ', ... 
@@ -111,29 +115,36 @@ function [goodstncal, err, stat_std_arr] =  goodcalsol (solwindow, currsol, ...
 	end;
 	
 	% Also considered a bad solution if relative error is larger than specified.
-	if (goodstncal == 1 && err > solparm.errthresh)
-		if (mse_ph < 30) % < 30deg. phase err is OK to pass.
-			goodstncal = 1;
+	if (solstat.goodstncal == 1 && solstat.err > solparm.errthresh)
+		if (solstat.mse_ph < 30) % < 30deg. phase err is OK to pass.
+			solstat.goodstncal = 1;
 		else
-			goodstncal = 0;
+			solstat.goodstncal = 0;
 		end;
 		% pause;
 	end;
-	fprintf (1, '{%5.2f, %4.1f, m:%5.2f, r:%5.2f, i:%5.2f, a:%5.2f, p:%5.2f} ', err, pherr, mse, mse_re, mse_im, mse_amp, mse_ph);
+	fprintf (1, '{%5.2f, %4.1f, m:%5.2f, r:%5.2f, i:%5.2f, a:%5.2f, p:%5.2f} ', solstat.err, solstat.pherr, solstat.mse, solstat.mse_re, solstat.mse_im, solstat.mse_amp, solstat.mse_ph);
 
+	% Uncomment conditional to plot only the bad solutions.
 	if (debug >= 4) % && goodstncal == 0)
-		% Plotting only the bad solutions.
+		
 		figure (solparm.gainplt);
 		subplot (1, 2, 1);
 		% plot (abs(solwindow)');
 		plot (real(solwindow)');
+		xlabel ('Antenna number');
+		title ('Real component of sol window');
 		subplot (1, 2, 2);	
 		% plot (angle (solwindow)');
 		plot (imag (solwindow)');
+		xlabel ('Antenna number');
+		title ('Imag component of sol window');
 		
 		figure (solparm.currsolplt);
 		subplot (1,2,1);
 		plot (abs(meansol), '-b');
+		xlabel ('Antenna number');
+		title ('Mean solution Vs. current solution');
 		hold on;
 		plot (abs(currsol), '-r');
 		hold off;
