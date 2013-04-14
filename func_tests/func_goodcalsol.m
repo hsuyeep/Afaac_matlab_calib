@@ -10,7 +10,7 @@
 %  wrbad : bool controlling writing of bad solutions to disk.
 
 
-function func_goodcalsol (fname, offset, nrecs, wrbad) 
+function func_goodcalsol (fname, offset, nrecs, wrbad, pltall) 
 
 	debuglev = 4;
 
@@ -26,7 +26,7 @@ function func_goodcalsol (fname, offset, nrecs, wrbad)
 		% pos = [left bottom width height]
 		pos1 = [edge, 0, scnsize(3)/2 - edge, scnsize(4)/2];
 		set(solparm.gainplt,'OuterPosition',pos1);
-		pos1 = [edge+scnsize(3)*(1/2), 0, scnsize(3)/2 - edge, scnsize(4)/2];
+		pos1 = [edge+scnsize(3)*(1/2), 0, scnsize(3)/2-edge, scnsize(4)/2];
 		set(solparm.currsolplt,'OuterPosition',pos1);
 	end;
 
@@ -37,7 +37,7 @@ function func_goodcalsol (fname, offset, nrecs, wrbad)
 	if (wrbad == 1)
 		k = strfind (fname, '.bin');
 		outfname = [fname(1:k-1) '_' num2str(offset) '_badsol.bin'];
-		fprintf (1, 'func_goodcalsol:Writing bad solutions to file : %s.\n',...
+		fprintf (1, 'func_goodcalsol:Writing bad sols to file : %s.\n',...
 			 outfname);
 		fsol = fopen (outfname, 'wb');
 	end;
@@ -53,7 +53,7 @@ function func_goodcalsol (fname, offset, nrecs, wrbad)
 	Nelem = length (sol0.gainsol);
 
 	if (isempty(nrecs) || nrecs < 0)
-		% Determine number of records: Crude way, as record size could not be 
+		% Determine number of records: Crude way, as recsize could not be 
 		% determined correctly!
 		t = whos ('sol0');
 		recsize = t.bytes; 
@@ -64,16 +64,21 @@ function func_goodcalsol (fname, offset, nrecs, wrbad)
 	end;
 
 	% Generate data structures 
-	solparm.solthresh=0.15;% Reject calsolutions with std. across antennas
-						% in a station > solthresh percent from mean solutions.
-	solparm.errthresh = 10; % Tolerance as offset from mean gainsol, in percent
+	% Reject calsolutions with std. across antennas in a station > solthresh
+	% percent from mean solutions.
+	solparm.solthresh=0.15;
+	% solparm.errthresh = 10; % Tolerance as offset from mean gainsol, percent
+	% solparm.mse_ph_thresh = 30;% Deg, for mse phase error
+	solparm.errthresh = 15; % Tolerance as offset from mean gainsol, percent
+	solparm.mse_ph_thresh = 50;% Deg, for mse phase error
 	solwinsize = 10; 
-	solwindow = complex (zeros (solwinsize, Nelem), zeros (solwinsize, Nelem)); 
+	solwindow = complex (zeros (solwinsize, Nelem), ... 
+						 zeros (solwinsize, Nelem)); 
 	gainmask = zeros (1, Nelem);
 	gainmask (sol0.flagant) = 1;
 	meangain = zeros (Nelem, nrecs);
 	meanerr = meangain;
-	% solstat = zeros (1, nrecs); % NOTE: Trying to create an array of structures here!
+	stat_std_ts = zeros (6, nrecs);
 	badsols = 0;
 	col = {'bo-', 'mo-', 'ro-', 'ko-', 'go-', 'yo-', 'wo-', 'co-'};
 
@@ -81,21 +86,34 @@ function func_goodcalsol (fname, offset, nrecs, wrbad)
 	histbins = 30;
 	re_hist = zeros (Nelem, histbins);
 	im_hist = re_hist;
+	err_ts = zeros (1, nrecs);
+	mse_ph_ts = zeros (1, nrecs);
+	mse_amp_ts = mse_ph_ts;
 	stnstdhist = zeros (6, histbins); % Histogram of station stds.
 	badgainint = 50; % Interval over which to count bad gains, in recs.
 	badgainhistory = zeros (1, int32(nrecs/badgainint));
 	badint = 1;
 
-	% Fill in the window: NOTE: NOT CHECKING FOR BAD SOUTIONS!
+	% Fill in the window: 
 	fprintf (1, 'Filling solution window...');
-	for ts = 1:solwinsize
+	ts = 0;
+	while (1)
+	% for ts = 1:solwinsize
 		try
 			sol = readcalsol (fid);
 		catch
 			fprintf (1, 'func_goodcalsol: Error in readcalsol!\n');
 		end;
 		% gainsol = complex (sol.real_gainsol, sol.imag_gainsol);
-		solwindow (mod(ts,solwinsize) + 1, :) = sol.gainsol;
+		solstat(1) = goodcalsol (solwindow, ts, sol.gainsol.', gainmask, ...
+								 solparm, debuglev);
+		if (solstat(1).goodstncal == 1)
+			ts = ts + 1;
+			if (ts == solwinsize)
+				break;
+			end;
+			solwindow (mod(ts,solwinsize), :) = sol.gainsol;
+		end;
 	end;
 	fprintf (1, 'Done.\n');
 	% Mean re/im components for histograms
@@ -118,7 +136,7 @@ function func_goodcalsol (fname, offset, nrecs, wrbad)
 	% xaxis = linspace (rehistlo, rehisthi, histbins);
 
 	% gainsol = complex (sol.real_gainsol', sol.imag_gainsol');
-	solstat(1) = goodcalsol (solwindow, sol.gainsol.', ... 
+	solstat(1) = goodcalsol (solwindow, solwinsize, sol.gainsol.', ... 
 												gainmask, solparm, debuglev);
 	% setup histograms for stn. std. devs.
 	stnstdhi = solstat(1).stat_std_arr + 1; % max (stnstd);
@@ -166,8 +184,17 @@ function func_goodcalsol (fname, offset, nrecs, wrbad)
 		meanerr (:, ts) = meansol - sol.gainsol.';
 
 		% Decide whether to update the solution buffer with current solution.
-		solstat(ts) = goodcalsol (solwindow, sol.gainsol.', gainmask, ... 
+		solstat(ts) = goodcalsol (solwindow, solwinsize, sol.gainsol.', gainmask, ... 
 									solparm, debuglev);
+		err_ts(ts) = solstat(ts).err;
+		% if (solstat(ts).mse_ph > 2*solparm.mse_ph_thresh)
+		%	mse_ph_ts(ts) = solparm.mse_ph_thresh;
+		% else
+		 	mse_ph_ts(ts) = solstat(ts).mse_ph;
+			mse_amp_ts (ts) = solstat(ts).mse_amp;
+		% end;
+		stat_std_ts (:, ts) = solstat(ts).stat_std_arr;
+
 
 		% Handle a bad timeslice.
 		if (solstat(ts).goodstncal == 0)
@@ -202,14 +229,34 @@ function func_goodcalsol (fname, offset, nrecs, wrbad)
 	end;
 
 	fprintf (1, '\nNumber of bad gains: %d\n', badsols);
+	fprintf (1, 'Mean/std of phase std. across stations:\n');
+	for stn=1:6
+		[m_stn(stn), v_stn(stn), sel]=robustmean (stat_std_ts (stn, :), 3);
+		fprintf (1, '%.2f/%.2f  ', m_stn(stn), v_stn(stn));
+	end;
+	fprintf ('\n');
+
 	% Plot results
 	figure;
 	subplot (1,2,1);
-	imagesc (re_hist);
-	title ('Histogram of real gainsol');
+	% imagesc (re_hist);
+	% title ('Histogram of real gainsol');
+	hist (err_ts);
+	title ('Rel. err. wrt. meansol. histogram');
+	[m, v, sel] = robustmean (err_ts, 3);
+	fprintf (1, 'Mean/std of rel. err: %f/%f\n', m, v);
+
 	subplot (1,2,2);
-	imagesc (im_hist);
-	title ('Histogram of imag. gainsol');
+	% imagesc (im_hist);
+	% title ('Histogram of imag. gainsol');
+	hist (mse_ph_ts);
+	title (sprintf ('MSE phase histogram, saturating at %d deg.', ... 
+					solparm.mse_ph_thresh*2));
+	[m, v, sel] = robustmean (mse_ph_ts, 3);
+	fprintf (1, 'Mean/std of mse_ph_ts: %f/%f\n', m, v);
+	[m, v, sel] = robustmean (mse_amp_ts, 3);
+	fprintf (1, 'Mean/std of mse_amp_ts: %f/%f\n', m, v);
+
 	tb1 = uicontrol ('style', 'text');
 	set (tb1, 'Units', 'characters');
 	pos = get (tb1, 'Position');

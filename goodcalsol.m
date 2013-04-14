@@ -20,15 +20,71 @@
 % solstat.err       : Relative error in percent. wrt. mean solution over window.
 % solstat.stat_std_arr: Complex stds. of each station over window.
 % solstat.mse_amp   : MSE over amplitudes
-% solstat.mse_ph
-% solstat.mse_re
-% solstat.mse_im
-% solstat.mse
+% solstat.mse_ph    : MSE over phases
+% solstat.mse_re    : MSE over real components
+% solstat.mse_im    : MSE over imag components
+% solstat.mse       : MSE over cartesian differences.
+% Algorithm:
+%   The check for a good solution occurs on the phase and amplitude of the 
+% solution. First, the relative error between the current solution and the mean
+% solution is determined. If this is large, the phase is checked with a more 
+% stringent condition (since a phase error is more damaging than an amp. error).
 
-function [solstat] =  goodcalsol (solwindow, currsol, gainmask, solparm, debug)
+function [solstat] =  goodcalsol (solwindow, nsol, currsol, gainmask, solparm, debug)
 	
+	if (nsol == 0) % Window is empty
+		% NOTE: Order in which structure entries are filled matters! CRAZY!
+		solstat.mse = 0;
+		% Currently not being u
+		solstat.mse_re  = 0;
+		solstat.mse_im  = 0;
+		solstat.mse_amp = 0; 
+		solstat.mse_ph  = 0; 
+		solstat.err = 0;
+		solstat.pherr = 0
+		solstat.stat_std_arr = zeros (1, 6);
+		% No window to compare against, just check the consistency over stations
+		% of variance in gain amp and phase within a station.
+		for sta=0:5
+			sta_ind = [sta*48+1 : (sta+1)*48];
+			% Use only unflagged antennas per station, check phase variance.
+			% Take care of phase wraps.
+			station_ph = angle (currsol (gainmask(sta_ind) == 0));
+			station_amp = abs (currsol (gainmask (sta_ind) == 0));
+			
+			% Phase unwrap
+			diffphfact = abs(station_ph ./ pi);
+			sel = diffphfact > 0.5; % Choose phase differences > 0.5 rad.
+			diffphfact (sel) = ceil (diffphfact (sel)); % Convert to integers.
+			diffphfact (sel == 0) = floor (diffphfact(sel == 0));
+			% Choose +ve phase differences, need to subtract 2pi mult.
+			sel = station_ph > 0; 
+			station_ph (sel) = station_ph (sel) - diffphfact(sel)*pi;
+			station_ph (sel==0) = station_ph (sel==0) + diffphfact(sel==0)*pi;
+			station_ph = station_ph * (180/pi); % Convert to degrees.
+
+			solstat.stat_std_arr(sta+1) = std(station_ph);
+	
+		end;
+
+		% Why should the std be comparable to the mse threshold?
+		% NOte this can be used to eliminate the sols. with completely random 
+		% phases, especially when no window is available...
+		if (sum (solstat.stat_std_arr > solparm.mse_ph_thresh)>	1)
+			solstat.goodstncal = 0;
+		else 
+			solstat.goodstncal = 1;
+		end;
+		return;
+	end;
+
+
 	% Compute mean of real and imaginary components separately.
-	meansol = mean(solwindow);
+	if (nsol == 1)
+		meansol = solwindow(1,:);
+	else 
+		meansol = mean(solwindow (1:nsol,:));
+	end;
 
 %	if (debug >= 4)
 %		figure (solparm.gainplt);
@@ -64,15 +120,23 @@ function [solstat] =  goodcalsol (solwindow, currsol, gainmask, solparm, debug)
 	diffph (sel) = diffph (sel) - diffphfact(sel)*pi;
 	diffph (sel == 0) = diffph (sel == 0) + diffphfact(sel == 0)*pi;
 	diffph = diffph * (180/pi); % Convert to degrees.
+	[m, v, sel] = robustmean (diffph, 5); % Ignoring phases > 5sigma.
+
+	% Arbit. declaring bad if >0.5 of antennas need to be thrown while 
+	% constructing a robust mean.
+%	if (sum(sel) < length (diffph)/2)     
+%	end;
 
 	npar = length(meansol); 
-	solstat.mse = (diffcart * diffcart')/(2*npar); % 2 for re/im, avg. err per ant.
+
+	% 2 for re/im, avg. err per ant.
+	solstat.mse = (diffcart * diffcart')/(2*npar); 
 	% Currently not being used.   
-	solstat.mse_re  = sum (real (diffcart).^2)/npar; % avg. err in real component
-	solstat.mse_im  = sum (imag (diffcart).^2)/npar; % avg. err in imag component
+	solstat.mse_re  = sum (real (diffcart).^2)/npar; % avg. err in real 
+	solstat.mse_im  = sum (imag (diffcart).^2)/npar; % avg. err in imag 
 
 	solstat.mse_amp = sum (diffamp.^2)/npar;         % avg. err in amp.
-	solstat.mse_ph  = sum (diffph.^2)/npar;          % avg. err in ph, in deg.
+	solstat.mse_ph  = sum (diffph(sel == 1).^2)/npar;% avg. err in ph, in deg.
 
 	% Compute relative error of this solution wrt. mean solution.
 	solstat.err = 100*sum(abs(meansol - currsol)) / sum(abs(meansol));
@@ -81,8 +145,6 @@ function [solstat] =  goodcalsol (solwindow, currsol, gainmask, solparm, debug)
 
 	% Compute per station gain variances. NOTE: All solution always have 288 
 	% elements. Also, std (complex number) = sqrt (std(re).^2 + std(im).^2);
-	solstat.goodstncal = 1;
-	solstat.stat_std_arr = zeros (1, 6);
 	for sta=0:5
 		sta_ind = [sta*48+1 : (sta+1)*48];
 		% Use only unflagged antennas per station
@@ -115,15 +177,16 @@ function [solstat] =  goodcalsol (solwindow, currsol, gainmask, solparm, debug)
 	end;
 	
 	% Also considered a bad solution if relative error is larger than specified.
+	solstat.goodstncal = 1;
 	if (solstat.goodstncal == 1 && solstat.err > solparm.errthresh)
-		if (solstat.mse_ph < 30) % < 30deg. phase err is OK to pass.
+		if (solstat.mse_ph < solparm.mse_ph_thresh) % < 30deg. phase err is OK to pass.
 			solstat.goodstncal = 1;
 		else
 			solstat.goodstncal = 0;
 		end;
 		% pause;
 	end;
-	fprintf (1, '{%5.2f, %4.1f, m:%5.2f, r:%5.2f, i:%5.2f, a:%5.2f, p:%5.2f} ', solstat.err, solstat.pherr, solstat.mse, solstat.mse_re, solstat.mse_im, solstat.mse_amp, solstat.mse_ph);
+	fprintf (1, '{e:%5.1f, %4.1f, m:%5.2f, r:%5.2f, i:%5.2f, a:%5.2f, p:%5.2f} ', solstat.err, solstat.pherr, solstat.mse, solstat.mse_re, solstat.mse_im, solstat.mse_amp, solstat.mse_ph);
 
 	% Uncomment conditional to plot only the bad solutions.
 	if (debug >= 4) % && goodstncal == 0)

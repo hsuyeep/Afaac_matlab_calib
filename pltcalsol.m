@@ -134,7 +134,7 @@ function [srcflux, re_gain, im_gain] = pltcalsol (fname, nrecs, showplt)
 				plot (rec.tobs-t_first, rec.sigmas(src), char(col(src)));
 				hold on;
 			end;
-			title (sprintf ('Extracted fluxes of model sources from %s', fname));
+			title ('Extracted fluxes of model sources.');
 			xlabel ('Time (sec from obs. commencement)');
 			ylabel ('Flux ratio normalized to CasA flux');
 	
@@ -142,27 +142,29 @@ function [srcflux, re_gain, im_gain] = pltcalsol (fname, nrecs, showplt)
 			currgain = rec.gainsol; % (flagant == 0);
 			gaindiff = currgain - prevgain;
 			gainratio = currgain ./ prevgain;
-			prevgain = currgain;
 	
 			subplot (2,3,1);
-			plot (abs (gaindiff), 'ro');
+			% plot (abs (gaindiff), 'ro');
+			plot (abs(currgain) - abs(prevgain));
 			title (sprintf ('Gain time diff abs: Time: %.2f', rec.tobs));
 	
 			subplot (2,3,2);
-			plot (angle (gaindiff), 'ro');
-			title (sprintf ('Gain time diff phase: Time: %.2f', rec.tobs));
-	
-			subplot (2,3,3);
+			% plot (angle (gaindiff), 'ro');
 			plot (abs(currgain), 'bo');
 			title ('Dipole gain abs.');
+
 	
-			subplot (2,3,4);
-			plot (angle(currgain), 'bo');
-			title ('Dipole gain phase');
-	
-			subplot (2,3,5);
+			subplot (2,3,3);
 			plot (abs(gainratio), 'go');
 			title ('Dipole gain ratio abs.');
+	
+			subplot (2,3,4);
+			plot (180/pi*unwrap(angle (currgain) - angle (prevgain)));
+			title (sprintf ('Gain time diff phase(deg): Time: %.2f', rec.tobs));
+	
+			subplot (2,3,5);
+			plot (angle(currgain), 'bo');
+			title ('Dipole gain phase(rad)');
 	
 			subplot (2,3,6);
 			plot (angle(gainratio), 'go');
@@ -206,9 +208,33 @@ function [srcflux, re_gain, im_gain] = pltcalsol (fname, nrecs, showplt)
 			
 			% hold on;
 			% pause; % (0.1);
+			prevgain = currgain;
 		end;
 	end;
 	fclose (fid);
+
+	% Stamp the plots with filenames
+	if (showplt == 1)
+		figure (fluxplt);
+		tb1 = uicontrol ('style', 'text');
+		set (tb1, 'Units', 'characters');
+		pos = get (tb1, 'Position');
+	    pos(1) = 0; pos (2) = 0; pos(3) = length(fname); pos(4) = 1; 
+		set (tb1, 'Position', pos); set (tb1, 'FontSize', 8);
+		set (tb1, 'String', fname);
+
+		figure (gainplt);
+		tb1 = uicontrol ('style', 'text');
+		set (tb1, 'Units', 'characters');
+		set (tb1, 'Position', pos); set (tb1, 'FontSize', 8);
+		set (tb1, 'String', fname);
+		
+		figure (noiseplt);
+		tb1 = uicontrol ('style', 'text');
+		set (tb1, 'Units', 'characters');
+		set (tb1, 'Position', pos); set (tb1, 'FontSize', 8);
+		set (tb1, 'String', fname);
+	end;
 
 	% Now generate histograms of each dipoles' gain amplitudes
 	gainrehist = hist (re_gain, 100); % 100 bins

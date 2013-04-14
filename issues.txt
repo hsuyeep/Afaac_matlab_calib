@@ -1,0 +1,157 @@
+Issue list for aartfaac calibration and imaging:
+
+Visibility processing optimization
+----------------------------------
+- What is the distribution of baselines/visibilities in spatial freq, for the 
+  various operating modes of the AARTFAAC? 
+- Can we average 'closeby' visibilities together to reduce computation and
+  increase SNR?
+- Can we eliminate some visibilities without losing too much calibration 
+  solution SNR or image dynamic range?
+
+Phase calibration for ionospheric distortions using WSF
+-----------------------------------------------
+- What is the error on the WSF positions?
+- What happens if we do not use the WSF at all, but a more accurate sky-model, 
+  say from the VLSS?
+- What is the effect of not correcting a position error of model sources by 
+  a few PSF widths? ie, what are the phase errors introduced, and does this 
+  have an implication on deciding the working calibration unit?
+- What is the effect of multiple rounds of WSF, with a better calibration in 
+  each iteration? (Since WSF is sensitive to array calibration). What if in 
+  tracking calibration we first calibrate the array using a prev. solution 
+  before WSF?
+- What is the effect of instantaneous RFI on WSF? (As the signal model assumes 
+  spatial incoherence of the emitters, so that the array manifold is 
+  unambiguous.)
+- How strong does an emitter have to be for WSF to converge? Can we extend it
+  to weaker sources? Say the LOFAR calibrators?
+- How long can we coast on WSF solutions? 
+- What is the effect of feed-forward of WSF estimates to next timeslice on the
+  calibration solutions of that timeslice?
+
+- What is the convergence rate of WSF with NM fminsearch?
+- 
+
+Amplitude calibration
+---------------------
+- Is there a correlation between antenna gain amplitude estimates and extracted
+  fluxes of the model sources?
+
+Flagging
+--------
+- What is the fraction of data which is being flagged currently as a function of
+  subband, and what are the most common errors?
+
+- How do low level RFI features behave on calibration? Is there a need for post 
+  calibration flagging?
+- Can insight be gained into flagging by looking at neighbouring channels as 
+  well? ie, do we need to couple flagging info across the spectra?
+
+Overall calibration
+-------------------
+- What is the effect of bright transients/instantaneous RFI on the calibration?
+- Can we see the effect of the ionosphere on generated images, say via image 
+  wander? or amplitude scintillations?
+- What about applying average calibration solutions to instantaneous 
+  visibilities?
+- How does calibratability change as a function of time and bandwidth smearing?
+  ie, what is the calibration unit to choose for the AARTFAAC?
+- What is the overall effect of the frequency axis on calibration solutions?
+- How independent of frequency is the calibration, can each calibration unit be 
+  treated completely independently?
+- What is the role of polarization within the ASM's operational boundaries?
+
+- What is the rate of divergence of calibration solutions from a given point 
+  in time? This should change slowly, at rates corresponding to instrumental 
+  and sky variations.
+- Is it better to calibrate several 3 KHz chunks of the spectrum, average the
+  calibrated visibilities, and then create a single image? Or calibrate and 
+  image at 3 KHz, and then average the images? Or is it better to average the 
+  uncalibrated visibilities, carry out a single calibration at higher SNR, and 
+  image at the integrated spectral resolution?
+- What about generating total intensity images? Currently, we calibrate the XX
+  correlations only, but for I images, we'll need XX+YY. How do the YY images 
+  look?
+- What is the dynamic range of images generated using only 3 KHz of bandwidth?
+  Is it better to calibrate at high spectral resolution and then integrate over
+  frequency?
+  
+
+
+Tracking calibration
+--------------------
+- In what fraction of timeslices do we actually have to do a convergent 
+  calibration? How effective is tracking calibration in practice?
+- Under different observing conditions, what are the adequate number of 
+  iterations to carry out to ensure a specified calibration error?
+- what is the effect of low level RFI on the solution propagation in trackcal?
+- What is the best criteria for establishing the goodness of a solution in a 
+  pipelined manner? Currently looking at estimated gain phase MSE. See Kazemi
+  SAGECal description paper.
+
+
+Imaging
+-------
+- What is the effect of various imaging parameters on calibrated AARTFAAC 
+  visibilities? Try with CASA imager using different settings.
+- Facetted imaging: Do we do that as routine? Is w-projection a better way to
+  get high sensitivity image edges? (see w-proj. paper by cornwell).
+- What should be the pixel spacing for all-sky imaging? currently we go slightly
+  over nyquist...
+- Is there any requirement for A-projection, considering sources are still 
+  moving through the sidelobes. Maybe since we are making snapshot images, 
+  things are still fine, but what if we want to stack images for sensitivity?
+- What kind of weighting of the visibilities is suitable for point source 
+  detection from the AARTFAAC?
+- What kind of gridding does a suitable interpolation for AARTFAAC visibilities?
+  What is the effect of the high UV sampling density on chosen interpolation 
+  schemes?
+- What are the implications of stacking images over frequency to generate higher
+  sensitivity images?
+
+Source extraction
+-----------------
+- What is the stability of extracted fluxes of the brightest sources in the 
+  observed sky? Do any systematic variations correlate with gain estimations?
+- What is the region from which one can reliably extract sources?
+
+Observation simulations
+-----------------------
+- How does one add noise to a simulation for a specified per-dipole sensitivity?
+- 
+
+Noise analysis
+--------------
+- Given the sensitivities of antennas and the sky temprature at a given time 
+  (sky background + bright sources within FoV), what is the expected increase 
+  in noise due to 4-bit representation for the complex subbands?
+- How does the calibration distribute non-modelable effects to the noise 
+  estimates? Specifically see this under day time conditions.
+- How does the noise estimation vary as a function of frequency?
+- What is the contribution of confusion noise for different observing 
+  configurations?
+- What is hte contribution of self noise from the A-team sources to the image?
+  what about after A-team subtraction (see Anantha's paper), do we need to do 
+  anything special to handle the excess noise left over after src removal?
+
+Galactic modelling:
+-------------------
+- For spatial filtering of the galaxy, what is the visibility cutoff under 
+  different observing conditions? Should this be adapted to different observing 
+  conditions?
+- What is the computational load of shapelet analysis of the galaxy?
+- What is the error in the shapelet analysis, and do we still need to carry out
+  a spatial filtering of the galaxy after a shapelet representation?
+- How can modeling errors be quantified? Can they be tested using simulations?
+
+Commensal observations with LOFAR
+---------------------------------
+- How does one communicate the change of modes in LOFAR, which affect our 
+  observations, and do we have to do anything to account for it?
+- 
+
+--------------------------------------------------------------------------------
+Implementation issues:
+---------------------
+- Separation of flagging mask from spatial filtering mask.
