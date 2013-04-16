@@ -87,8 +87,8 @@ Tracking calibration
   iterations to carry out to ensure a specified calibration error?
 - what is the effect of low level RFI on the solution propagation in trackcal?
 - What is the best criteria for establishing the goodness of a solution in a 
-  pipelined manner? Currently looking at estimated gain phase MSE. See Kazemi
-  SAGECal description paper.
+  pipelined manner? Currently looking at estimated gain phase MSE. (See Kazemi
+  SAGECal description paper also).
 
 
 Imaging

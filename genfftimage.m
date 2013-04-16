@@ -16,7 +16,7 @@
 %				out using floats. NOTE: If writing to file, images are not shown.
 
 function [img_l, img_m, img] =  ... 
-    genfftimage (fname,ntslices, offset, posfilename, mosaic, caxisrng, wr2file)
+    genfftimage (fname,ntslices, offset, posfilename, weight, uvcellsize, mosaic, caxisrng, wr2file)
 	radec = 0;
     duv = 2.5;						% Default, reassigned from freq. of obs. to
 									% image just the full Fov (-1<l<1)
@@ -49,6 +49,7 @@ function [img_l, img_m, img] =  ...
 	% Obtain image parameters from visibility file.
 	fin = fopen (fname, 'rb');
 	[acc, img.tobs, img.freq] = readms2float (fin, offset, -1, 288);
+	Nelem = size (acc, 1);
 	lambda = 299792458/img.freq; 		% in m.
 	duv = lambda/2;
 	
@@ -98,21 +99,46 @@ function [img_l, img_m, img] =  ...
 	elembeam = ones (size (mask));
 	elembeam = max(max(elembeam(:,:,1))) ./ elembeam (:,:,1);
 
+	% UNTESTED! Works well only with cellsizes of <10meters.
+	% Generate weighting mask on sampled visibilities. Those in a higher density
+	% uvcell are weighted down (divided by a larger number).
+%	weightmask = ones (size (acc));
+%	if (weight == 1)
+%		uvec = uloc (:); vvec = vloc (:);
+%		weightvec = weightmask (:);
+%		for uind = 1:max(uvec)/uvcellsize
+%			usel = (abs(uvec) > (uind-1)*uvcellsize) & ...
+%				   (abs(uvec) < uind*uvcellsize);
+%			for vind = 1:max(vvec)/uvcellsize
+%				vsel = (abs(vvec) > (vind-1)*uvcellsize) & ...
+%					   (abs(vvec)<vind*uvcellsize);
+%				sel = usel & vsel;
+%				w = sum (sel); % Weight = total number of visibilities in range.
+%				weightvec (usel & vsel) = 1/w;
+%			end;
+%		end;
+%		weightmask = reshape (weightvec, [Nelem, Nelem]);
+%	end;
+	
+% figure;
+% mesh (weightmask);
+
 	for ts = 1:ntslices
 
 		if (isempty (acc) == false)
 			fprintf (1, 'Slice: %3d, Time:%.2f, Freq:%.2f.\n', ... 
 					 offset+ts,img.tobs, img.freq); 
+			acc_weighted = acc .* weightmask;
 
 			if (mosaic == 0)
 				% Image current timeslice. Generate a zenith image.
 		   		[radecmap, img.map, calvis, img.l, img.m] = ... 
-				  fft_imager_sjw_radec (acc(:), uloc(:), vloc(:), ... 
+				  fft_imager_sjw_radec (acc_weighted(:), uloc(:), vloc(:), ... 
 							duv, Nuv, uvpad, img.tobs, img.freq, radec);
 			else
 				% Image current timeslice. Generate a mosaic image.
 		   		[img.map, img.l, img.m] = ... 
-						genmosaic(acc, img.tobs, img.freq, nfacet, facetsize, ...
+						genmosaic(acc_weighted, img.tobs, img.freq, nfacet, facetsize, ...
 								uloc(:), vloc(:), posITRF, 0);
 			end;
 

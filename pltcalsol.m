@@ -23,7 +23,8 @@ function [srcflux, re_gain, im_gain] = pltcalsol (fname, nrecs, showplt)
 	fclose (fid);
 	fid = fopen (fname, 'rb');
 	ind = 1;
-	col = {'bo', 'mo', 'ro', 'ko', 'go', 'yo', 'wo', 'co'};
+	% col = {'bo', 'mo', 'ro', 'ko', 'go', 'yo', 'wo', 'co'};
+	col = {'b.', 'm.', 'r.', 'k.', 'g.', 'y.', 'w.', 'c.'};
 
 	try
 		rec0 = readcalsol (fid);
@@ -276,23 +277,53 @@ function [srcflux, re_gain, im_gain] = pltcalsol (fname, nrecs, showplt)
 %	surf (1:size (amp_ts, 2), 1:size (amp_ts,1), ph_ts);
 
 	figure;
-	subplot (2,1,1);
+	h(1) = subplot (2,1,1);
 	for ind = 1:6 % 6 stations
 		plot (tstamp, amp_ts(:,24*ind), char(col(ind)));
 		hold on;
 	end;
 	hold off;
-	title (sprintf ('Timeseries of gain magnitudes from individual antennas:%s', fname));
-	xlabel (sprintf ('Time offset (in %0.2sec) from %.2f', dt, t_first));
+	grid;
+	title (sprintf ('Timeseries of complex gains from individual antennas:%s', fname));
+	ylabel ('Gain amplitude (arb. unit)');
+	% Fix number of ticks on axis
+	L = get (gca, 'XLim');
+	set (gca, 'XTick', int32(linspace (L(1), L(2), 5)));
+	L = get (gca, 'YLim');
+	set (gca, 'YTick', int32(linspace (L(1), 25, 5)));
+	set (h(1), 'xticklabel', []); % Turn off the x-axis on top plot.
 
-	subplot (2,1,2);
+	h(2) = subplot (2,1,2);
 	for ind = 1:6 % 6 stations
 		plot (tstamp, ph_ts(:,24*ind), char(col(ind)));
-		title ('Timeseries of gain phases from individual antennas');
 		hold on;
 	end;
 	% text(.75,1.25, sprintf ('File : %s', fname));
 	hold off;
+	grid;
+	ylabel ('Gain phase (rad)');
+
+	% Fix number of ticks on axis
+	L = get (gca, 'XLim');
+	set (gca, 'XTick', int32(linspace (L(1), L(2), 5)));
+	set (h(2), 'YAxisLocation', 'right');
+	% L = get (gca, 'YLim');
+	% set (gca, 'YTick', (linspace (-pi, pi, 5)));
+	% lab = linspace (-pi, pi, 5);
+	% set (gca, 'YTickLabel', sprintf ('%5.2f|', lab));
+	% set (gca, 'YTick', (linspace (-pi, pi, 5)));
+	xlabel (sprintf ('Time offset (in %0.2fsec) from %.2f', dt, t_first));
+	% Move amp and phase plots close to each other.
+	pos=get(h,'position');
+	bottom=pos{2}(2);
+	top=pos{1}(2)+pos{1}(4);
+	plotspace=top-bottom;
+	pos{2}(4)=plotspace/2;
+	pos{1}(4)=plotspace/2;
+	pos{1}(2)=bottom+plotspace/2;
+	set(h(1),'position',pos{1});
+	set(h(2),'position',pos{2});
+	linkaxes (h, 'x');
 
 	figure;
 	subplot (2,2,1)
@@ -320,3 +351,8 @@ function [srcflux, re_gain, im_gain] = pltcalsol (fname, nrecs, showplt)
 	xlabel ('Time slices');
 	ylabel ('Gain error (%)');
 	title ('Error in gain solutions wrt. first solution');
+	L = get (gca, 'XLim');
+	set (gca, 'XTick', int32(linspace (L(1), L(2), 5)));
+	L = get (gca, 'YLim');
+	set (gca, 'YTick', int32(linspace (L(1), 100, 5))); % Not beyond 100%
+	grid;
