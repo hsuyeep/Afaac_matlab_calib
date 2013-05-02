@@ -3,9 +3,13 @@ Issue list for aartfaac calibration and imaging:
 Visibility processing optimization
 ----------------------------------
 - What is the distribution of baselines/visibilities in spatial freq, for the 
-  various operating modes of the AARTFAAC? 
-- Can we average 'closeby' visibilities together to reduce computation and
-  increase SNR?
+  various operating modes of the AARTFAAC? (Although we have a very high
+  concentration of short baselines, which should help model the diffuse emission
+  better, we want to detect point sources, for which we need higher resolution).
+- What is the effect of adding in a few longer baselines? Does it improve our
+  point source sensitivity?
+- Can we average 'closeby' visibilities together to reduce computation in
+  calibration, and increase solution SNR?
 - Can we eliminate some visibilities without losing too much calibration 
   solution SNR or image dynamic range?
 
@@ -26,12 +30,11 @@ Phase calibration for ionospheric distortions using WSF
   unambiguous.)
 - How strong does an emitter have to be for WSF to converge? Can we extend it
   to weaker sources? Say the LOFAR calibrators?
-- How long can we coast on WSF solutions? 
+- How long can we coast on WSF solutions? Maybe the costly WSF can be reduced 
+  and done only periodically.
 - What is the effect of feed-forward of WSF estimates to next timeslice on the
   calibration solutions of that timeslice?
-
-- What is the convergence rate of WSF with NM fminsearch?
-- 
+- What is the convergence rate of WSF with NM fminsearch, as compared to MVP?
 
 Amplitude calibration
 ---------------------
@@ -50,18 +53,29 @@ Flagging
 
 Overall calibration
 -------------------
+- What is the basic calim unit which balances calibration quality and 
+  computational load? What is the SNRs required for the various components of 
+  the algorithm? How does calibratability change as a function of time and 
+  bandwidth smearing? NOTE that parameter variances can be determined for a 
+  snapshot observation using variance across antennas.
+- Can we generate a plot of Time Vs. Freq Vs. calibration 'goodness' surface in
+  order to determine an appropriate cell size?
+- What is the dynamic range of images generated using only 3 KHz of bandwidth?
+  Is it better to calibrate at high spectral resolution and then integrate over
+  frequency?
+- Can we show the rate of variation of instrumental parameters without calibra
+  tion? Maybe via closure phase compared to model closure phase?
+- What is the effect of gain error on point source sensitivity? What if we do a
+  shoddy job of calibration to save computation?
 - What is the effect of bright transients/instantaneous RFI on the calibration?
 - Can we see the effect of the ionosphere on generated images, say via image 
   wander? or amplitude scintillations?
 - What about applying average calibration solutions to instantaneous 
   visibilities?
-- How does calibratability change as a function of time and bandwidth smearing?
-  ie, what is the calibration unit to choose for the AARTFAAC?
 - What is the overall effect of the frequency axis on calibration solutions?
 - How independent of frequency is the calibration, can each calibration unit be 
   treated completely independently?
 - What is the role of polarization within the ASM's operational boundaries?
-
 - What is the rate of divergence of calibration solutions from a given point 
   in time? This should change slowly, at rates corresponding to instrumental 
   and sky variations.
@@ -70,14 +84,10 @@ Overall calibration
   image at 3 KHz, and then average the images? Or is it better to average the 
   uncalibrated visibilities, carry out a single calibration at higher SNR, and 
   image at the integrated spectral resolution?
-- What about generating total intensity images? Currently, we calibrate the XX
-  correlations only, but for I images, we'll need XX+YY. How do the YY images 
-  look?
-- What is the dynamic range of images generated using only 3 KHz of bandwidth?
-  Is it better to calibrate at high spectral resolution and then integrate over
-  frequency?
-  
-
+- What about generating total intensity images? Currently, we calibrate and 
+  image the XX correlation only, how does the YY and total intensity look?
+- Sartaj Sahini: Analysis of algorithms readup for characterising calibration
+  algorithm with various metrics.
 
 Tracking calibration
 --------------------
@@ -109,6 +119,8 @@ Imaging
   schemes?
 - What are the implications of stacking images over frequency to generate higher
   sensitivity images?
+- What kind of deconvolution is appropriate? Do we go for an analytical approach
+  like Wijnholds? or a traditional iterative CLEAN?
 
 Source extraction
 -----------------
@@ -119,7 +131,6 @@ Source extraction
 Observation simulations
 -----------------------
 - How does one add noise to a simulation for a specified per-dipole sensitivity?
-- 
 
 Noise analysis
 --------------
@@ -155,3 +166,29 @@ Commensal observations with LOFAR
 Implementation issues:
 ---------------------
 - Separation of flagging mask from spatial filtering mask.
+
+-------------------- Paper discussion meeting points      ---------------------
+Calibration: Basic points
+- How often do we need to calibrate?
+- How long can we coast on a previous calibration?
+- What is the effect of bad calibration on the generated image?
+- What is the computational effort to calibrate? What approach is cheapest?
+- What is the calibration computational unit to consider?
+- How good a calibration can we do?(How close to thermal noise limit can we go?)
+- Is there any feedback necessary between spectral calibration solutions? (This 
+  influences the calibration pipeline architecture)
+- 
+
+Imaging:
+- What are the best parameters for carrying out imaging with the AARTFAAC's
+  snapshot UV coverage? Also to maximise point source sensitivity?
+- What kind of deconvolution is ideal for a real-time system? 
+- What fraction of the FoV can be reliably searched for transients?
+- What image parameters are being routinely achieved, based on standard or
+  longer integration after rephasing?
+- How does the noise vary across the image, in different epochs of time?
+- How do we combine subbands to create high sensitivity, high bandwidth images?
+- Why do the day time images seem more sensitive than the night time images,
+  based on the number of sources detected? Ellingson talks about the beam 
+  sensitivity being a function of sidereal time, due to galactic noise leakage.
+  

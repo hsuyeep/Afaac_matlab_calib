@@ -9,7 +9,7 @@
 % Returns:
 %  ele_diff, az_diff: Ele., azi differences between catalog and wsf positions.
 
-function cmpcatwsf (fname, nrecs)
+function [dist] = cmpcatwsf (fname, nrecs)
 	fid = fopen (fname, 'rb');
 	srcname = {'3C461', '3C405', '3C144', '3C274', 'Sun'};
 	% To rotate coordinates in ITRF to the plane of CS002
@@ -130,20 +130,24 @@ function cmpcatwsf (fname, nrecs)
 	set (tb1, 'Position', pos); set (tb1, 'FontSize', 8);
 
 	% PLot histograms of differences
-	for src=1:size (srccat_azi, 1)-1 % Don't plot the Sun
+	for src=1:2 % size (srccat_azi, 1)-1 % Don't plot the Sun
 		sel = srccat_azi (src,:) ~= 0; % NOTE: This comparison fails for NaNs!
 		if (sum(sel) == 0)
 			continue;
 		end;
 		figure;
 		% subplot (1,2,1);
+%		dist = sqrt ( ...
+%				((srcwsf_azi (src, sel) - srccat_azi (src, sel))*180/pi).^2 ...
+%			 +	((srcwsf_el (src, sel) - srccat_el (src, sel))*180/pi).^2);
 		dist = sqrt ( ...
-				((srcwsf_azi (src, sel) - srccat_azi (src, sel))*180/pi).^2 ...
-			 +	((srcwsf_el (src, sel) - srccat_el (src, sel))*180/pi).^2);
+				((srcwsf_azi (src, :) - srccat_azi (src, :))*180/pi).^2 ...
+			 +	((srcwsf_el (src, :) - srccat_el (src, :))*180/pi).^2);
 		[m, v, sel1] = robustmean (dist, 5);
 
 		subplot (2,1,1);
-		plot (t_samp(sel), dist, '.');
+		% plot (t_samp(sel), dist, '.');
+		plot (t_samp, dist, '.');
 		title (sprintf ('Deviation between catalog and WSF positions. src: %s, mean:%.2f, sig:%.2f', char(srcname(src)), m, v));
 
 		subplot (2,1,2);

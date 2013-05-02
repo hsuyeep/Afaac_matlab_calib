@@ -69,7 +69,7 @@ function multibandimg (ntslices)
 									duv(ind), Nuv, uvpad, t_obs, fr, radec);
 		
 				subplot (2,3,ind)
-				subimage (l,m,abs(calmap));
+				image (l,m,abs(calmap));
 	       		% imagesc(l, m, calmap);
 %			if isempty (caxisrng) == 0
 %				caxis (caxisrng);

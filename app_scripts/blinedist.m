@@ -64,6 +64,11 @@ function blinedist (array_config)
 		  fft_imager_sjw_radec (acc(:), uloc(:), vloc(:), ... 
 					duv, Nuv, uvpad, 0, freq, radec);
 	mesh (l, m, double(20*log10(abs(map)/max(abs(map(:))))))
+	xlabel ('West l East');
+	ylabel ('North m South');
+	colorbar;
+	set (gca, 'FontWeight', 'bold');
+	axis ([-1 1 -1 1 -100 0 -50 0]);
 	title (sprintf ('PSF in dB for %s array configuration at %.2f MHz, Natural', ... 
 					 char(allowed_arr_confs(nameind)), freq/1e6));
 
@@ -88,5 +93,8 @@ function blinedist (array_config)
 		  fft_imager_sjw_radec (acc_weighted(:), uloc(:), vloc(:), ... 
 					duv, Nuv, uvpad, 0, freq, radec);
 	mesh (l, m, double(20*log10(abs(map)/max(abs(map(:))))))
+	colorbar;
+	set (gca, 'FontWeight', 'bold');
+	axis ([-1 1 -1 1 -100 0 -50 0]);
 	title (sprintf ('PSF in dB for %s array configuration at %.2f MHz, Uniform', ... 
 					 char(allowed_arr_confs(nameind)), freq/1e6));

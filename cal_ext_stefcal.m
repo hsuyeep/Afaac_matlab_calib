@@ -79,23 +79,32 @@ function [sol, sol_gainsolv] = cal_ext_stefcal(Rhat, A, sigmas, mask, calim)
 	    
 		%------------ Per sensor gain estimation -------------
 	    % estimate g using baseline restriction (eq. 36 of [1])
-	    % alpha = computeAlphaW(Rhat .* (1 - mask), ... 
-		%			(A * diag(sigmahat(:, iter-1)) * A') .* (1 - mask));
-	    % if (sum(~isfinite(alpha(:))) == 0)
-	    %    [v, d] = eig(alpha);
-	    %    [~, idx] = max(diag(d));
-	    %    ghat(:, iter) = conj(v(:, idx));
-	    % else
-	    %    ghat(:, iter) = 1;
-	    % end
+		%--------- UNComment this part to get to the full WALS solver --------%
+%	    alpha = computeAlphaW(Rhat .* (1 - mask), ... 
+%					(A * diag(sigmahat(:, iter-1)) * A') .* (1 - mask));
+%	    if (sum(~isfinite(alpha(:))) == 0)
+%	       [v, d] = eig(alpha);
+%	       [~, idx] = max(diag(d));
+%	       ghat(:, iter) = conj(v(:, idx));
+%	    else
+%	       ghat(:, iter) = 1;
+%	    end
+%		sol_gainsolv.ghat = ghat(:, iter);	
+%		sol_gainsolv.gresult = 1;
+%		sol_gainsolv.iter = 1;
+%		sol_gainsolv.tol = 1;
+		%--------- UNComment this part to get to the full WALS solver --------%
+
 	    
 		%------------ Per sensor gain estimation -------------
 	    % gain estimation using StefCal - experimental
+		%--------- Comment this part to get to the full WALS solver --------%
  	    sol_gainsolv = gainsolv (1e-6, (A * diag(sigmahat(:, iter-1)) * A')...
  			.* (1 - mask), Rhat .* (1 - mask), ghat(:, iter-1),...  
 			calim.maxiter_gainsolv, calim.debug);
 		total_stefcal_iters = total_stefcal_iters + sol_gainsolv.iter;
  	    ghat(:, iter) = sol_gainsolv.ghat;
+		%--------- Comment this part to get to the full WALS solver --------%
 
 	    GA = diag(ghat(:, iter)) * A;
 	    Rest = GA * diag(sigmahat(:, iter-1)) * GA';

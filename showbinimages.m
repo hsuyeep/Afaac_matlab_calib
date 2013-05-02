@@ -46,8 +46,8 @@ function showbinimages (fname, nrecs)
    		set (gca, 'YDir', 'Normal'); % To match orientation with station images
    		set (gca, 'XDir', 'Reverse'); % To match orientation with station images
 
-    	ylabel('South \leftarrow m \rightarrow North');
-    	xlabel('East \leftarrow l \rightarrow West');
+    	ylabel('South $\leftarrow$ m $\rightarrow$ North');
+    	xlabel('East $\leftarrow$ l $\rightarrow$ West');
     
     
     	set(colorbar, 'FontSize', 16);

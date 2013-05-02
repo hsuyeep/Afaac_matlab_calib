@@ -11,4 +11,6 @@ format compact
 format short g
 
 set(0, 'DefaultTextFontSize', 14);
+% set(0, 'FontWeight', 'bold');
 set(0, 'DefaultAxesFontSize', 16);
+% set(0, 'FontWeight', 'bold');

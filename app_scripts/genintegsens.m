@@ -13,7 +13,7 @@
 	% ntslices = 250;
 	disp (sprintf ('Found %d records at %f sec. resolution.', ntslices, dt));
 	fid = fopen (fname, 'rb');
-	[acct0, tobs, freq] = readms2float (fid, -1, -1);
+	[acct0, tobs, freq] = readms2float (fid, -1, -1, 288);
 	tint = 3:8:119;
 	acc = zeros ([size(acct0), tint(end)]);
 	tobs = zeros (1, tint(end));
@@ -42,7 +42,7 @@
 		% NOTE: This loop reads in ACMs for the largest window defined, and 
 		% further code works on subsets of the full window.
 		for ind = 1:tint(end)
-				[acct0, t, freq] = readms2float (fid, -1, -1);
+				[acct0, t, freq] = readms2float (fid, -1, -1, 288);
 				if (isempty (t)) 
 					break;
 				end;

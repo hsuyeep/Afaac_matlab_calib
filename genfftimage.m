@@ -16,7 +16,8 @@
 %				out using floats. NOTE: If writing to file, images are not shown.
 
 function [img_l, img_m, img] =  ... 
-    genfftimage (fname,ntslices, offset, posfilename, weight, uvcellsize, mosaic, caxisrng, wr2file)
+    genfftimage (fname,ntslices, offset, posfilename, mosaic, caxisrng, wr2file)
+    % genfftimage (fname,ntslices, offset, posfilename, weight, uvcellsize, mosaic, caxisrng, wr2file)
 	radec = 0;
     duv = 2.5;						% Default, reassigned from freq. of obs. to
 									% image just the full Fov (-1<l<1)
@@ -102,7 +103,7 @@ function [img_l, img_m, img] =  ...
 	% UNTESTED! Works well only with cellsizes of <10meters.
 	% Generate weighting mask on sampled visibilities. Those in a higher density
 	% uvcell are weighted down (divided by a larger number).
-%	weightmask = ones (size (acc));
+	weightmask = ones (size (acc));
 %	if (weight == 1)
 %		uvec = uloc (:); vvec = vloc (:);
 %		weightvec = weightmask (:);

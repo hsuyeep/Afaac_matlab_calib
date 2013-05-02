@@ -135,9 +135,11 @@ function [srcflux, re_gain, im_gain] = pltcalsol (fname, nrecs, showplt)
 				plot (rec.tobs-t_first, rec.sigmas(src), char(col(src)));
 				hold on;
 			end;
+			set (gca, 'FontWeight', 'bold');
 			title ('Extracted fluxes of model sources.');
 			xlabel ('Time (sec from obs. commencement)');
 			ylabel ('Flux ratio normalized to CasA flux');
+			
 	
 			figure (gainplt);
 			currgain = rec.gainsol; % (flagant == 0);
