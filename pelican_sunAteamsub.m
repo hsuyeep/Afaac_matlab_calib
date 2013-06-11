@@ -12,7 +12,7 @@
 %           freq, uvflag, flagant, debug, ptSun)
 function [currsol] = pelican_sunAteamsub (acc, t_obs, ...
           freq, uvflag, flagant, debug, ptSun, max_calext_iter, ...
-		  max_gainsolv_iter)
+		  max_gainsolv_iter, posfilename)
 
 % Arguments:
 %    acc    : Filled, square ACM of size NantxNant complex numbers, where 
@@ -68,7 +68,8 @@ function [currsol] = pelican_sunAteamsub (acc, t_obs, ...
         rodata.normal  = [0.598753, 0.072099, 0.797682].'; % Normal to CS002
 
         disp ('Loading 3CR catalog and local antenna positions.');
-        load ('poslocal.mat', 'posITRF', 'poslocal'); 
+        % load ('poslocal.mat', 'posITRF', 'poslocal'); 
+		load (posfilename, 'posITRF', 'poslocal');
     	rodata.posITRF = posITRF;
     	rodata.poslocal = poslocal;
     	load srclist3CR;
@@ -178,7 +179,7 @@ function [currsol] = pelican_sunAteamsub (acc, t_obs, ...
 
 
 	t_obs_mjdsec = t_obs; % NOTE: Just so debug images can update with mjd sec.
-    t_obs = t_obs/86400 + 2400000.5; % Convert from MJD secs. to MJD day units
+    t_obs = t_obs/86400 + 2400000.5; % Convert from MJD secs. to JD day units
 
     
     % whitening of the array covariance matrix (required for DOA estimation)

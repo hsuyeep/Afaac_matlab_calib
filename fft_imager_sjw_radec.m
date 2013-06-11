@@ -25,6 +25,8 @@ function [radecskymap, lmskymap, vispad, l, m] =  ...
 
     % create object for interpolation
     vis = zeros(Nuv);
+	missed_vis = 0;   % cumulative count of ignored visibilities due to 
+					  % gridded value exeeding grid size.
     %W = zeros(Nuv);
     for idx = 1:length(u(:))            % For every recorded visibility
     
@@ -74,6 +76,17 @@ function [radecskymap, lmskymap, vispad, l, m] =  ...
     	% back the original ungridded observed visibility.
     	% NOTE: We need to accumulate this to prevent overwriting the gridded 
 		% values from a visibility from a neighbouring grid square.
+		% fprintf (1, 'bline: %06d (%03.2f,%6.2f), uidx: %03d %03d, vidx: %03d, %03d\n', idx, u(idx), v(idx), uidxl, uidxh, vidxl, vidxh);
+		if ((uidxl < 1) || (uidxh < 1) || (uidxl > Nuv) || (uidxh > Nuv))
+			missed_vis = missed_vis + 1;
+			continue;
+		end;
+
+		if ((vidxl < 1) || (vidxh < 1) || (vidxl > Nuv) || (vidxh > Nuv))
+			missed_vis = missed_vis + 1;
+			continue;
+		end;
+
         vis(uidxl, vidxl) = vis(uidxl, vidxl) + sull * phasor;
         vis(uidxl, vidxh) = vis(uidxl, vidxh) + sulh * phasor;
         vis(uidxh, vidxl) = vis(uidxh, vidxl) + suhl * phasor;
@@ -81,7 +94,11 @@ function [radecskymap, lmskymap, vispad, l, m] =  ...
         
         %W(uidx, vidx) = W(uidx, vidx) + 1;
     end
-    
+
+	if (missed_vis > 0)
+	 	fprintf (2, 'Missed vis: %d\n', missed_vis); 
+	end;
+
     % zero padding to desired (u,v)-size
     N = size(vis, 1);
     N1 = floor((uvsize - N) / 2);
@@ -111,7 +128,8 @@ function [radecskymap, lmskymap, vispad, l, m] =  ...
     % NOTE: Total imaged Field of View is determined by the visibility 
 	% grid-spacing, duv.
     lmax = dl * uvsize / 2;
-    l = [-lmax:dl:lmax-1e-3];
+	l = linspace (-lmax, lmax, uvsize);
+    % l = [-lmax:dl:lmax-1e-3];
     m = l;  % Identical resolution and extent along m-axis
     
     % Create a mask to mask out pixels beyond the unit circle (these are below 

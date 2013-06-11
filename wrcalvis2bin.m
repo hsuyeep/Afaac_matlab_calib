@@ -9,11 +9,13 @@
 %	wrcalsol: Bool turning on or off writing of calibration solutions to file.
 %   trackcal: Bool turning off the application of tracking calibration. This
 %			  results in te carrying out a o
+%   array   : The array configuration, one of 'hba_dual', 'lba_inner', 
+%			  'lba_outer'
 % NOTE! NOTE: Currently, the list of antennas to be flagged is a parameter
 %			  within the script, and needs to be changed for different datasets!
 % pep/18Oct12
 
-function wrcalvis2bin (fname, offset, ntslices, wrcalsol, trackcal)
+function wrcalvis2bin (fname, offset, ntslices, wrcalsol, trackcal, array)
 
 %	gainplt = figure ;
 %	currsolplt = figure ;
@@ -46,6 +48,21 @@ function wrcalvis2bin (fname, offset, ntslices, wrcalsol, trackcal)
 	% Cal. solution window size (One per ant, irrespective of current flagging.
 	solwindow = complex (zeros (solwinsize, Nelem), zeros (solwinsize, Nelem)); 
 	solwinfilled = 0;
+
+	% Determine the array configuration to provide to pelican_sunAteamsub
+	switch (array)
+		case 'hba_dual'
+			posfilename = 'poslocal_hba.mat';
+
+		case 'lba_inner'
+			posfilename = 'poslocal_inner.mat';
+
+		case 'lba_outer'
+			posfilename = 'poslocal_outer.mat';
+
+		otherwise
+			error ('Unknown array configuration! Quitting...');
+	end;
 
 	% Determine number of timeslices to operate on
 	if ntslices == -1
@@ -92,13 +109,13 @@ function wrcalvis2bin (fname, offset, ntslices, wrcalsol, trackcal)
 	% For LBA_INNER_BAND60 data
     % flagant = [1:12, 47, 48, 95,96, 143, 144, 191, 192, 239, 240, 287, 288 ];   
 	% For LBA_OUTER_BAND60 data
-    % flagant = [1:12, 51, 193, 239,273 ]; 
+    flagant = [1:12, 51, 193, 239,273 ]; 
 
 	% For LBA_OUTER_BAND_SPREAD data
     % flagant = [1:48, 51, 239]; 
 
 	% For LBA_OUTER_BAND_SPREAD, 18min data
-    flagant = [51, 238, 273]; 
+    % flagant = [51, 238, 273]; 
 	
 	% For 03285_dawn_spread data
     % flagant = [49:96, 239, 241:288]; 
@@ -154,7 +171,7 @@ function wrcalvis2bin (fname, offset, ntslices, wrcalsol, trackcal)
 										visamplothresh);
 	currflagant = unique ([flagant missant]); % Not reshaping
 	prevsol = pelican_sunAteamsub (acc, t_obs, freq, uvflag, ... 
-						currflagant, debuglev, ptSun, [], []);
+						currflagant, debuglev, ptSun, [], [], posfilename);
 
 	% Main loop iterating over timeslices. Functional parts:
 	% - Carry out flagging over time window, also visibility flagging.
@@ -207,7 +224,7 @@ function wrcalvis2bin (fname, offset, ntslices, wrcalsol, trackcal)
 		currsol.freq = freq;
 		if (trackcal == 0)
 	   	    currsol = pelican_sunAteamsub (acc, t_obs, freq, uvflag, ... 
-				currflagant, debuglev, ptSun, [], []);
+				currflagant, debuglev, ptSun, [], [], posfilename);
 		else %% Carry out a local, tracking calibration.
 		%%% NOTE: Both cal_ext and gainsolv iterations are set to 1! NOTE!%%%
 		%%% NOTE: gainsolv iters need to be set to 2 for averaging! NOTE%%% 
@@ -236,7 +253,7 @@ function wrcalvis2bin (fname, offset, ntslices, wrcalsol, trackcal)
 					% If no gains are available, recalibrate from scratch.
 					fprintf (2,'--> No prev gains. Calib. to convergence.\n');
 	   	    		prevsol = pelican_sunAteamsub (acc, t_obs, freq, uvflag, ...
-									currflagant, debuglev, ptSun, [], []);
+									currflagant, debuglev, ptSun, [], [], posfilename);
 					nconvcals = nconvcals + 1;
 				end;
 			end;
@@ -310,7 +327,7 @@ function wrcalvis2bin (fname, offset, ntslices, wrcalsol, trackcal)
 				if (trackcal == 1) % Do so only for tracking calibration.
 					fprintf (2, '   --> Calibrating to convergence\n');
 					currsol = pelican_sunAteamsub (acc, t_obs, freq, uvflag, ...
-									currflagant, debuglev, ptSun, [], []);
+									currflagant, debuglev, ptSun, [], [], posfilename);
 					solstat = goodcalsol (solwindow,currsol,gainmask, ...
 											solparm, debuglev);	
 

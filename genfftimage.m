@@ -52,7 +52,7 @@ function [img_l, img_m, img] =  ...
 	[acc, img.tobs, img.freq] = readms2float (fin, offset, -1, 288);
 	Nelem = size (acc, 1);
 	lambda = 299792458/img.freq; 		% in m.
-	duv = lambda/2;
+	% duv = lambda/2;
 	
 	station = 0;
 	% For imaging from a single station
@@ -154,7 +154,7 @@ function [img_l, img_m, img] =  ...
 					caxis (caxisrng);
 				end;
 				% [sel, sel_l, sel_m] = overplot3cr (img.tobs, srclist3CR, ... 
-				%									 100, hdl);
+				% 									 10, hdl);
 	        	set(gca, 'FontSize', 16);
 			
 		        title(sprintf('Rec: %d, Time:%.2f, Freq:%f',offset+ts,img.tobs, ...
