@@ -66,7 +66,7 @@ k=1;
 for ind = 1:4:nfreq
 	acc = SB000_Rxxb0t0000(:,:,ind); 
 	freq = SB000_Frequencies (ind);
-	for facc = 1:3 % Average 2 channels
+	for facc = 1:3 % Average 4 channels
 		acc = (acc + SB000_Rxxb0t0000(:,:,ind+facc))/2;
 		freq = (freq + SB000_Frequencies (ind+facc))/2;
 	end;
@@ -81,7 +81,7 @@ k=1;
 for ind = 1:8:nfreq
 	acc = SB000_Rxxb0t0000(:,:,ind); 
 	freq = SB000_Frequencies (ind);
-	for facc = 1:7 % Average 2 channels
+	for facc = 1:7 % Average 8 channels
 		acc = (acc + SB000_Rxxb0t0000(:,:,ind+facc))/2;
 		freq = (freq + SB000_Frequencies (ind+facc))/2;
 	end;
@@ -96,7 +96,7 @@ k=1;
 for ind = 1:16:nfreq
 	acc = SB000_Rxxb0t0000(:,:,ind); 
 	freq = SB000_Frequencies (ind);
-	for facc = 1:15 % Average 2 channels
+	for facc = 1:15 % Average 16 channels
 		acc = (acc + SB000_Rxxb0t0000(:,:,ind+facc))/2;
 		freq = (freq + SB000_Frequencies (ind+facc))/2;
 	end;
@@ -111,7 +111,7 @@ k=1;
 for ind = 1:32:nfreq
 	acc = SB000_Rxxb0t0000(:,:,ind); 
 	freq = SB000_Frequencies (ind);
-	for facc = 1:31 % Average 2 channels
+	for facc = 1:31 % Average 32 channels
 		acc = (acc + SB000_Rxxb0t0000(:,:,ind+facc))/2;
 		freq = (freq + SB000_Frequencies (ind+facc))/2;
 	end;
@@ -121,12 +121,32 @@ for ind = 1:32:nfreq
 	k = k+1;
 end;
 
+% Display RFI prone channels in a full 64 channel averaging
+acc = zeros (size (SB000_Rxxb0t0000,1), size (SB000_Rxxb0t0000,2));
+vacc = acc;
+sacc = acc;
+for ind = 1:size (SB000_Rxxb0t0000,1)
+	for indj = 1:size (SB000_Rxxb0t0000,2)
+		if (ind == indj) 
+			continue;
+		end;
+		[m, v, sel] = robustmean (squeeze(SB000_Rxxb0t0000(ind, indj, 2:end)), 3);
+		acc(ind, indj) = m;
+		vacc(ind, indj) = v;
+		sacc(ind, indj) = sum(sel);
+	end;
+end;
+% Calibrate the robust mean at 192 KHz.
+	sol192KHz_robust= pelican_sunAteamsub (acc, SB000_TimeSlots, SB000_Frequencies(32), uvflag, ... 
+					flagant, debuglev, ptSun, [], [], posfilename);
+
+
 % Calibrate with 192 KHz resolution
 k=1;
 for ind = 1:64:nfreq
 	acc = SB000_Rxxb0t0000(:,:,ind); 
 	freq = SB000_Frequencies (ind);
-	for facc = 1:63 % Average 2 channels
+	for facc = 1:63 % Average 64 channels
 		acc = (acc + SB000_Rxxb0t0000(:,:,ind+facc))/2;
 		freq = (freq + SB000_Frequencies (ind+facc))/2;
 	end;
@@ -408,4 +428,3 @@ sigmas = [sol3KHz(32).sigmas sol6KHz(16).sigmas sol12KHz(8).sigmas sol24KHz(4).s
 plot (chanwidth, sigmas(2,:), 'r*-');
 xlabel ('channel width (KHz)'); ylabel ('CygA Flux estimate');
 saveas (gcf, 'Sigmas_ch32.png', 'png');
-
