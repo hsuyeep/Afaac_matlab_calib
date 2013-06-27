@@ -13,10 +13,10 @@
 %	beam	   : 2D matrix with psf, with peak normalized to 1, and beam power
 %				 in linear units.
 
-function [beam] = aartfaac_beam (arrayconfig, grid, freq, Nuv)
+function [lmbeam] = aartfaac_beam (arrayconfig, grid, freq, Nuv, uvsize)
 	C = 299792458; 
 	lambda = C/freq;	% In m.
-	duv = 0.5; % lambda/2; 	% In m, Always Nyquist sample the UV plane.
+	duv = 2.5; %lambda/2; 	% In m, Always Nyquist sample the UV plane.
 
 	% Find out array configuration
 	if arrayconfig == 'LBA_OUTER'
@@ -104,12 +104,45 @@ function [beam] = aartfaac_beam (arrayconfig, grid, freq, Nuv)
         %W(uidx, vidx) = W(uidx, vidx) + 1;
     end
 
+    % zero padding to desired (u,v)-size
+    N = size(vis, 1);
+    N1 = floor((uvsize - N) / 2);
+    N2 = ceil((uvsize + 1 - N) / 2) - 1;
+    
+    % Surround gridded visibilities with 0-padding to create padded visibility 
+    % matrix.
+    vispad = [zeros(N1, uvsize); ...
+              zeros(N, N1), vis, zeros(N, N2); ...
+              zeros(N2, uvsize)];
+    vispad(~isfinite(vispad)) = 0;
+
+    % Create l,m axis corresponding to choices of duv
+    % NOTE: Resolution of image is determined by total array aperture extent, 
+    % resolution = lambda/D. 
+    dl = (299792458/(freq * uvsize * duv)); % dimensionless, in dir. cos. units
+    
+    % NOTE: Total imaged Field of View is determined by the visibility 
+	% grid-spacing, duv.
+    lmax = dl * uvsize / 2;
+	l = linspace (-lmax, lmax, uvsize);
+    m = l;  % Identical resolution and extent along m-axis
+
+    % Create a mask to mask out pixels beyond the unit circle (these are below 
+	% the horizon.)
+    mask = NaN (length(l));
+    mask(meshgrid(l).^2 + meshgrid(l).'.^2 < 1) = 1;
+
 	% Carry out 2D FFT to generate beam pattern 	
     % FFT imaging: Just take FFT of the gridded visibilities.
 	figure;
 	subplot (1,2,1);
 	imagesc (vis); colorbar;
-    vis = conj(flipud(fliplr(fftshift(vis))));
-    beam = fftshift(fft2(vis));
+
+    vispad = conj(flipud(fliplr(fftshift(vispad))));
+    beam = fftshift(fft2(vispad));
+    lmbeam = single (real(beam) .* mask);
+
 	subplot (1,2,2);
-	imagesc (20*log10(abs(beam))); colorbar;
+	imagesc (l,m, 20*log10(abs(lmbeam))); colorbar;
+	figure;
+	mesh (20*log10(abs(lmbeam)));

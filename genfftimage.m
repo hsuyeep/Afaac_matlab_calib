@@ -149,7 +149,8 @@ function [img_l, img_m, img] =  ...
 			
 			if (wr2file == 0)
 				figure (hdl);
-	   	     	imagesc(img.l, img.m, (real(img.map)));
+	   	     	% imagesc(img.l, img.m, (real(img.map)));
+	   	     	imagesc((real(img.map))); % Uncomment for pixel axis.
 				if isempty (caxisrng) == 0
 					caxis (caxisrng);
 				end;
