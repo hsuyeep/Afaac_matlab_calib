@@ -60,6 +60,9 @@ function wrcalvis2bin (fname, offset, ntslices, wrcalsol, trackcal, array)
 		case 'lba_outer'
 			posfilename = 'poslocal_outer.mat';
 
+		case 'lba_sparse'
+			posfilename = 'poslocal_sparse.mat';
+
 		otherwise
 			error ('Unknown array configuration! Quitting...');
 	end;

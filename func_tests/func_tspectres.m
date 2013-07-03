@@ -50,13 +50,13 @@ for ts = 1:ntimes
 	for sb = 1:nbands
 		% filename for this timeslice and subband
 		fname = sprintf ('~/WORK/AARTFAAC/Reobs/11Jul12/LBA_OUTER_BAND60/spectres/SB00%d/Rxxb0t00%02d.mat', sb-1, ts-1);
-		fprintf (1, 'Reading from %s\n', fname);
+		fprintf (2, '\nReading from %s\n', fname);
 		load (fname);
 		eval ([sprintf('acc_sb = Rxxb0t00%02d; clear Rxxb0t00%02d;',ts-1,ts-1)]);
 		acc (:,:, (sb-1)*64 + (1:64)) = acc_sb;
 	end;
 
-	% DEBUG: Show bandpass from all 5 subbands
+	% DEBUG: Show bandpass from all 5 subbands for this timeslice.
 	if (debug == 1)
 		for stat = 1:6
 			subplot (2,3,stat);
@@ -73,34 +73,117 @@ for ts = 1:ntimes
 
 	
 	% Calibrate every channel at 3KHz resolution, currently only over 1 sb.
-	for ind = 2:64*nbands
-		sol3KHz(ind) = pelican_sunAteamsub (acc (:,:,ind), TimeSlots(ts), ...
+	for ind = 1:64*nbands
+		if (ind == 1) continue; end;
+		sol3KHz(ts, ind) = pelican_sunAteamsub (acc (:,:,ind), TimeSlots(ts), ...
 			freq(1, ind), uvflag, flagant, debuglev, ptSun, [], [], posfilename);
 	end;
 
-	% Generate statistics on calibration solution.
-	if first == 1
-		allgain = zeros (ntimes, 64*nbands, length (sol3KHz(2).gainsol));
-		allsigmas = zeros (ntimes, 64*nbands, length (sol3KHz(2).sigmas));
-		first = 0;
+	fprintf (2, 'Now calibrating 6 KHz chunks...\n');
+	k=1;
+	for ind = 1:2:64*nbands
+		acccum = acc (:,:,ind); 
+		freqcum = freq (1, ind);
+		for facc = 1:1 % Average 2 channels
+			acccum = (acccum + acc (:,:,ind+facc))/2;
+			freqcum = (freqcum + freq (1, ind+facc))/2;
+		end;
+ 		fprintf (1, 'ind = %d, freq = %.2f\n', ind, freqcum);
+		sol6KHz(ts, k) = pelican_sunAteamsub (acccum, TimeSlots(ts),...
+ 		   freqcum, uvflag, flagant, debuglev, ptSun, [], [], posfilename);
+		k = k + 1;
 	end;
 
-	for ind = 2:length (sol3KHz)
-		allgain (ts, ind, :) = sol3KHz(ind).gainsol;
-		allsigmas (ts, ind, :) = sol3KHz(ind).sigmas;
-	end;
+%	fprintf (2, 'Now calibrating 12 KHz chunks...\n');
+%	for ind = 1:4:64*nbands
+%		acccum = acc (:,:,ind); 
+%		freqcum = freq (1, ind);
+%		for facc = 1:3 % Average 4 channels
+%			acccum = (acccum + acc (:,:,ind+facc))/2;
+%			freqcum = (freqcum + freq (1, ind+facc))/2;
+%		end;
+% 		fprintf (1, 'ind = %d, freq = %.2f\n', ind, freqcum);
+%		sol12KHz(ts, ind) = pelican_sunAteamsub (acccum, TimeSlots(ts),...
+% 		   freqcum, uvflag, flagant, debuglev, ptSun, [], [], posfilename);
+%	end;
+%
+%	fprintf (2, 'Now calibrating 24 KHz chunks...\n');
+%	for ind = 1:8:64*nbands
+%		acccum = acc (:,:,ind); 
+%		freqcum = freq (1, ind);
+%		for facc = 1:7 % Average 4 channels
+%			acccum = (acccum + acc (:,:,ind+facc))/2;
+%			freqcum = (freqcum + freq (1, ind+facc))/2;
+%		end;
+% 		fprintf (1, 'ind = %d, freq = %.2f\n', ind, freqcum);
+%		sol24KHz(ts, ind) = pelican_sunAteamsub (acccum, TimeSlots(ts),...
+% 		   freqcum, uvflag, flagant, debuglev, ptSun, [], [], posfilename);
+%	end;
+%
+%	fprintf (2, 'Now calibrating 48 KHz chunks...\n');
+%	for ind = 1:16:64*nbands
+%		acccum = acc (:,:,ind); 
+%		freqcum = freq (1, ind);
+%		for facc = 1:15 % Average 4 channels
+%			acccum = (acccum + acc (:,:,ind+facc))/2;
+%			freqcum = (freqcum + freq (1, ind+facc))/2;
+%		end;
+% 		fprintf (1, 'ind = %d, freq = %.2f\n', ind, freqcum);
+%		sol48KHz(ts, ind) = pelican_sunAteamsub (acccum, TimeSlots(ts),...
+% 		   freqcum, uvflag, flagant, debuglev, ptSun, [], [], posfilename);
+%	end;
+%
+%	fprintf (2, 'Now calibrating 96 KHz chunks...\n');
+%	for ind = 1:32:64*nbands
+%		acccum = acc (:,:,ind); 
+%		freqcum = freq (1, ind);
+%		for facc = 1:31 % Average 4 channels
+%			acccum = (acccum + acc (:,:,ind+facc))/2;
+%			freqcum = (freqcum + freq (1, ind+facc))/2;
+%		end;
+% 		fprintf (1, 'ind = %d, freq = %.2f\n', ind, freqcum);
+%		sol96KHz(ts, ind) = pelican_sunAteamsub (acccum, TimeSlots(ts),...
+% 		   freqcum, uvflag, flagant, debuglev, ptSun, [], [], posfilename);
+%	end;
 
-	gains = sol3KHz(2).gainsol;
-	sigmas = sol3KHz(2).sigmas;
-	for ind = 2:64 % DOING FOR ONE SUBBAND ONLY
-		gains = gains + sol3KHz(ind).gainsol;
-		sigmas = sigmas + sol3KHz(ind).sigmas;
-	end;
-	gains = gains / length (sol3KHz);
-	sigmas = sigmas/length (sol3KHz);
+%	for ind = 1:64:64*nbands
+%		acccum = acc (:,:,ind); 
+%		freqcum = freq (1, ind);
+%		for facc = 1:63 % Average 4 channels
+%			acccum = (acccum + acc (:,:,ind+facc))/2;
+%			freqcum = (freqcum + freq (1, ind+facc))/2;
+%		end;
+%		fprintf (1, 'ind = %d, freq = %.2f\n', ind, freqcum);
+%		sol192KHz(ts, ind) = pelican_sunAteamsub (acccum, TimeSlots(ts),...
+% 		   freqcum, uvflag, flagant, debuglev, ptSun, [], [], posfilename);
+%	end;
 
-	% Store averaged values.
-	sbgain(:,ts) = gains;
-	sbsigmas(:,ts) = sigmas;
+	% Generate statistics across the frequency axis on calibration solution.
+%	if first == 1
+%		allgain = zeros (ntimes, 64*nbands, length (sol3KHz(2).gainsol));
+%		allsigmas = zeros (ntimes, 64*nbands, length (sol3KHz(2).sigmas));
+%		first = 0;
+%	end;
+%
+%	for ind = 2:length (sol3KHz)
+%		allgain (ts, ind, :) = sol3KHz(ind).gainsol;
+%		allsigmas (ts, ind, :) = sol3KHz(ind).sigmas;
+%	end;
+%
+%	gains = sol3KHz(2).gainsol;
+%	sigmas = sol3KHz(2).sigmas;
+%	for ind = 2:64 % DOING FOR ONE SUBBAND ONLY
+%		gains = gains + sol3KHz(ind).gainsol;
+%		sigmas = sigmas + sol3KHz(ind).sigmas;
+%	end;
+%	gains = gains / length (sol3KHz);
+%	sigmas = sigmas/length (sol3KHz);
+%
+%	% Store averaged values.
+%	sbgain(:,ts) = gains;
+%	sbsigmas(:,ts) = sigmas;
 	
 end; % End of ts loop
+
+% save ('tspectres_1.mat', 'sol96KHz', 'sol48KHz', 'sol24KHz', 'sol12KHz', 'sol6KHz', 'sol3KHz');
+save ('tspectres_2.mat', 'sol6KHz', 'sol3KHz');
