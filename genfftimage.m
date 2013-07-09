@@ -13,10 +13,14 @@
 %	caxisrng: 	2-element vector with the coloraxis range for display.
 %	wr2file:Bool controlling writing of generated images to file. If true,
 %				the input filename with 'img' appended is created and written
-%				out using floats. NOTE: If writing to file, images are not shown.
+%				out using floats. NOTE: If writing to file,images are not shown.
+%   elbeam:     Bool controlling applying an element beam pattern correction.
+%				NOTE: Currently only for X-dipole.
+
 
 function [img_l, img_m, img] =  ... 
-    genfftimage (fname,ntslices, offset, posfilename, mosaic, caxisrng, wr2file)
+    genfftimage (fname, ntslices, offset, posfilename, mosaic, caxisrng, ... 
+				 wr2file, elbeam)
     % genfftimage (fname,ntslices, offset, posfilename, weight, uvcellsize, mosaic, caxisrng, wr2file)
 	radec = 0;
     duv = 2.5;						% Default, reassigned from freq. of obs. to
@@ -94,11 +98,15 @@ function [img_l, img_m, img] =  ...
 	end;
 	mask = zeros (size (img.map));
 	mask (meshgrid (img.l).^2 + meshgrid(img.m).'.^2 < 0.9) = 1;
-	disp ('NOTE! NOTE! Working only with LBA X-dipoles primary beam correction now!');
-	addpath 'LBA_beam/CS1/';
-	% elembeam = calculateLBAbeam (img.l, img.m, img.freq, [1:2:96]); 
-	elembeam = ones (size (mask));
-	elembeam = max(max(elembeam(:,:,1))) ./ elembeam (:,:,1);
+
+	if (elbeam == 1)
+		disp ('NOTE! NOTE! Working only with LBA X-dipoles primary beam correction now!');
+		addpath 'LBA_beam/CS1/';
+		elembeam = calculateLBAbeam (img.l, img.m, img.freq, [1:2:96]); 
+		elembeam = max(max(elembeam(:,:,1))) ./ elembeam (:,:,1);
+	else
+		elembeam = ones (size (mask));
+	end;
 
 	% UNTESTED! Works well only with cellsizes of <10meters.
 	% Generate weighting mask on sampled visibilities. Those in a higher density
@@ -184,6 +192,8 @@ function [img_l, img_m, img] =  ...
 			disp ('File end reached!');
 		end;
 	end;
+	% Return out only the last image
+	img_l = img.l; img_m = img.m; img = img.map;
 	fclose (fin);
 	if (wr2file == 1)		
 		fclose (fimg);

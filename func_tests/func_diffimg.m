@@ -40,14 +40,20 @@ function func_diffimg (fname, posfname, offset, ntslices, winsize, noisereg)
 	end;
 
 	tblks = int32(ntslices/winsize);% Time windows over which to generate stats.
-	meantseries = zeros (1, winsize);
-	sigtseries  = meantseries;
-	meanmaptseries = zeros (1, winsize);
-	sigmaptseries  = meantseries;
-	cumulmapmean   = zeros (1, winsize);
-	cumulmapvar    = zeros (1, winsize);
-	cumuldiffmean  = zeros (1, winsize);
-	cumuldiffvar   = zeros (1, winsize);
+	rawmap = zeros (uvpad, uvpad, winsize);
+
+	rawmean = zeros (1, winsize/2);
+	rawstd  = zeros (1, winsize/2);
+	diffmean = zeros (1, winsize/2);
+	diffstd  = zeros (1, winsize/2);
+
+%	sigtseries  = meantseries;
+%	meanmaptseries = zeros (1, winsize);
+%	sigmaptseries  = meantseries;
+%	cumulmapmean   = zeros (1, winsize);
+%	cumulmapvar    = zeros (1, winsize);
+%	cumuldiffmean  = zeros (1, winsize);
+%	cumuldiffvar   = zeros (1, winsize);
 
 	fid = fopen (fname, 'rb');
 
@@ -62,7 +68,7 @@ function func_diffimg (fname, posfname, offset, ntslices, winsize, noisereg)
 	end;
 
 	% Read in a calibrated ACM.
-	[acc, img.tobs, img.freq] = readms2float (fid, 1, -1, 288);
+	[acc, img.tobs, img.freq] = readms2float (fid, -1, -1, 288);
 	Nelem = size (acc, 1);
 
 	lambda = 299792458/img.freq; 		% in m.
@@ -91,7 +97,8 @@ function func_diffimg (fname, posfname, offset, ntslices, winsize, noisereg)
 				duv, Nuv, uvpad, img.tobs, img.freq, 0);
 
 	% Data structure for difference images
-	diffimg  = zeros (uvpad, uvpad, ntslices-1); % Holds actual img differences
+	diffimg  = zeros (uvpad, uvpad, winsize/2); % Holds actual img differences
+	diffmap  = zeros (uvpad);
 	sigdiff  = zeros (uvpad);    % Sum of x in the diff. image
 	sigdiff2 = zeros (uvpad);    % Sum of x^2 in the diff. image
 	mapsigdiff  = zeros (uvpad); % Sum of x in the raw image
@@ -126,71 +133,55 @@ function func_diffimg (fname, posfname, offset, ntslices, winsize, noisereg)
 	pos1 = [edge, 0, scnsize(3)- edge, scnsize(4)/2];
 	set(maphdl,'OuterPosition',pos1);
 
-	% Generate images, differences and second differences.
-	for im = 2:winsize
+	% Create all raw images. we iterate over these raw images to create 
+	% difference images at various integration times.
+	for im=1:winsize
 		% Get next ACM timeslice.
 		[acc, img.tobs, img.freq] = readms2float (fid, -1, 0, 288);
 
 		% Generate image and difference image.
-   		[radecmap, img.map, calvis, img.l, img.m] = ... 
+   		[radecmap, rawmap(:,:,im), calvis, img.l, img.m] = ... 
 		  fft_imager_sjw_radec (acc(:), uloc(:), vloc(:), ... 
 					duv, Nuv, uvpad, img.tobs, img.freq, 0);
+		fprintf (1, 'Creating image %d at time %.2f\n', im, img.tobs);
 
-		diffimg (:,:, im-1) = real(img.map) - real(prevmap);
+%		mapsigdiff = mapsigdiff + rawmap (:,:,im);
+%		mapsigdiff2 = mapsigdiff2 + rawmap (:,:,im).^2;
+	end;
 
-		% For pixel level running mean/var, generate integrated pixels.
-		sigdiff  = sigdiff  + diffimg (:,:,im-1); 
-		sigdiff2 = sigdiff2 + diffimg (:,:,im-1).^2;
-		mapsigdiff = mapsigdiff + img.map;
-		mapsigdiff2 = mapsigdiff2 + img.map.^2;
-
-		% Determine mean/var of cumulative RAW and DIFF image till now.
-		tmpreg = sigdiff (xbl:xtr, ybl:ytr)/(im-1); % The mean cumulative image.
-		cumuldiffmean(im) = mean (tmpreg(:));   % Get mean over chosen region.
-		cumuldiffvar (im) = std (tmpreg(:));    % Get std. over chosen region
-
-		tmpreg = mapsigdiff (xbl:xtr, ybl:ytr)/(im-1); % Now for the RAW image.
-		cumulmapmean(im) = mean (tmpreg(:));   % Get mean over chosen region.
-		cumulmapvar (im) = std (tmpreg(:));    % Get std. over chosen region
-
-		% Show input and difference images.
-		% figure (diffhdl);
-		% subplot (121);
-		% imagesc (diffimg (:,:,im-1).*mask); colorbar;
+	% Create 1-second difference maps, also generate raw and diff. image 
+	% instantaneous statistics and cumulative maps.
+	for im=1:2:winsize
+		% diffmap = (real(rawmap(:,:,im+1)) - real(rawmap (:,:,im)))/2;
+		diffmap = (real(rawmap(:,:,im+1)) - real(rawmap (:,:,im)));
+		% intmap  = (real(rawmap(:,:,im+1)) + real(rawmap (:,:,im)))/2;
+		intmap  = (real(rawmap(:,:,im+1)) + real(rawmap (:,:,im)));
 
 		% Generate spatial noise stats over selected region, within the snapshot
 		% diff image noise
-		noisemap = diffimg (xbl:xtr, ybl:ytr, im-1);
-		meantseries (im) = mean (noisemap(:)); 
-		sigtseries  (im) = std  (noisemap(:));
+		noisemap = diffmap (xbl:xtr, ybl:ytr);
+		meantseries ((im+1)/2) = mean (noisemap(:)); 
+		sigtseries  ((im+1)/2) = std  (noisemap(:));
 		% raw image noise
-		mapnoisereg = img.map (xbl:xtr, ybl:ytr);
-		meanmaptseries (im) = mean (mapnoisereg(:));
-		sigmaptseries  (im) = std  (mapnoisereg(:));
+		mapnoisereg = intmap (xbl:xtr, ybl:ytr);
+		meanmaptseries ((im+1)/2) = mean (mapnoisereg(:));
+		sigmaptseries  ((im+1)/2) = std  (mapnoisereg(:));
 
-%		noisemin = min (noisemap(:));  noisemax = max (noisemap(:));
-%		fprintf (1, ... 
-%		'[Min, Max, rng, mean, var] = %6.1f, %6.1f, %6.1f %6.3f, %6.1f\n', ...
-%				 noisemin, noisemax, noisemax-noisemin,  m, v);
+		sigdiff  = sigdiff  + diffmap;
+		sigdiff2 = sigdiff2 + diffmap.^2;
+		mapsigdiff = mapsigdiff + intmap;
+		mapsigdiff2 = mapsigdiff2 + intmap.^2;
 
-		% Print number of pixels above 3sigma in map, and their locations
-		% This can help check correspondence with sources;
-		outliermap = zeros (uvpad);
-		outliermap ((noisemap > thresh*sigtseries(im))) = 1;
-
-		% Show difference image and histogram over chosen region.
-		figure (diffhdl);
-		subplot (121); imagesc (diffimg (:,:,im-1).*mask); colorbar;
-		subplot (122); hist (noisemap(:), 100);
-
-		% Show raw image and histogram over chosen region.
+		% Show instantaneous image, and histogram of chosen region
 		figure (maphdl);
-		subplot (121); imagesc (img.map.*mask); colorbar;
-		subplot (122); hist (mapnoisereg(:), 100);
-		axis ('tight');
+		tmpreg = intmap (xbl:xtr, ybl:ytr); % The mean diff image.
+		subplot (121); imagesc (intmap); colorbar;
+		subplot (122); hist (tmpreg(:), 50);
 
-		% imagesc (outliermap); colorbar;
-		prevmap = img.map;
+		figure (diffhdl);
+		tmpreg = diffmap (xbl:xtr, ybl:ytr); % The mean diff image.
+		subplot (121); imagesc (diffmap); colorbar;
+		subplot (122); hist (tmpreg(:), 50);
 	end;
 	% Generate labels for the RT-plots
 	figure (diffhdl); 
@@ -200,16 +191,187 @@ function func_diffimg (fname, posfname, offset, ntslices, winsize, noisereg)
 	title ('Noise region pixel histogram');
 	figure (maphdl); 
 	subplot (121); xlabel ('X-Pixel'); ylabel ('Y-Pixel');
-	title ('1-timeslice map');
+	title ('2-timeslice integrated map');
 	subplot (122); xlabel ('Pixel value'); ylabel ('Counts');
 	title ('Noise region pixel histogram');
 
+	% Plot mean and variance timeseries over this window for both diff and raw 
+	% maps.
+	figure;
+	subplot (221);
+	plot (meanmaptseries, '*r'); grid;
+	xlabel ('Timeslice pairs'); ylabel ('Pixel value');
+	title (sprintf ('Mean RAW image noise in chosen region, over %d timeslices', ...
+					 winsize));
+	subplot (222);
+	plot (sigmaptseries, '*r'); grid;
+	xlabel ('Timeslice pairs'); ylabel ('Pixel value');
+	title (sprintf ('RAW noise std in chosen region, over %d timeslices', winsize));
+	subplot (223);
+	plot (meantseries, '*b'); grid;
+	xlabel ('Timeslice pairs'); ylabel ('Pixel value');
+	title (sprintf ('Mean DIFF image noise in chosen region, over %d timeslices', ...
+					winsize));
+	subplot (224);
+	plot (sigtseries, '*b'); grid;
+	xlabel ('Timeslice pairs'); ylabel ('Pixel value');
+	title (sprintf ('DIFF image noise std in chosen region, over %d timeslices', ...
+					 winsize));
+	
 	% Generate per pixel noise stats across time.
 	% mean per pixel.
-	meanperpix = sigdiff/(winsize-1);
-	sigperpix  = sqrt (sigdiff2/(winsize-1) - meanperpix.^2);
-	mapmeanperpix = mapsigdiff/(winsize-1);
-	mapsigperpix  = sqrt (mapsigdiff2/(winsize-1) - mapmeanperpix.^2);
+	meanperpix = sigdiff/(winsize/2);
+	sigperpix  = sqrt (sigdiff2/(winsize/2) - meanperpix.^2);
+	mapmeanperpix = mapsigdiff/(winsize/2);
+	mapsigperpix  = sqrt (mapsigdiff2/(winsize/2) - mapmeanperpix.^2);
+	
+
+	% Generate all integrated maps possible within winsize
+	for integ=1:winsize/2
+		integ1 = zeros(uvpad, uvpad);
+		integ2 = integ1;
+		% Generate integrated images for differencing
+		fprintf (2, 'NOTE: Taking only the first 2 consecutive integrated maps for differencing!\n');
+		for im=1:integ
+			integ1 = integ1 + real (rawmap (:,:,im));
+			integ2 = integ2 + real (rawmap (:,:,im+integ));
+		end;	
+		% diffimg (:,:,integ) = (integ2 - integ1)/(2*integ);
+		% NOTE: Difference pixel values are not divided by 2!
+		diffimg (:,:,integ) = (integ2 - integ1)/integ;
+		fprintf (1, 'Creating diff between 2 images integrated to %d sec\n',...
+				 integ);
+
+		% Store noise in selected region in diff and integ. images
+		% NOTE: Mean images are generated by dividing by 2!
+		final_integ_img = (integ1 + integ2 )/(integ);
+		tmpreg = final_integ_img (xbl:xtr, ybl:ytr); % The mean cumul image.
+		rawmean (integ) = mean (tmpreg(:));
+		rawstd  (integ) = std  (tmpreg(:));
+
+		tmpreg = diffimg (xbl:xtr, ybl:ytr, integ); % The mean diff image.
+		diffmean(integ) = mean (tmpreg(:));
+		diffstd (integ) = std  (tmpreg(:));
+	end;
+
+	% Generate noise histograms in 30-sec differences and integrated images.
+	figure;
+	subplot (121);
+	tmpreg = final_integ_img (xbl:xtr, ybl:ytr); % The integrated image.
+	hist (tmpreg(:), 50);
+	title ('Hist of noise region in 60-sec integrated images');
+	xlabel ('Pixel value'); ylabel ('Count');
+	subplot (122);
+	tmpreg = diffimg (xbl:xtr, ybl:ytr, winsize/2); % The mean diff image.
+	hist (tmpreg(:), 50);
+	title ('Hist of noise region in difference of 2, 30sec integrated images');
+	xlabel ('Pixel value'); ylabel ('Count');
+
+	% Generate a plot of the std. of the noise in the integrated raw and
+	% difference images
+	% Plot noise variance as a function of integration of both RAW and DIFF
+	% images.
+	figure;
+	subplot (221);
+	plot (rawmean, 'r*'); grid;
+	xlabel ('Integrated time (secs)'); ylabel ('Mean pixel value');
+	title ('Raw image noise mean at diff time integrations');
+	subplot (222);
+	plot (rawstd, 'r*'); grid;
+	xlabel ('Integrated time (secs)'); ylabel ('std. pixel value');
+	title ('Raw image std. at different time integrations');
+	subplot (223); grid;
+	plot (diffmean, 'b*'); grid;
+	xlabel ('Integrated time (secs)'); ylabel ('Mean pixel value');
+	title ('Diff image mean at different time integrations');
+	subplot (224); grid;
+	plot (diffstd, 'b*'); grid;
+	xlabel ('Integrated time (secs)'); ylabel ('std. pixel value');
+	title ('Diff image std. at different time integrations');
+
+	x = [1:winsize/2];
+
+	% The canonical thermal noise curve, x is in secs of integration time.
+	y = x.^-0.5; 
+	figure;
+	loglog (x, y, 'k-');
+	hold on;
+	% NOTE: Normalizing with largest variance to match theoretical curve.
+	loglog (x, rawstd/max(rawstd), 'r*-');
+	loglog (x, diffstd/max(diffstd), 'b*-');
+	grid;
+	title ('Noise region std Vs. integration time');
+	xlabel ('integration time(secs)');
+	ylabel ('Normalized noise std.');
+	legend ('Theoretical thermal', 'Raw image', 'Difference Image');
+
+	% Generate images, differences and second differences.
+%	for im = 2:winsize
+%		% Get next ACM timeslice.
+%		[acc, img.tobs, img.freq] = readms2float (fid, -1, 0, 288);
+%
+%		% Generate image and difference image.
+%   		[radecmap, img.map, calvis, img.l, img.m] = ... 
+%		  fft_imager_sjw_radec (acc(:), uloc(:), vloc(:), ... 
+%					duv, Nuv, uvpad, img.tobs, img.freq, 0);
+%
+%		diffimg (:,:, im-1) = real(img.map) - real(prevmap);
+%
+%		% For pixel level running mean/var, generate integrated pixels.
+%		sigdiff  = sigdiff  + diffimg (:,:,im-1); 
+%		sigdiff2 = sigdiff2 + diffimg (:,:,im-1).^2;
+%		mapsigdiff = mapsigdiff + img.map;
+%		mapsigdiff2 = mapsigdiff2 + img.map.^2;
+%
+%		% Determine mean/var of cumulative RAW and DIFF image till now.
+%		tmpreg = sigdiff (xbl:xtr, ybl:ytr)/(im-1); % The mean cumulative image.
+%		cumuldiffmean(im) = mean (tmpreg(:));   % Get mean over chosen region.
+%		cumuldiffvar (im) = std (tmpreg(:));    % Get std. over chosen region
+%
+%		tmpreg = mapsigdiff (xbl:xtr, ybl:ytr)/(im-1); % Now for the RAW image.
+%		cumulmapmean(im) = mean (tmpreg(:));   % Get mean over chosen region.
+%		cumulmapvar (im) = std (tmpreg(:));    % Get std. over chosen region
+%
+%		% Show input and difference images.
+%		% figure (diffhdl);
+%		% subplot (121);
+%		% imagesc (diffimg (:,:,im-1).*mask); colorbar;
+%
+%		% Generate spatial noise stats over selected region, within the snapshot
+%		% diff image noise
+%		noisemap = diffimg (xbl:xtr, ybl:ytr, im-1);
+%		meantseries (im) = mean (noisemap(:)); 
+%		sigtseries  (im) = std  (noisemap(:));
+%		% raw image noise
+%		mapnoisereg = img.map (xbl:xtr, ybl:ytr);
+%		meanmaptseries (im) = mean (mapnoisereg(:));
+%		sigmaptseries  (im) = std  (mapnoisereg(:));
+%
+%%		noisemin = min (noisemap(:));  noisemax = max (noisemap(:));
+%%		fprintf (1, ... 
+%%		'[Min, Max, rng, mean, var] = %6.1f, %6.1f, %6.1f %6.3f, %6.1f\n', ...
+%%				 noisemin, noisemax, noisemax-noisemin,  m, v);
+%
+%		% Print number of pixels above 3sigma in map, and their locations
+%		% This can help check correspondence with sources;
+%		outliermap = zeros (uvpad);
+%		outliermap ((noisemap > thresh*sigtseries(im))) = 1;
+%
+%		% Show difference image and histogram over chosen region.
+%		figure (diffhdl);
+%		subplot (121); imagesc (diffimg (:,:,im-1).*mask); colorbar;
+%		subplot (122); hist (noisemap(:), 100);
+%
+%		% Show raw image and histogram over chosen region.
+%		figure (maphdl);
+%		subplot (121); imagesc (img.map.*mask); colorbar;
+%		subplot (122); hist (mapnoisereg(:), 100);
+%		axis ('tight');
+%
+%		% imagesc (outliermap); colorbar;
+%		prevmap = img.map;
+%	end;
+
 	
 	% Figure management
 	stathdl = figure;
@@ -226,76 +388,36 @@ function func_diffimg (fname, posfname, offset, ntslices, winsize, noisereg)
 	subplot (221);
 	imagesc (meanperpix); colorbar;
 	xlabel ('X-Pixel'); ylabel ('Y-Pixel');
-	title ('DIFF image mean per pixel');
+	title ('1-sec. DIFF image mean per pixel');
 	subplot (222);
 	imagesc (sigperpix); colorbar;
 	xlabel ('X-Pixel'); ylabel ('Y-Pixel');
-	title ('DIFF image variance per pixel');
+	title ('1-sec. DIFF image variance per pixel');
 	subplot (223);
 	imagesc (mapmeanperpix); colorbar;
 	xlabel ('X-Pixel'); ylabel ('Y-Pixel');
 	title ('RAW image mean per pixel');
 	subplot (224);
 	imagesc (mapsigperpix); colorbar;
+	% caxis ([-50 100]);
 	xlabel ('X-Pixel'); ylabel ('Y-Pixel');
 	title ('RAW image variance per pixel');
 
-	% Print histogram of integrated raw image and diff image.
-	figure;
-	% Chosen region in integrated noise map.
-	noisemap = meanperpix (xbl:xtr, ybl:ytr); 
-	subplot (121);
-	hist (noisemap(:), 100);
-	xlabel ('Pixel value'); ylabel ('Counts');
-	title ('Integrated DIFF image histogram over chosen region');
-	mapnoisereg = mapmeanperpix (xbl:xtr, ybl:ytr);
-	subplot (122);
-	hist (mapnoisereg(:), 100);
-	xlabel ('Pixel value'); ylabel ('Counts');
-	title ('Integrated RAW image histogram over chosen region');
-	
-	% Plot mean and variance timeseries over this window for both diff and raw 
-	% maps.
-	figure;
-	subplot (221);
-	plot (meantseries, '*r');
-	xlabel ('Timeslices'); ylabel ('Pixel value');
-	title (sprintf ('Mean DIFF image noise in chosen region, over %d timeslices', ...
-					 winsize));
-	subplot (222);
-	plot (sigtseries, '*r');
-	xlabel ('Timeslices'); ylabel ('Pixel value');
-	title (sprintf ('DIFF image noise std in chosen region, over %d timeslices', ...
-					 winsize));
-	subplot (223);
-	plot (meanmaptseries, '*r');
-	xlabel ('Timeslices'); ylabel ('Pixel value');
-	title (sprintf ('Mean RAW image noise in chosen region, over %d timeslices', ...
-					winsize));
-	subplot (224);
-	plot (sigmaptseries, '*r');
-	xlabel ('Timeslices'); ylabel ('Pixel value');
-	title (sprintf ('RAW noise std in chosen region, over %d timeslices', winsize));
-
-	% Plot noise variance as a function of integration of both RAW and DIFF
-	% images.
-	figure;
-	subplot (221);
-	plot (cumulmapmean, 'r*');
-	xlabel ('Integrated time'); ylabel ('Mean pixel value');
-	title ('Raw image mean at different time integrations');
-	subplot (222);
-	plot (cumulmapvar, 'r*');
-	xlabel ('Integrated time'); ylabel ('std. pixel value');
-	title ('Raw image std. at different time integrations');
-	subplot (223);
-	plot (cumuldiffmean, 'b*');
-	xlabel ('Integrated time'); ylabel ('Mean pixel value');
-	title ('Diff image mean at different time integrations');
-	subplot (224);
-	plot (cumuldiffvar, 'b*');
-	xlabel ('Integrated time'); ylabel ('std. pixel value');
-	title ('Diff image std. at different time integrations');
+%	% Print histogram of integrated raw image and diff image.
+%	figure;
+%	% Chosen region in integrated noise map.
+%	noisemap = meanperpix (xbl:xtr, ybl:ytr); 
+%	subplot (121);
+%	hist (noisemap(:), 50);
+%	xlabel ('Pixel value'); ylabel ('Counts');
+%	title ('Integrated DIFF image histogram over chosen region');
+%	mapnoisereg = mapmeanperpix (xbl:xtr, ybl:ytr);
+%	subplot (122);
+%	hist (mapnoisereg(:), 50);
+%	xlabel ('Pixel value'); ylabel ('Counts');
+%	title ('Integrated RAW image histogram over chosen region');
+%	
+%
 	
 
 	
