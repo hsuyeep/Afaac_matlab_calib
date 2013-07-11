@@ -1,4 +1,4 @@
-function [l, m] = radectolm(alpha, delta, JD, L, B)
+function [l, m] = radectolm(alpha, delta, JD, L, B,  epoch)
 
 % [l, m] = radectolm(alpha, delta, JD, L, B)
 %
@@ -12,6 +12,7 @@ function [l, m] = radectolm(alpha, delta, JD, L, B)
 % JD    : Julian day as DATENUM for the time of observation
 % L     : geographical longitude in degrees
 % B     : geographical latitude in degrees
+% epoch : Specifies if coordinates are in B1950 (true), or J2000 (false)
 %
 % Return values
 % l : vector or matrix of the same size as alpha with l-coordinates
@@ -41,6 +42,15 @@ LST =  ((GST + L*240) / 240) * pi / 180;
 
 alpha0 = LST;              % Zenith projection, in radians
 delta0 = B * pi / 180;     % ibid.
+
+if epoch == true 		   % Coordinates are B1950 radians
+	[x, y, z] = sph2cart (alpha, delta, 1);  % Convert to cartesian
+	precMat = precessionMatrix(JulianDay(datenum(1950, 1, 1, 0, 0, 0)));	
+	j2000cart = [x' y' z'] * precMat; % Transpose for product compatibility.
+	% NOTE: 2*pi wraps in alpha do not matter.
+	[alpha, delta, r] = cart2sph (j2000cart (:,1), j2000cart (:,2), ...
+								  j2000cart (:,3));
+end;
 
 % (alpha, delta) to (l, m)
 el = asin(sin(delta) * sin(delta0) + cos(delta0) * cos(delta) .* cos(alpha0 - alpha));

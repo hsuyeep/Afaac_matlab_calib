@@ -74,7 +74,7 @@ function multibandimg (ntslices)
 %			if isempty (caxisrng) == 0
 %				caxis (caxisrng);
 %			end;
-%			[sel, sel_l, sel_m] = overplot3cr (t_obs, srclist3CR, 20, hdl);
+%			[sel, sel_l, sel_m] = overplotcat (t_obs, srclist3CR, 20, hdl,true);
 %	        set(gca, 'FontSize', 16);
 			
 	        title(['Time: ' num2str(t_obs) ', Freq: ' num2str(freq(ind))]);

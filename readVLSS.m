@@ -38,16 +38,29 @@ function srclistVLSS = readVLSS (fname, srcfluxlimit)
 		[val cnt] = sscanf (str, '%d %d %f %d %d %f %f', 7);
 		
 		if val(7) > srcfluxlimit
-			srclistVLSS (srccnt).name = 'test';
+
 			% Convert positions to decimal hours, and then to radians.
-			srclistVLSS (srccnt).alpha = (val(1) + val(2)/60 + val(3)/3600) ...
-										 /(2*pi);
-			if val (4) < 0
-				srclistVLSS(srccnt).delta=(val(4)-val(5)/60-val(6)/3600)/(2*pi);
+			srclistVLSS (srccnt).alpha =  ...
+					(val(1) + val(2)/60 + val(3)/3600) * (pi/12);
+			if val (4) < 0 % Maintain delta sign.
+				srclistVLSS(srccnt).delta =  ...
+						(val(4) - val(5)/60 - val(6)/3600) * (pi/180);
 			else
-				srclistVLSS(srccnt).delta=(val(4)+val(5)/60+val(6)/3600)/(2*pi);
+				srclistVLSS(srccnt).delta = ...
+						(val(4) + val(5)/60 + val(6)/3600) * (pi/180);
 			end 
 			srclistVLSS(srccnt).flux = val (7);
+
+			% Generate name
+			if (srclistVLSS (srccnt).delta > 0)
+				srclistVLSS (srccnt).name = ...
+						sprintf ('%3.1f+%3.1f',  ...
+						srclistVLSS(srccnt).alpha, srclistVLSS(srccnt).delta);
+			else
+				srclistVLSS (srccnt).name = ...
+						sprintf ('%3.1f%4.1f',  ...
+						srclistVLSS(srccnt).alpha, srclistVLSS(srccnt).delta);
+			end;
 			srccnt = srccnt + 1;
 		end 
 		

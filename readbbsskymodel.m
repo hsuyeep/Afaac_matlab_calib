@@ -116,10 +116,10 @@ function [srcitrf] = readbbsskymodel (fname, tobs, hba, debug);
 	% Convert the positions of all components from RA/DEC to l,m for a 
 	% zenith pointing from CS002 at the time specified in tobs.
 %	pos = zeros (length (ra), 2);
-%	[pos(:,1), pos(:,2)] = radectolm (ra, dec, tobs_mod, cs002_lon, cs002_lat);
-%	[sunmodl, sunmodm] = radectolm (raModSun, decModSun, tobs_mod, cs002_lon, cs002_lat);
+%	[pos(:,1), pos(:,2)] = radectolm (ra, dec, tobs_mod, cs002_lon, cs002_lat, false);
+%	[sunmodl, sunmodm] = radectolm (raModSun, decModSun, tobs_mod, cs002_lon, cs002_lat, false);
 %
-%	[sunl, sunm] = radectolm (raSun, decSun, tobs_jd, cs002_lon, cs002_lat);
+%	[sunl, sunm] = radectolm (raSun, decSun, tobs_jd, cs002_lon, cs002_lat, false);
 
 	% Obtain I flux, normalize to 1, scale by arbit factor for plot.
 	iflux = str2num(char(comp{5}));

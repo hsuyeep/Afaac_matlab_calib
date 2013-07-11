@@ -107,7 +107,7 @@ if debug > 3
 	caxis ([mosmin 0.5*mosmax]);             
 	xlabel ('East - West');
 	ylabel ('North - South');
-	% [sel, sel_l, sel_m] = overplot3cr (tobs, srclist3CR, 150, mosimg);
+	% [sel, sel_l, sel_m] = overplotcat (tobs, srclist3CR, 150, mosimg, true);
 	     
 	
 	% display the difference between the zenith image and the mosaic

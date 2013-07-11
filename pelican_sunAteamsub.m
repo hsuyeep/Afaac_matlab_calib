@@ -367,9 +367,10 @@ function [currsol] = pelican_sunAteamsub (acc, t_obs, ...
 		figure(subsky);
 		imagesc (l,m,real(calmap.*mask));
 		colorbar;
-		title (sprintf ('Image after Sun + A team subtraction. Time: %f', t_obs_mjdsec));
-		% [sel, sel_l, sel_m] = overplot3cr (t_obs_mjdsec, rodata.catalog, 300, ...
-	%										subsky);
+		title (sprintf ('Image after Sun + A team subtraction. Time: %f', ...
+				t_obs_mjdsec));
+		% [sel, sel_l, sel_m] = overplotcat (t_obs_mjdsec, rodata.catalog, ...
+	    %								300, subsky, true);
 		pause;
 	end;
 
