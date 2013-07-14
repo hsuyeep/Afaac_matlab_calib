@@ -19,12 +19,13 @@
 % Returns:
 %	fitparms: A structure containing an estimate of the same parameters as 
 %			init_par, returned in the same order. 
+%     resid : Frobenius norm of the residual image, for fit quality check.
 
 % NOTE: Can improve fit parameters by including a position angle in the model;
 % see gaussian.m. Also, by providing initial estimates via moments.
 % NOTE: How do we know if the fit did not go well?
 
-function [fitparams] = fit2dgauss(image, l, m, init_par, debug)
+function [fitparams, resid] = fit2dgauss(image, l, m, init_par, debug,debwinhdl)
 
 % Debug function, uncomment all commented sections, then run as fit2dgauss()
 %function [fitparams] = fit2dgauss() 
@@ -49,17 +50,31 @@ function [fitparams] = fit2dgauss(image, l, m, init_par, debug)
 %	subplot (1,2,1); plot (image (:,int32(size(image,2)/2)+x0));
 %	subplot (1,2,2); plot (image (int32(size(image,2)/2)+y0,:));
 	
-	 % For debug:
-	 if debug > 1
-	 	 model_image = init_par(3)*exp(-(lmesh-init_par(1)).^2/(2*init_par(4)^2)).*exp(-(mmesh-init_par(2)).^2/(2*init_par(5)^2));
-		figure; imagesc (model_image);
-	 end;
 
 	% Attempt to invoke fminsearch
 	fitparams = fminsearch(@residual,init_par, [], lmesh, mmesh, image);
 	
+	 % For debug:
+	model_image = init_par(3) * ...
+					exp(-(lmesh-init_par(1)).^2/(2*init_par(4)^2)).*...
+					exp(-(mmesh-init_par(2)).^2/(2*init_par(5)^2));
+	fit_image = fitparams(3) * ...
+					exp(-(lmesh-fitparams(1)).^2/(2*fitparams(4)^2)).*...
+					exp(-(mmesh-fitparams(2)).^2/(2*fitparams(5)^2));
+	resid_image = image - fit_image;
+	resid = norm (resid_image, 'fro');
+	if debug > 1
+		figure (debwinhdl); 
+		subplot (131); imagesc (image); title ('Data'); colorbar;
+		subplot (132); imagesc (fit_image); title ('Fit image'); colorbar;
+		subplot (133); 
+		imagesc (resid_image); title ('Residual image'); colorbar;
+	 end;
+
 	% Define a residual cost function for minimization.
 	function err = residual(par, l, m, image)
 	  % global X Y Zdata;
-	  model_image = par(3)*exp(-(l-par(1)).^2/(2*par(4)^2)).*exp(-(m-par(2)).^2/(2*par(5)^2));
-	  err = sum(sum( (model_image - image).^2 ));
+		model_image = par(3) * ...
+						exp(-(l-par(1)).^2/(2*par(4)^2)) .* ...
+						exp(-(m-par(2)).^2/(2*par(5)^2));
+		err = sum(sum( (model_image - image).^2 ));
