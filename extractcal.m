@@ -18,12 +18,12 @@
 %  upcals : Bool vector containing 1s for the calibrators actually used. 
 %   resid : Vector of size(callist) containing the norm of the residual between
 %			model and data. Use this to determine fit quality.
+%  exitfl : The exit status of the func. minimization. 0 implies things are good
 
-%  		Specify fitting function as an array config PSF.
 function [peakfl, intfl, upcals, resid, exitfl] = ...
 	extractcal (img, l, m, tobs, freq, rodata, catalog, callist, epoch, debug)
 
-	% Temporary
+
 	% addpath ../
 	% addpath srcfind/;
 
@@ -43,7 +43,7 @@ function [peakfl, intfl, upcals, resid, exitfl] = ...
 	srcposITRF = radectoITRF (racal, deccal, epoch, tobs_jd);
 	upcals = srcposITRF * rodata.normal > 0;
 	[catl, catm] = radectolm (racal,deccal,tobs_jd,rodata.lon,rodata.lat,epoch);
-	fprintf (1, '\n%.2fs %.2fHz: Found %d calibrators in FoV.\n', ...
+	fprintf (1, '%.2fs %.2fHz: Found %d calibrators in FoV.\n', ...
 			 tobs, freq, sum(upcals));
 	cat = [catalog(callist(upcals))];
 	lup = catl(upcals); mup = catm(upcals);
@@ -54,6 +54,8 @@ function [peakfl, intfl, upcals, resid, exitfl] = ...
 					cat(ind).name, cat(ind).flux, lup(ind), mup(ind));
 		end;
 	end;
+
+	% Generate PSF for fitting
 
 	% Handle debug
 	if debug > 2

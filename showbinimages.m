@@ -50,7 +50,7 @@ function showbinimages (fname, nrecs)
     
     
     	set(colorbar, 'FontSize', 16);
-    	pause (0.5);
+    	% pause (0.5);
 	end;
 
 	 

@@ -58,8 +58,8 @@ function func_calfluxrat (fname, offset, ntslices, posfilename, debug)
 	winsize = 10; % Timeslices          % Window datastructures
 	pkwin = zeros (ncal, winsize);
 	intwin = pkwin;
-	thresh = 5;                         % Rejection threshold = 10*median value
-	badfit = zeros (ncal, 1);			% TO hold the number of badly fitted src
+	thresh = 3;                         % Rejection threshold = 10*median value
+	badfit = zeros (ncal, ntslices);	% TO hold the number of badly fitted src
 	badtimes = 0;						% Variable storing number of tslices 
 										% discarded due to median filter.
 	leg_str = cell (1, ncal);			% Cell array for dynamic legends
@@ -69,16 +69,23 @@ function func_calfluxrat (fname, offset, ntslices, posfilename, debug)
 	fprintf (2, '--> Filling filter window of %d timeslices...', winsize);
 	for ind = 1:winsize
 		img = readimg2bin (fid);
+		fprintf (1, '\nRec %4d ', ind);
 		[pkwin(:, ind), intwin(:, ind), upcals, resid(:, ind), exitfl] = ...
-			extractcal (img.map, img.l, img.m, img.tobs, img.freq, rodata, ...
-						 srclist3CR, callist, true, 0);	
+			extractcal (img.map, img.l, img.m, img.tobs, ...
+					img.freq, rodata, srclist3CR, callist, true, 0);	
 
+		badfit (:, ind) = exitfl;   % Record locations of bad fits.
 		% Check for convergence of fminsearch
-		if (sum(exitfl) < ncal) % A 0 implies Max. num. of func. evals, reached.
+		% A 0 implies Max. num. of func. evals, reached. 1s is good. -1 is bad
+		if (sum(exitfl) ~= ncal) 
 			fprintf (1, 'Exit fl: %s\n', num2str(exitfl));
-			badfitcals = find (exitfl == 0); % Indices of inconvergent cals.
-			badfit (badfitcals) = badfit (badfitcals) + 1;
+			% badfitcals = find (exitfl == 0); % Indices of inconvergent cals.
+			% badfit (badfitcals) = badfit (badfitcals) + 1;
 		end;
+		
+		% Also filling appropriate location in full timeseries
+		peakfl (:, ind) = pkwin (:, ind);   intfl (:, ind) = intwin (:, ind);
+		
 	end;
 	% Generate initial statistics for each calsource, over winsize timeslices.
 	% Transpose due to median being a row vector computed over cols.
@@ -90,18 +97,21 @@ function func_calfluxrat (fname, offset, ntslices, posfilename, debug)
 	% Move back to beginning of file.
 	% TODO: But be careful about variables like badfit etc.
 
-	for ind = 1:ntslices
+	for ind = winsize:ntslices
 		img = readimg2bin (fid);
 
+		fprintf (1, '\nRec %4d ', ind);
 		[tpk, tint, upcals, resid(:, ind), exitfl] = ...
 			extractcal (img.map, img.l, img.m, img.tobs, img.freq, rodata, ...
 						 srclist3CR, callist, true, 0);	
+		badfit (:, ind) = exitfl;   % Record locations of bad fits.
 
 		% Check for convergence of fminsearch
-		if (sum(exitfl) < ncal) % A 0 implies Max. num. of func. evals, reached.
+		% A 0 implies Max. num. of func. evals, reached. 1s is good. -1 is bad
+		if (sum(exitfl) ~= ncal) 
 			fprintf (1, 'Exit fl: %s\n', num2str(exitfl));
-			badfitcals = find (exitfl == 0); % Indices of inconvergent cals.
-			badfit (badfitcals) = badfit (badfitcals) + 1;
+			% badfitcals = find (exitfl == 0); % Indices of inconvergent cals.
+			% badfit (badfitcals) = badfit (badfitcals) + 1;
 		end;
 
 		% Decide if current timeslice should enter timeseries.
@@ -115,15 +125,15 @@ function func_calfluxrat (fname, offset, ntslices, posfilename, debug)
 		% Fill window circularly
 		winind = mod (ind, winsize) + 1;
 		pkwin (:, winind) = tpk; intwin (:, winind) = tint;
-		peakfl (:, ind) = tpk; intfl (:, ind) = tint;
+		peakfl (:, ind) = tpk;   intfl (:, ind) = tint;
 	end;
 
 	% Print statistics
-	fprintf (1, '\nBad fit count: %s\n', num2str(badfit, ' %2d '));
+	fprintf (1, '\nBad fit count: %s\n', num2str(sum (badfit' == 0), ' %2d '));
 	fprintf (1, 'Discarded timeslices: %d\n', badtimes);
 
 	% Plot fitted fluxes
-	col = {'b.-', 'm.-', 'r.-', 'k.-', 'g.-', 'y.-', 'w.-', 'c.-'};
+	col = {'b*-', 'm*-', 'r*-', 'k*-', 'g*-', 'y*-', 'w*-', 'c*-'};
 	for ind = 1:ncal
 		leg_str {ind} = srclist3CR(callist(ind)).name;
 	end;
@@ -132,7 +142,9 @@ function func_calfluxrat (fname, offset, ntslices, posfilename, debug)
 	% Peak fluxes and ratios
 	subplot (221);
 	for ind = 1:ncal
-		plot (peakfl(ind, :), char(col(ind)));
+		% pfl = peakfl (ind, badfit(ind, :) == 0);
+		% plot (pfl, char(col(ind)));
+		plot (peakfl (ind, :), char(col(ind))); % Unfiltered data.
 		hold on;
 	end;
 	title ('Extract peak flux of calibrators'); 
@@ -152,6 +164,8 @@ function func_calfluxrat (fname, offset, ntslices, posfilename, debug)
 	% Integrated fluxes and ratios
 	subplot (223);
 	for ind = 1:ncal
+		% ifl = intfl (ind, badfit(ind, :) == 0);
+		% plot (ifl, char (col(ind)));
 		plot (intfl(ind, :), char (col(ind)));
 		hold on;
 	end;
@@ -167,19 +181,41 @@ function func_calfluxrat (fname, offset, ntslices, posfilename, debug)
 	xlabel ('Timeslices'); ylabel ('Counts');
 	legend (leg_str);
 
-	% Plot histograms
+	% Plot histograms. We discard outliers for individual timeseries histograms
+	% For ratios, we discard all bad fits in the union of all cal sources. 
 	figure;
+	badfitunion = sum (badfit);
+	pkflref = peakfl (1, badfitunion == ncal); 
 	for ind = 1:ncal
-		subplot (2,2,ind);
-		hist (peakfl(ind, :));
-		title (sprintf ('Peak flux hist (src:%s)', ...
+		subplot (2,3,ind);
+		pfl = peakfl (ind, badfit(ind, :) == 1);
+		hist (pfl, 50);
+		title (sprintf ('Peak flux (src:%s)', ...
 				srclist3CR(callist(ind)).name));
+
+		subplot (2,3,ind+ncal);
+		pfl = peakfl (ind, badfitunion == ncal); 
+		hist (pfl./pkflref, 50);
+		title (sprintf ('Peak flux ratio to %s (src:%s)', ...
+				srclist3CR(callist(1)).name, srclist3CR(callist(ind)).name));
 	end;
 
 	figure;
+	intflref = intfl (1, badfitunion == ncal); 
 	for ind = 1:ncal
-		subplot (2,2,ind);
-		hist (intfl(ind, :));
-		title (sprintf ('Integ. flux hist (src:%s)', ...
+		subplot (2,3,ind);
+		ifl = intfl (ind, badfit(ind, :) == 1);
+		hist (ifl, 50);
+		title (sprintf ('Integ. flux (src:%s)', ...
 				srclist3CR(callist(ind)).name));
+
+		subplot (2,3,ind+ncal);
+		pfl = intfl (ind, badfitunion == ncal); 
+		hist (pfl./intflref, 50);
+		title (sprintf ('Peak flux ratio to %s (src:%s)', ...
+				srclist3CR(callist(1)).name, srclist3CR(callist(ind)).name));
 	end;
+
+	% Save the workspace for longer files!
+	fsave = strcat (fname, '_save.mat');
+	save (fsave);
