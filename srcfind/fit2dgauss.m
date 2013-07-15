@@ -20,12 +20,14 @@
 %	fitparms: A structure containing an estimate of the same parameters as 
 %			init_par, returned in the same order. 
 %     resid : Frobenius norm of the residual image, for fit quality check.
+%    exitfl : Holds the exit flag value of fminsearch. Helps in identifying 
+%			  bad fits.
 
 % NOTE: Can improve fit parameters by including a position angle in the model;
 % see gaussian.m. Also, by providing initial estimates via moments.
 % NOTE: How do we know if the fit did not go well?
 
-function [fitparams, resid] = fit2dgauss(image, l, m, init_par, debug,debwinhdl)
+function [fitparams, resid, exitfl] = fit2dgauss(image, l, m, init_par, debug,debwinhdl)
 
 % Debug function, uncomment all commented sections, then run as fit2dgauss()
 %function [fitparams] = fit2dgauss() 
@@ -52,7 +54,8 @@ function [fitparams, resid] = fit2dgauss(image, l, m, init_par, debug,debwinhdl)
 	
 
 	% Attempt to invoke fminsearch
-	fitparams = fminsearch(@residual,init_par, [], lmesh, mmesh, image);
+	[fitparams, fval, exitfl] = ...
+					fminsearch(@residual,init_par, [], lmesh, mmesh, image);
 	
 	 % For debug:
 	model_image = init_par(3) * ...

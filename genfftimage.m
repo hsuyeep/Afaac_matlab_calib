@@ -25,8 +25,8 @@ function [img_l, img_m, img] =  ...
 	radec = 0;
     duv = 2.5;						% Default, reassigned from freq. of obs. to
 									% image just the full Fov (-1<l<1)
-    Nuv = 500; %1000                % size of gridded visibility matrix
-    uvpad = 512; %1024              % specifies if any padding needs to be added
+    Nuv = 1000;						% size of gridded visibility matrix
+    uvpad = 1024;					% specifies if any padding needs to be added
 	nfacet = 3;
 	facetsize = 256;
 
@@ -100,8 +100,8 @@ function [img_l, img_m, img] =  ...
 	mask (meshgrid (img.l).^2 + meshgrid(img.m).'.^2 < 0.9) = 1;
 
 	if (elbeam == 1)
-		disp ('NOTE! NOTE! Working only with LBA X-dipoles primary beam correction now!');
-		addpath 'LBA_beam/CS1/';
+		fprintf (1, 'NOTE! NOTE! Working only with LBA X-dipoles primary beam correction now!');
+		addpath '~/WORK/AARTFAAC/Afaac_matlab_calib/LBA_beam/CS1/';
 		elembeam = calculateLBAbeam (img.l, img.m, img.freq, [1:2:96]); 
 		elembeam = max(max(elembeam(:,:,1))) ./ elembeam (:,:,1);
 	else

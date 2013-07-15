@@ -19,7 +19,8 @@
 %   resid : Vector of size(callist) containing the norm of the residual between
 %			model and data. Use this to determine fit quality.
 
-function [peakfl, intfl, upcals, resid] = ...
+%  		Specify fitting function as an array config PSF.
+function [peakfl, intfl, upcals, resid, exitfl] = ...
 	extractcal (img, l, m, tobs, freq, rodata, catalog, callist, epoch, debug)
 
 	% Temporary
@@ -66,6 +67,7 @@ function [peakfl, intfl, upcals, resid] = ...
 	peak = zeros (1, sum(upcals));
 	int = peak;
 	fitres = peak;
+	exitfl = peak;
 
 	% For each calibrator
 	for ind = 1:sum(upcals)	
@@ -133,8 +135,9 @@ function [peakfl, intfl, upcals, resid] = ...
 		init_par = double ([limg, mimg, errsq(peakl, peakm), lsig, msig]);
 
 		% NOTE: l is the x-axis, ie, columns!
-		[fitparams, res] = fit2dgauss (fitmat, fitl, fitm, ...
+		[fitparams, res, exitfl(ind)] = fit2dgauss (fitmat, fitl, fitm, ...
 								double(init_par), debug, fit2dmap);
+		
 		% Extract out peak and integrated flux
 		peak (ind) = fitparams(3);
 
