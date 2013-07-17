@@ -9,19 +9,25 @@
 % catalog : Specified catalog containing positional information of cal sources.
 % callist : Calibrator list as indices within catalog.
 %   epoch : True if positions are B1950, false if they are J2000.
+%     psf : Matrix containing the estimated PSF for the current image.
+%			If empty, a 2D gaussian is fit to sources.
 %   debug : If 1, display island maps, fit residuals/curves, more msgs.
 
-
 % Returns:
-%	peakfl: Vector containing the peak flux (in counts) of the calibrators
-%    ntfl : Vector containing the integrated flux (in counts) of cal sources
-%  upcals : Bool vector containing 1s for the calibrators actually used. 
-%   resid : Vector of size(callist) containing the norm of the residual between
-%			model and data. Use this to determine fit quality.
+%  upcals : Bool vector containing 1s for the calibrators actually used fron
+%			specified callist. 
+%    fit  : An array of structures of size sum (upcals), containing the fit 
+%			parameters as returned by the underlying fitting routine.
+% Members of fit:
+% fitparam: Vector containing optimization results of fit parameters. Check
+%			underlying fitting routine for definition of members.	  
+%   resid : The norm of the residual between model and data. Use this to 
+%			determine fit quality.
 %  exitfl : The exit status of the func. minimization. 0 implies things are good
 
-function [peakfl, intfl, upcals, resid, exitfl] = ...
-	extractcal (img, l, m, tobs, freq, rodata, catalog, callist, epoch, debug)
+function [upcals, fit] = ...
+		extractcal (img, l, m, tobs, freq, rodata, catalog, callist, epoch,...
+					 psf, debug)
 
 
 	% addpath ../
@@ -30,6 +36,7 @@ function [peakfl, intfl, upcals, resid, exitfl] = ...
     tobs_jd = tobs/86400 + 2400000.5; % Convert from MJD secs. to JD day units
 	errrad = 5;  % In pixel units.
 	fitrad = 5; % In pixel units
+
 	% NOTE: This assumes image is square.
 	N = size (img, 1); % Number of pixels in image.
 	lm2pix  = (max(l) - min(l))/N;
@@ -55,8 +62,6 @@ function [peakfl, intfl, upcals, resid, exitfl] = ...
 		end;
 	end;
 
-	% Generate PSF for fitting
-
 	% Handle debug
 	if debug > 2
 		islemap = figure; 
@@ -66,11 +71,6 @@ function [peakfl, intfl, upcals, resid, exitfl] = ...
 		fit2dmap = -1;
 	end;
 	
-	peak = zeros (1, sum(upcals));
-	int = peak;
-	fitres = peak;
-	exitfl = peak;
-
 	% For each calibrator
 	for ind = 1:sum(upcals)	
 
@@ -118,6 +118,8 @@ function [peakfl, intfl, upcals, resid, exitfl] = ...
 			
 		fitl = [limg-fitrad:limg+fitrad]; 
 		fitm = [mimg-fitrad:mimg+fitrad];
+
+		% NOTE: Currently not using this!
 		% fitl = [limg-lsig:limg+lsig]; 
 		% fitm = [mimg-msig:mimg+msig];
 		lsig = 3; msig = 3;
@@ -136,20 +138,18 @@ function [peakfl, intfl, upcals, resid, exitfl] = ...
 		% functions.
 		init_par = double ([limg, mimg, errsq(peakl, peakm), lsig, msig]);
 
-		% NOTE: l is the x-axis, ie, columns!
-		[fitparams, res, exitfl(ind)] = fit2dgauss (fitmat, fitl, fitm, ...
-								double(init_par), debug, fit2dmap);
-		
-		% Extract out peak and integrated flux
-		peak (ind) = fitparams(3);
-
-		% Do we need to scale this by the amplitude?
-		int (ind ) = 2*pi*fitparams(4)*fitparams(5); 
-		fitres (ind) = res;
+		if (isempty (psf))
+			% NOTE: l is the x-axis, ie, columns!
+			fit(ind) = fit2dgauss (fitmat, fitl, fitm, ...
+									double(init_par), debug, fit2dmap);
+		else
+			fit(ind) = fit2dpsf (fitmat, fitl, fitm, ...
+									double(init_par), debug, fit2dmap);
+		end; 
 	
 		% if (debug > 0)
-			fprintf (1, 'Src: %s, pk: %.2f, int: %.2f, Resid: %f.\n', ...
-  					 cat(ind).name, peak (ind), int (ind), fitres(ind));
+		%	fprintf (1, 'Src: %s, pk: %.2f, int: %.2f, Resid: %f.\n', ...
+  		%			 cat(ind).name, peak (ind), int (ind), fitres(ind));
 		% end; 
 
 		if (debug > 2)
@@ -165,7 +165,8 @@ function [peakfl, intfl, upcals, resid, exitfl] = ...
 			plot (fitl, max(fitmat ), 'b.-'); 
 			hold on;
 			plot (fitl, ...
-			fitparams(3)*exp(-(fitl-fitparams(1)).^2/(2*fitparams(4)^2)),'r.-');
+			fit(ind).fitparams(3)*...
+	exp(-(fitl-fit(ind).fitparams(1)).^2/(2*fit(ind).fitparams(4)^2)),'r.-');
 			title ('max over cols'); xlabel ('l');
 
 			subplot (223); 
@@ -173,14 +174,8 @@ function [peakfl, intfl, upcals, resid, exitfl] = ...
 			plot (fitm, max(fitmat'), 'b.-'); 
 			hold on;
 			plot (fitm, ...
-			fitparams(3)*exp(-(fitm-fitparams(2)).^2/(2*fitparams(4)^2)),'r.-');
+			fit(ind).fitparams(3)*...
+	exp(-(fitm-fit(ind).fitparams(2)).^2/(2*fit(ind).fitparams(4)^2)),'r.-');
 			title ('max over rows'); xlabel ('m');
 		end;
 	end;
-	
-	peakfl = zeros (1, length (callist)); % Really kludgy
-	intfl  = peakfl;
-	resid  = peakfl;
-	peakfl (upcals) = peak;
-	intfl  (upcals) = int;
-	resid  (upcals) = fitres;

@@ -30,9 +30,9 @@ function [img] = readimg2bin (fid)
 		return;
 	end;
 	img.freq      = fread (fid, 1, 'double');	
-	img.pix2laxis = fread (fid, 1, 'float32');
-	img.l = fread (fid, img.pix2laxis, 'float32');
-	img.pix2maxis = fread (fid, 1, 'float32');
-	img.m = fread (fid, img.pix2maxis, 'float32');
-	map = fread (fid, img.pix2laxis * img.pix2maxis, 'float32');
+	img.pix2laxis = single (fread (fid, 1, 'float32'));
+	img.l = single (fread (fid, img.pix2laxis, 'float32'));
+	img.pix2maxis = single (fread (fid, 1, 'float32'));
+	img.m = single (fread (fid, img.pix2maxis, 'float32'));
+	map = single (fread (fid, img.pix2laxis * img.pix2maxis, 'float32'));
 	img.map = reshape (map, img.pix2laxis, img.pix2maxis); 

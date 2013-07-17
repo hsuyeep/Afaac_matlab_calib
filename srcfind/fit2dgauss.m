@@ -1,6 +1,11 @@
 % Script to fit a 2D gaussian on a portion of the image containing
 % sources. Basic fit: no position angle parameter estimated.
 % pep/21Dec12
+% Updated code to return more parameters of the fit, like residue and fit
+% failure information, all together as a vector. A vector makes it easier to 
+% handle a series of fits, say in a pipeline. Also, a different fitting routine
+% can return a larger vector, if it has more fit parameters to return.
+% pep/16Jul13
 
 % Arguments:
 %	image:	2D array containing source islands (noise?)
@@ -17,17 +22,18 @@
 
 
 % Returns:
-%	fitparms: A structure containing an estimate of the same parameters as 
-%			init_par, returned in the same order. 
-%     resid : Frobenius norm of the residual image, for fit quality check.
-%    exitfl : Holds the exit flag value of fminsearch. Helps in identifying 
-%			  bad fits.
+%   fit   : A structure containing the following fields:
+%	  fitparms: An estimate of the same parameters as init_par, returned in the 
+%				same order. 
+%      resid  : Frobenius norm of the residual image, for fit quality check.
+%      exitfl : Holds the exit flag value of fminsearch. Helps in identifying 
+%			  	bad fits.
 
 % NOTE: Can improve fit parameters by including a position angle in the model;
 % see gaussian.m. Also, by providing initial estimates via moments.
 % NOTE: How do we know if the fit did not go well?
 
-function [fitparams, resid, exitfl] = fit2dgauss(image, l, m, init_par, debug,debwinhdl)
+function [fit] = fit2dgauss(image, l, m, init_par, debug, debwinhdl)
 
 % Debug function, uncomment all commented sections, then run as fit2dgauss()
 %function [fitparams] = fit2dgauss() 
@@ -54,19 +60,18 @@ function [fitparams, resid, exitfl] = fit2dgauss(image, l, m, init_par, debug,de
 	
 
 	% Attempt to invoke fminsearch
-	[fitparams, fval, exitfl] = ...
+	[fit.fitparams, fval, fit.exitfl] = ...
 					fminsearch(@residual,init_par, [], lmesh, mmesh, image);
 	
-	 % For debug:
 	model_image = init_par(3) * ...
 					exp(-(lmesh-init_par(1)).^2/(2*init_par(4)^2)).*...
 					exp(-(mmesh-init_par(2)).^2/(2*init_par(5)^2));
-	fit_image = fitparams(3) * ...
-					exp(-(lmesh-fitparams(1)).^2/(2*fitparams(4)^2)).*...
-					exp(-(mmesh-fitparams(2)).^2/(2*fitparams(5)^2));
+	fit_image = fit.fitparams(3) * ...
+				exp(-(lmesh-fit.fitparams(1)).^2/(2*fit.fitparams(4)^2)).*...
+				exp(-(mmesh-fit.fitparams(2)).^2/(2*fit.fitparams(5)^2));
 	resid_image = image - fit_image;
-	resid = norm (resid_image, 'fro');
-	if debug > 1
+	fit.resid = norm (resid_image, 'fro');
+	if debug > 2
 		figure (debwinhdl); 
 		subplot (131); imagesc (image); title ('Data'); colorbar;
 		subplot (132); imagesc (fit_image); title ('Fit image'); colorbar;
