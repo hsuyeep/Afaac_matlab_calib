@@ -1,10 +1,12 @@
-addpath ~/WORK/Matlab/cvx
-addpath ~/WORK/Matlab/cvx/structures
-addpath ~/WORK/Matlab/cvx/lib
-addpath ~/WORK/Matlab/cvx/functions
-addpath ~/WORK/Matlab/cvx/commands
-addpath ~/WORK/Matlab/cvx/builtins
+%addpath ~/WORK/Matlab/cvx
+%addpath ~/WORK/Matlab/cvx/structures
+%addpath ~/WORK/Matlab/cvx/lib
+%addpath ~/WORK/Matlab/cvx/functions
+%addpath ~/WORK/Matlab/cvx/commands
+%addpath ~/WORK/Matlab/cvx/builtins
 addpath ~/WORK/Matlab/matlab_xunit/xunit/
+addpath ~/WORK/Matlab/mtit/
+addpath ~/WORK/AARTFAAC/Afaac_matlab_calib/srcfind/
 
 % set command window format
 format compact

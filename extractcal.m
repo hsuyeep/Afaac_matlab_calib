@@ -27,7 +27,7 @@
 
 function [upcals, fit] = ...
 		extractcal (img, l, m, tobs, freq, rodata, catalog, callist, epoch,...
-					 psf, debug)
+					 psf, islemap, fit2dmap, debug)
 
 
 	% addpath ../
@@ -64,11 +64,10 @@ function [upcals, fit] = ...
 
 	% Handle debug
 	if debug > 2
-		islemap = figure; 
-		fit2dmap = figure;
-	else
-		islemap = -1;
-		fit2dmap = -1;
+		if (islemap == -1 && fit2dmap == -1)
+			islemap = figure; 
+			fit2dmap = figure;
+		end;
 	end;
 	
 	% For each calibrator
@@ -87,7 +86,7 @@ function [upcals, fit] = ...
 		[rowmax, rowmaxind] = max (colmax);
 
 		% The local location of the peak and its value.
-		peakm = colmaxind (rowmaxind); peakl = rowmaxind;  % l = rows;
+		peakl = colmaxind (rowmaxind); peakm = rowmaxind;  % l = rows;
 		peakpix = errsq(peakl, peakm);
 		
 
@@ -133,10 +132,10 @@ function [upcals, fit] = ...
 		end;
 
 		% Fit model to calibrator island
-		% init_par = [peak_x, peak_y, peak_flux, sigx, sigy];
+		% init_par = [peak_x, peak_y, peak_flux, sigx, sigy, rotation angle];
 		% NOTE: Conversion to double is required by the exp and fminsearch 
 		% functions.
-		init_par = double ([limg, mimg, errsq(peakl, peakm), lsig, msig]);
+		init_par = double ([limg, mimg, errsq(peakl, peakm), lsig, msig, 0]);
 
 		if (isempty (psf))
 			% NOTE: l is the x-axis, ie, columns!
@@ -156,7 +155,7 @@ function [upcals, fit] = ...
 			figure (islemap);
 			subplot (122);
 			imagesc (limg, mimg, fitmat);
-			title (sprintf ('Cal %d: %s, %d Jy, %.1f counts\n', ...
+			title (sprintf ('Data from Cal %d: %s, %d Jy, %.1f counts\n', ...
 				ind, cat(ind).name, cat(ind).flux, errsq(peakl, peakm)));
 			xlabel ('l'); ylabel ('m');
 
@@ -177,5 +176,7 @@ function [upcals, fit] = ...
 			fit(ind).fitparams(3)*...
 	exp(-(fitm-fit(ind).fitparams(2)).^2/(2*fit(ind).fitparams(4)^2)),'r.-');
 			title ('max over rows'); xlabel ('m');
+		drawnow;
+		pause;
 		end;
 	end;

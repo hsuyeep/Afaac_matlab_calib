@@ -20,7 +20,7 @@ function [times, autocorr] = genautocorr (fname, offset, ntimes)
 	end;
 
 	autocorr = zeros (288, ntimes);
-	times = zeros (ntimes);
+	times = zeros (ntimes, 1);
 
 	for ind = 1:ntimes
 		[acc, times(ind), freq] = readms2float (fid, -1, -1, 288);

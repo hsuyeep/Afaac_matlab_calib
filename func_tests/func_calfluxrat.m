@@ -9,11 +9,16 @@
 %	fname : File containing calibrated images (use rdimg2bin to read in).
 %  offset : Timeslice offset from which to begin.
 % ntslices: Number of timeslices to process.
+% posfilename: Array configuration of the images.
+% callist : List of sources within FoV to be monitored.
+% debug   : Turn on status messages.
+% Returns:
+%	fit   : Structure containing all relevant fit parameters.
 
 
-function fit = func_calfluxrat (fname, offset, ntslices, posfilename, debug)
+function fit = func_calfluxrat (fname, offset, ntslices, posfilename, callist, debug)
 
-	addpath ../srcfind 				   	% Add fit2dgauss () to path.
+	% addpath ../srcfind 				   	% Add fit2dgauss () to path.
 	
 	fid = fopen (fname, 'rb');
 	if (fid < 0)
@@ -37,20 +42,22 @@ function fit = func_calfluxrat (fname, offset, ntslices, posfilename, debug)
 		filesize = fdir.bytes;
 		imgwhos = whos ('img');
 		imgsize = imgwhos.bytes;
-		ntslices = round (filesize/imgsize);
+		ntslices = round (filesize/imgsize)-1; % Last timeslice is always tricky
 		fprintf (1, '--> Found %d timeslices in file.\n', ntslices);
 		fprintf (1, '--> NOTE: Does not work with multiple channels yet!\n');
+		fseek (fid, 0, 'bof');
 	end;
 
 	% NOTE: Should be an all-sky callist which is pruned to the current FoV.
 	% NOTE: Current list assumes 3CR catalog!
 	% calsrcs = 3C[295, 219, 338, 410.1, 10, 84, 338]
-	callist = [200, 133, 237]; %, 218, 4, 54, 237];
+	% callist = [200, 133, 237, 4]; %, 218, 4, 54, 237];
 	ncal = length (callist);
 
 	% Create datastructures
 	tpk = zeros (ncal, 1); tint = zeros (ncal, 1); % Instantaneous peak/int. fl.
 
+	tobs = zeros (ntslices,1);
 	peakfl = zeros (ncal, ntslices);    % Timeseries datastructures
 	intfl = peakfl;
 	resid = peakfl;
@@ -64,12 +71,21 @@ function fit = func_calfluxrat (fname, offset, ntslices, posfilename, debug)
 										% discarded due to median filter.
 	leg_str = cell (1, ncal);			% Cell array for dynamic legends
 
+	% Debug windows
+	if (debug > 3)
+		islemap = figure;
+		fit2dmap = figure;
+	else
+		islemap = -1; fit2dmap = -1;
+	end;
+
 	% Figure out which calibraters are up via a single call to extractcal.
 	img = readimg2bin (fid);
+	tobs(1) = img.tobs;
 	psf = [];
 	[upcals, fit] = ...
 			extractcal (img.map, img.l, img.m, img.tobs, ...
-					img.freq, rodata, srclist3CR, callist, true, psf, 3);	
+					img.freq, rodata, srclist3CR, callist, true, psf, debug, islemap, fit2dmap);	
 	% NOTE that extractcal returns an array of structures, one per fitted src.
 	for ind = 1:sum(upcals)
 		fit(ind,1) = fit(ind);
@@ -80,14 +96,16 @@ function fit = func_calfluxrat (fname, offset, ntslices, posfilename, debug)
 	% Create an array of structures for full timeseries.
 	% TODO: Currently dynamically expanding the array of structures.
 
+
 	% Fill in timeslice window.
 	fprintf (2, '--> Filling filter window of %d timeslices...', winsize);
 	for ind = 2:winsize
 		img = readimg2bin (fid);
+		tobs (ind) = img.tobs;
 		fprintf (1, '\nRec %4d ', ind);
 		[upcals, fit(:,ind)] = ...
 			extractcal (img.map, img.l, img.m, img.tobs, ...
-					img.freq, rodata, srclist3CR, callist, true, psf, 0);	
+					img.freq, rodata, srclist3CR, callist, true, psf, debug, islemap, fit2dmap);	
 
 		badfit (:, ind) = [fit(:,ind).exitfl];   % Record locations of bad fits.
 		% Check for convergence of fminsearch
@@ -104,12 +122,14 @@ function fit = func_calfluxrat (fname, offset, ntslices, posfilename, debug)
 			fitparam (cl,:) = fit(cl, ind).fitparams;
 		end;
 		tpk = fitparam (:,3);
-		tint = 2*pi*fitparam (:,4).*fitparam(:,5); 
+		tint = 2*pi*fitparam (:,3).*fitparam (:,4).*fitparam (:,5); 
+
 		% Also filling appropriate location in full timeseries
 		pkwin  (:,ind) = tpk; 
 		peakfl (:,ind) = tpk; 
 		intfl  (:,ind) = tint;
 		intwin (:,ind) = tint;
+		tobs (ind) = img.tobs;
 	end;
 	% Generate initial statistics for each calsource, over winsize timeslices.
 	% Transpose due to median being a row vector computed over cols.
@@ -121,13 +141,13 @@ function fit = func_calfluxrat (fname, offset, ntslices, posfilename, debug)
 	% Move back to beginning of file.
 	% TODO: But be careful about variables like badfit etc.
 
-	for ind = winsize:ntslices
+	for ind = winsize+1:ntslices
 		img = readimg2bin (fid);
 
 		fprintf (1, '\nRec %4d ', ind);
 		[upcals, fit(:,ind)] = ...
 			extractcal (img.map, img.l, img.m, img.tobs, img.freq, rodata, ...
-						 srclist3CR, callist, true, psf, 0);	
+						 srclist3CR, callist, true, psf, debug, islemap, fit2dmap);	
 		badfit (:, ind) = fit(ind).exitfl;   % Record locations of bad fits.
 
 		% Check for convergence of fminsearch
@@ -142,7 +162,9 @@ function fit = func_calfluxrat (fname, offset, ntslices, posfilename, debug)
 			fitparam (cl,:) = fit(cl, ind).fitparams;
 		end;
 		tpk = fitparam (:,3);
-		tint = 2*pi*fitparam (:,4).*fitparam(:,5); 
+		tint = 2*pi*fitparam (:,3).*fitparam (:,4).*fitparam (:,5); 
+		tobs (ind) = img.tobs;
+
 		% Decide if current timeslice should enter timeseries.
 		% NOTE: Not using the integrated flux!! 
 		if (sum (tpk' > thresh*pkmed) > 0) % Vectorial comparison.
@@ -161,6 +183,12 @@ function fit = func_calfluxrat (fname, offset, ntslices, posfilename, debug)
 	fprintf (1, '\nBad fit count: %s\n', num2str(sum (badfit' == 0), ' %2d '));
 	fprintf (1, 'Discarded timeslices: %d\n', badtimes);
 
+	% Save the workspace for longer files!
+	fsave = strcat (fname, '_save.mat');
+	save (fsave, 'callist', 'fit', 'tobs');
+
+
+	%%%%%%%%%%%%%%%%%%%% Analysis section %%%%%%%%%%%%%%%%%%
 	% Plot fitted fluxes
 	col = {'b*-', 'm*-', 'r*-', 'k*-', 'g*-', 'y*-', 'w*-', 'c*-'};
 	for ind = 1:ncal
@@ -169,7 +197,7 @@ function fit = func_calfluxrat (fname, offset, ntslices, posfilename, debug)
 
 	figure;
 	% Peak fluxes and ratios
-	subplot (221);
+	subplot (2, 2, 1);
 	for ind = 1:ncal
 		% pfl = peakfl (ind, badfit(ind, :) == 0);
 		% plot (pfl, char(col(ind)));
@@ -179,7 +207,7 @@ function fit = func_calfluxrat (fname, offset, ntslices, posfilename, debug)
 	title ('Extract peak flux of calibrators'); 
 	xlabel ('Timeslices'); ylabel ('Counts');
 	legend (leg_str);
-	subplot (222);
+	subplot (2, 2, 2);
 	for ind = 1:ncal
 		plot (peakfl(ind, :)./peakfl(1,:), char(col(ind)));
 		% plot (resid(ind,:), char(col(ind)));
@@ -191,17 +219,17 @@ function fit = func_calfluxrat (fname, offset, ntslices, posfilename, debug)
 	legend (leg_str);
 
 	% Integrated fluxes and ratios
-	subplot (223);
+	subplot (2, 2, 3);
 	for ind = 1:ncal
 		% ifl = intfl (ind, badfit(ind, :) == 0);
 		% plot (ifl, char (col(ind)));
 		plot (intfl(ind, :), char (col(ind)));
-		)hold on;
+		hold on;
 	end;
 	title ('Extract int. flux of calibrators'); 
 	xlabel ('Timeslices'); ylabel ('Counts');
 	legend (leg_str);
-	subplot (224);
+	subplot (2, 2, 4);
 	for ind = 1:ncal
 		plot (intfl(ind, :)./intfl(1,:), char(col(ind)));
 		hold on;
@@ -216,15 +244,17 @@ function fit = func_calfluxrat (fname, offset, ntslices, posfilename, debug)
 	badfitunion = sum (badfit);
 	pkflref = peakfl (1, badfitunion == ncal); 
 	for ind = 1:ncal
-		subplot (2,3,ind);
+		subplot (2, ncal, ind);
 		pfl = peakfl (ind, badfit(ind, :) == 1);
-		hist (pfl, 50);
+		plotfithist (pfl, 50, gca);
+		% hist (pfl, 50);
 		title (sprintf ('Peak flux (src:%s)', ...
 				srclist3CR(callist(ind)).name));
 
-		subplot (2,3,ind+ncal);
+		subplot (2, ncal, ind+ncal);
 		pfl = peakfl (ind, badfitunion == ncal); 
-		hist (pfl./pkflref, 50);
+		% hist (pfl./pkflref, 50);
+		plotfithist (pfl./pkflref, 50, gca);
 		title (sprintf ('Peak flux ratio to %s (src:%s)', ...
 				srclist3CR(callist(1)).name, srclist3CR(callist(ind)).name));
 	end;
@@ -232,16 +262,18 @@ function fit = func_calfluxrat (fname, offset, ntslices, posfilename, debug)
 	figure;
 	intflref = intfl (1, badfitunion == ncal); 
 	for ind = 1:ncal
-		subplot (2,3,ind);
+		subplot (2, ncal, ind);
 		ifl = intfl (ind, badfit(ind, :) == 1);
-		hist (ifl, 50);
+		% hist (ifl, 50);
+		plotfithist (ifl, 50, gca);
 		title (sprintf ('Integ. flux (src:%s)', ...
 				srclist3CR(callist(ind)).name));
 
-		subplot (2,3,ind+ncal);
+		subplot (2,ncal,ind+ncal);
 		pfl = intfl (ind, badfitunion == ncal); 
-		hist (pfl./intflref, 50);
-		title (sprintf ('Peak flux ratio to %s (src:%s)', ...
+		% hist (pfl./intflref, 50);
+		plotfithist (pfl./intflref, 50, gca);
+		title (sprintf ('Integ. flux ratio to %s (src:%s)', ...
 				srclist3CR(callist(1)).name, srclist3CR(callist(ind)).name));
 	end;
 
@@ -250,6 +282,7 @@ function fit = func_calfluxrat (fname, offset, ntslices, posfilename, debug)
 	ypos = xpos;
 	sigx = xpos; 
 	sigy = xpos;
+	pa   = xpos;
 	for ind=1:ntslices
 		for cl = 1:ncal
 			fitparam (cl,:) = fit(cl, ind).fitparams;
@@ -258,8 +291,24 @@ function fit = func_calfluxrat (fname, offset, ntslices, posfilename, debug)
 		ypos (:,ind) = fitparam (:,2);
 		sigx (:,ind) = fitparam (:,4);
 		sigy (:,ind) = fitparam (:,5);
+		pa (:,ind) = fitparam (:,6);
+	end;
+
+	% Plot other fit related data: 
+	% histograms of x and y positions, fitted sigx, sigy and position angle
+	for ind = 1:ncal
+		figure;
+		subplot (251);	plot (xpos (ind,:)); title ('lpos (pix)'); axis tight;
+		subplot (252);	plot (ypos (ind,:)); title ('mpos (pix)'); axis tight;
+		subplot (253);	plot (sigx (ind,:)); title ('sigl (pix)'); axis tight;
+		subplot (254);	plot (sigy (ind,:)); title ('sigm (pix)'); axis tight;
+		subplot (255);	plot (pa   (ind,:)); title ('pa (rad)'); axis tight;
+		
+		subplot (256);	plotfithist (xpos (ind,:), 50, gca);
+		subplot (257);	plotfithist (ypos (ind,:), 50, gca);
+		subplot (258);	plotfithist (sigx (ind,:), 50, gca);
+		subplot (259);	plotfithist (sigy (ind,:), 50, gca);
+		subplot (2,5,10);	plotfithist (pa   (ind,:), 50, gca);
+		mtit (sprintf ('3C%s',srclist3CR(callist(ind)).name), 'yoff',0.025);
 	end;
 	
-	% Save the workspace for longer files!
-	fsave = strcat (fname, '_save.mat');
-	save (fsave);

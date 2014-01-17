@@ -30,14 +30,24 @@ function [img_l, img_m, img] =  ...
 	nfacet = 3;
 	facetsize = 256;
 
+	if (elbeam == 0)
+		elstr = 'noel';
+	else
+		elstr = 'el';
+	end;
+
 	if (wr2file == 0)
 		hdl = figure;
 	else
 		k = strfind (fname, '.bin');
 		if (mosaic == 1)
-			imgfname = [fname(1:k-1) '_mosimg.bin'];
+			imgfname = sprintf ('%s_%d_%s%s', fname(1:k-1), offset, elstr, '_mosimg.bin');
 		else
-			imgfname = [fname(1:k-1) '_fftimg.bin'];
+			imgfname = sprintf ('%s_%d_%s%s', fname(1:k-1), offset, elstr, '_fftimg.bin');
+		end;
+		if (exist (imgfname, 'file') == 2)
+			fprintf (2, 'Overwriting existing file: %s. Continue? (Ctrl-C to kill)\n', imgfname);
+			pause;   % To prevent overwriting already written files!
 		end;
 		fimg = fopen (imgfname, 'wb');
 		if (fimg < 0)
