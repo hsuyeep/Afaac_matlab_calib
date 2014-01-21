@@ -84,10 +84,22 @@ function [currsol] = pelican_sunAteamsub (acc, t_obs, ...
 	                                  % wavelengths length.
 	    calim.maxrestriction = 60;    % Avoid vis. above 'maxrestriction' 
 	                                  % meters (NOT wavelengths!)
-	    calim.debug = debug;      	  % Set debug level.
+		% NOTE: Taper computation now pulled out from statcal_stefcal.
+		calim.parm.type = 'Gaussian';
+		calim.parm.minlambda = 10;    % NOTE: Units of lambda. 
+		calim.parm.maxmeters = 350;	  % NOTE: Units of meters.
+		calim.parm.pa(1) = 0.2;		  % NOTE: Units of lambda. 
+		calim.parm.pa(2) = calim.parm.pa(1); % Inner taper sigx/sigy
+		calim.parm.pa(3) = 100; 	  % NOTE: Units of lambda.
+		calim.parm.pa(4) = calim.parm.pa(3); % Outer taper sigx/sigy
+		[calim.intap, calim.outtap, calim.den, calim.mask, uvdist] =  ...
+				taper (rodata.posITRF, calim.parm, -1, freq, 4);
+		calim.intap_fl = calim.intap; calim.outtap_fl = calim.outtap;
+		calim.den_fl   = calim.den; calim.mask_fl = calim.mask;
+	    calim.debug    = debug;      	  % Set debug level.
 	    calim.rem_ants = rodata.Nelem;
-	    calim.flagant = flagant;
-		calim.opt = optimset ();     % Note: Using all default values!
+	    calim.flagant  = flagant;
+		calim.opt      = optimset ();     % Note: Using all default values!
  	
  	    % Calibration stopping conditions
    	    calim.diffstop = 1e-3;         % difference bet. calib. solutions
@@ -157,6 +169,12 @@ function [currsol] = pelican_sunAteamsub (acc, t_obs, ...
         							[calim.rem_ants, 3]);
     	calim.uvflag  = reshape (uvflag(antmask ~= 1), ... 
         				   [calim.rem_ants, calim.rem_ants]);
+		calim.intap_fl = reshape (calim.intap (antmask ~= 1), ...
+        				   [calim.rem_ants, calim.rem_ants]);
+		calim.outtap_fl = reshape (calim.outtap (antmask ~= 1), ...
+        				   [calim.rem_ants, calim.rem_ants]);
+		calim.mask_fl = reshape (calim.mask (antmask ~= 1), ...
+        				   [calim.rem_ants, calim.rem_ants]);
     	disp (['NOTE: ACM resized after flagging to ' num2str(size (acc))]);
 		% fprintf (1, 'Rank/rcond of ACM: %.4f/%.4f\n', rank(acc), rcond(acc));	
 
@@ -188,7 +206,7 @@ function [currsol] = pelican_sunAteamsub (acc, t_obs, ...
 
     % Initial calibration
     [cal1, sigmas1, Sigman1] = statcal_stefcal (acc, t_obs, freq, ... 
-        rodata, calim, calim.uvflag);
+        rodata, calim, calim.uvflag, calim.intap_fl);
 
     % [cal1, sigmas1, Sigman1] = statcal_vlss(acc, t_obs, freq, posITRF, srcsel,
     %                          normal, 10, maxrestriction, eye(Nelem), catalog);
@@ -236,7 +254,7 @@ function [currsol] = pelican_sunAteamsub (acc, t_obs, ...
     % NOTE: We only estimate source positions for sources with an apparent flux
     % larger than 1% of the apparent flux of Cas A. 'sel' holds this subset of
     % sources with enough power, and above the horizon
-    sel = sigmas1 > 0.01 & up'; 
+    sel = sigmas1 > (0.01*sigmas1(1)) & up'; 
     nsrc = sum(sel);
     if (calim.debug > 0)
        disp (['WSF: Working with ' num2str(nsrc) ...
@@ -266,7 +284,7 @@ function [currsol] = pelican_sunAteamsub (acc, t_obs, ...
     %[ghat, sigmas2, Sigman2] = cal_ext_stefcal(acc, A, sigmas1(sel), ...
     %							squeeze(abs(Sigman1)) > 0, calim);
     [sol, stefsol] = cal_ext_stefcal(acc, A, sigmas1(sel), ...
-    							squeeze(abs(Sigman1)) > 0, calim);
+    							squeeze(abs(Sigman1)) > 0, calim.uvflag, calim);
 	% Need to make a temporary storage in sol,to prevent cal_ext.. from 
 	% overwriting previous solution contents..
 	currsol.flagant = flagant;
@@ -361,8 +379,9 @@ function [currsol] = pelican_sunAteamsub (acc, t_obs, ...
 
 		title (sprintf ('Calibrated visibilities before model subtraction. Time: %f', t_obs_mjdsec));
 	
+		acc_taper = accsubAteam .* calim.mask_fl;
 	    [radecmap, calmap, calvis] = ... 
-			fft_imager_sjw_radec (accsubAteam(:), uloc_flag(:), vloc_flag(:), ... 
+			fft_imager_sjw_radec (acc_taper(:), uloc_flag(:), vloc_flag(:), ... 
 									duv, Nuv, uvpad, t_obs, freq, 0);
 		figure(subsky);
 		imagesc (l,m,real(calmap.*mask));

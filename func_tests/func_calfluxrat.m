@@ -35,23 +35,34 @@ function fit = func_calfluxrat (fname, offset, ntslices, posfilename, callist, d
     rodata.poslocal = poslocal;
 	load srclist3CR.mat
 
+	% Figure out number of records via kludgy filesize method.
+	img = readimg2bin (fid);
+	fdir = dir (fname);
+	filesize = fdir.bytes;
+	imgwhos = whos ('img');
+	imgsize = imgwhos.bytes;
+		
 	if (ntslices < 0)
-		% Figure out number of records via kludgy filesize method.
-		img = readimg2bin (fid);
-		fdir = dir (fname);
-		filesize = fdir.bytes;
-		imgwhos = whos ('img');
-		imgsize = imgwhos.bytes;
 		ntslices = round (filesize/imgsize)-1; % Last timeslice is always tricky
 		fprintf (1, '--> Found %d timeslices in file.\n', ntslices);
 		fprintf (1, '--> NOTE: Does not work with multiple channels yet!\n');
 		fseek (fid, 0, 'bof');
 	end;
 
+	% Move to desired offset
+	if (offset > 1)
+		% fseek (fid, offset*imgwhos.bytes, 'bof');
+		fprintf (1, 'Moving to offset %d...\n', offset);
+		for ind = 1:offset
+			img = readimg2bin (fid);
+		end;
+	end;
+
 	% NOTE: Should be an all-sky callist which is pruned to the current FoV.
 	% NOTE: Current list assumes 3CR catalog!
 	% calsrcs = 3C[295, 219, 338, 410.1, 10, 84, 338]
-	% callist = [200, 133, 237, 4]; %, 218, 4, 54, 237];
+	% callist = [117, 133, 265, 256, 200, 237];  % For day time observations
+	% callist = [  4, 314, 265, 256, 200, 237];  % For nite time observations
 	ncal = length (callist);
 
 	% Create datastructures
@@ -79,21 +90,28 @@ function fit = func_calfluxrat (fname, offset, ntslices, posfilename, callist, d
 		islemap = -1; fit2dmap = -1;
 	end;
 
-	% Figure out which calibraters are up via a single call to extractcal.
+	% Figure out which calibraters are up via a single first call to extractcal.
 	img = readimg2bin (fid);
 	tobs(1) = img.tobs;
 	psf = [];
-	[upcals, fit] = ...
+	[upcals, fit(:, 1)] = ...
 			extractcal (img.map, img.l, img.m, img.tobs, ...
-					img.freq, rodata, srclist3CR, callist, true, psf, debug, islemap, fit2dmap);	
+					img.freq, rodata, srclist3CR, callist, true, psf, debug, ...
+					islemap, fit2dmap);	
+
 	% NOTE that extractcal returns an array of structures, one per fitted src.
+	fitparam = zeros (ncal, length (fit(1,1).fitparams));
+	% fitparam = zeros (ncal, length (firstfit(1).fitparams));
 	for ind = 1:sum(upcals)
-		fit(ind,1) = fit(ind);
+		fitparam (ind,:) = fit(ind, 1).fitparams;
+		% fitparam (ind,:) = firstfit(ind).fitparams;
 	end;
 
-	fprintf (1, 'Found %d sources to monitor.\n', sum(upcals));
+	fprintf (1, 'Found %d sources to monitor.', sum(upcals));
 
 	% Create an array of structures for full timeseries.
+	% fit (ncal, ntslices) = {firstfit};
+	% fit (:, 1) = {firstfit};
 	% TODO: Currently dynamically expanding the array of structures.
 
 
@@ -102,7 +120,7 @@ function fit = func_calfluxrat (fname, offset, ntslices, posfilename, callist, d
 	for ind = 2:winsize
 		img = readimg2bin (fid);
 		tobs (ind) = img.tobs;
-		fprintf (1, '\nRec %4d ', ind);
+		fprintf (1, 'Rec %4d ', ind);
 		[upcals, fit(:,ind)] = ...
 			extractcal (img.map, img.l, img.m, img.tobs, ...
 					img.freq, rodata, srclist3CR, callist, true, psf, debug, islemap, fit2dmap);	
@@ -110,7 +128,7 @@ function fit = func_calfluxrat (fname, offset, ntslices, posfilename, callist, d
 		badfit (:, ind) = [fit(:,ind).exitfl];   % Record locations of bad fits.
 		% Check for convergence of fminsearch
 		% A 0 implies Max. num. of func. evals, reached. 1s is good. -1 is bad
-		if (sum(badfit(:,ind)) ~= ncal) 
+		if (sum(badfit(:,ind)) ~= sum(upcals)) 
 			fprintf (1, 'Exit fl: %s\n', num2str([fit(:,ind).exitfl]));
 			% badfitcals = find (exitfl == 0); % Indices of inconvergent cals.
 			% badfit (badfitcals) = badfit (badfitcals) + 1;
@@ -144,16 +162,15 @@ function fit = func_calfluxrat (fname, offset, ntslices, posfilename, callist, d
 	for ind = winsize+1:ntslices
 		img = readimg2bin (fid);
 
-		fprintf (1, '\nRec %4d ', ind);
+		fprintf (1, 'Rec %4d ', ind);
 		[upcals, fit(:,ind)] = ...
 			extractcal (img.map, img.l, img.m, img.tobs, img.freq, rodata, ...
 						 srclist3CR, callist, true, psf, debug, islemap, fit2dmap);	
-		badfit (:, ind) = fit(ind).exitfl;   % Record locations of bad fits.
-
+		badfit (:, ind) = [fit(:, ind).exitfl];  % Record locations of bad fits.
 		% Check for convergence of fminsearch
 		% A 0 implies Max. num. of func. evals, reached. 1s is good. -1 is bad
-		if (sum(fit(ind).exitfl) ~= ncal) 
-			fprintf (1, 'Exit fl: %s\n', num2str(fit(ind).exitfl));
+		if (sum(badfit(:,ind)) ~= ncal) 
+			fprintf (1, 'Exit fl: %s\n', num2str([fit(:,ind).exitfl]));
 			% badfitcals = find (exitfl == 0); % Indices of inconvergent cals.
 			% badfit (badfitcals) = badfit (badfitcals) + 1;
 		end;
@@ -167,16 +184,25 @@ function fit = func_calfluxrat (fname, offset, ntslices, posfilename, callist, d
 
 		% Decide if current timeslice should enter timeseries.
 		% NOTE: Not using the integrated flux!! 
-		if (sum (tpk' > thresh*pkmed) > 0) % Vectorial comparison.
-			fprintf (2, '<-- Discarding time %.2f\n', img.tobs);	
+		% Check for outliers and bad fits.
+		badsrc = (tpk > thresh*pkmed') | (1-badfit (:,ind)); 
+		% if (sum (tpk' > thresh*pkmed) > 0) % Vectorial comparison.
+		if (sum (badsrc) > 0) % Vectorial comparison.
+			fprintf (2, '<-- Discarding time %.2f. Badsrc: %s.\n', ...
+					img.tobs, num2str(badsrc));	
 			badtimes = badtimes + 1;
-			continue;
-		end;
+			tpk (badsrc == 1) = NaN; % Replace outliers with NaN.
+			tint (badsrc == 1) = NaN;
+			% continue;
+		else
 
-		% Fill window circularly
-		winind = mod (ind, winsize) + 1;
-		pkwin (:, winind) = tpk; intwin (:, winind) = tint;
+			% Fill window circularly
+			winind = mod (ind, winsize) + 1;
+			pkwin (:, winind) = tpk; intwin (:, winind) = tint;
+			% peakfl (:, ind) = tpk;   intfl (:, ind) = tint;
+		end;
 		peakfl (:, ind) = tpk;   intfl (:, ind) = tint;
+
 	end;
 
 	% Print statistics

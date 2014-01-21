@@ -24,7 +24,9 @@ function [srcflux, re_gain, im_gain] = pltcalsol (fname, nrecs, showplt)
 	fid = fopen (fname, 'rb');
 	ind = 1;
 	% col = {'bo', 'mo', 'ro', 'ko', 'go', 'yo', 'wo', 'co'};
-	col = {'b.', 'm.', 'r.', 'k.', 'g.', 'y.', 'w.', 'c.'};
+	% col = {'b.', 'm.', 'r.', 'k.', 'g.', 'y.', 'w.', 'c.'};
+	col = {'b*', 'm*', 'r*', 'k*', 'g*', 'y*', 'w*', 'c*'};
+	% col = {'b-', 'm-', 'r-', 'k-', 'g-', 'y-', 'w-', 'c-'};
 
 	try
 		rec0 = readcalsol (fid);
@@ -70,6 +72,8 @@ function [srcflux, re_gain, im_gain] = pltcalsol (fname, nrecs, showplt)
 	im_gain = zeros (nrecs, Nelem); 
 	tstamp  = zeros (nrecs);
 	srcflux = zeros (nrecs, rec.calsrcs);
+	srcpos_th  = zeros (nrecs, rec.calsrcs);
+	srcpos_phi  = zeros (nrecs, rec.calsrcs);
 	% pause;
 
 	% Figure management
@@ -120,7 +124,9 @@ function [srcflux, re_gain, im_gain] = pltcalsol (fname, nrecs, showplt)
 		recsol = [rec.gainsol(flag1 == 0); rec.sigmas(srcsel); rec.thsrc_wsf(srcsel); rec.phisrc_wsf(srcsel)];
 		gainerr (ts) = (100/length(rec0sol))*sum( abs(rec0sol - recsol) ./ abs(rec0sol));
 
-		% srcflux (ts, :) = rec.sigmas';
+		srcpos_th (ts,:) = rec.thsrc_wsf-rec.thsrc_cat;
+		srcpos_phi (ts,:) = rec.phisrc_wsf-rec.phisrc_cat;
+		srcflux (ts, :) = rec.sigmas';
 
 		ind = ind + 1;
 		t = whos ('rec');
@@ -139,6 +145,7 @@ function [srcflux, re_gain, im_gain] = pltcalsol (fname, nrecs, showplt)
 			title ('Extracted fluxes of model sources.');
 			xlabel ('Time (sec from obs. commencement)');
 			ylabel ('Flux ratio normalized to CasA flux');
+			axis tight; grid on;
 			
 	
 			figure (gainplt);
@@ -177,6 +184,7 @@ function [srcflux, re_gain, im_gain] = pltcalsol (fname, nrecs, showplt)
 			figure (noiseplt);
 			subplot (2,2,1);
 			plot (rec.tobs-t_first, norm (rec.sigman, 'fro'), 'ro');
+			grid on;
 			hold on;
 			title (sprintf ('Estimated noise norm: Time: %.2f', rec.tobs));
 			% imagesc(abs(sigman)); % estimated noise absolute value
@@ -185,22 +193,25 @@ function [srcflux, re_gain, im_gain] = pltcalsol (fname, nrecs, showplt)
 	
 			subplot (2,2,2);
 			plot (rec.tobs-t_first, rec.pinv_sol, 'bo');
+			grid on;
 			hold on;
 			title (sprintf ('Estimated parameter residuals'));
 	
 			subplot (2,2,3);
 			for ind = 1:rec.calsrcs
-				plot (ts, 180/pi*(rec.thsrc_cat(ind) - rec.thsrc_wsf (ind)), char(col(ind)));
+				plot (rec.tobs-t_first, 180/pi*(rec.thsrc_cat(ind) - rec.thsrc_wsf (ind)), char(col(ind)));
 				hold on;
 			end;
+			grid on;
 			title (sprintf ('Cat-WSF ele. resid(deg), %d srcs', ...
 					rec.calsrcs));
 	
 			subplot (2,2,4);
 			for ind = 1:rec.calsrcs
-				plot(ts, 180/pi*(rec.phisrc_cat(ind) - rec.phisrc_wsf (ind)), char(col(ind)));
+				plot(rec.tobs-t_first, 180/pi*(rec.phisrc_cat(ind) - rec.phisrc_wsf (ind)), char(col(ind)));
 				hold on;
 			end;
+			grid on;
 			title (sprintf ('Cat-WSF azi. resid(deg), %d srcs', ...
 					rec.calsrcs));
 			% text(.75,1.25, sprintf ('File : %s', fname));
@@ -277,6 +288,19 @@ function [srcflux, re_gain, im_gain] = pltcalsol (fname, nrecs, showplt)
 %	subplot (2,1,2);
 %	title ('Time series of per-antenna gain solution phases');
 %	surf (1:size (amp_ts, 2), 1:size (amp_ts,1), ph_ts);
+
+	% Plot LS imaging extracted source flux 
+	figure;
+	for ind = 1:length(rec.sigmas)
+		% plot (tstamp, srcflux(:,ind), char(col(ind)));
+		plot (srcflux(:,ind), char(col(ind)));
+		hold on;
+	end;
+	title ('Estimated A-team flux');
+	xlabel ('Timeslices'); ylabel ('Flux (arbit)');
+	legend ('3C461 (CasA)', '3C405 (CygA)', '3C144 (TauA)', '3C274 (VirA)', ...
+			'Sun');
+	grid; 
 
 	figure;
 	h(1) = subplot (2,1,1);
@@ -358,3 +382,21 @@ function [srcflux, re_gain, im_gain] = pltcalsol (fname, nrecs, showplt)
 	L = get (gca, 'YLim');
 	set (gca, 'YTick', int32(linspace (L(1), 100, 5))); % Not beyond 100%
 	grid;
+
+	% Plot residual track of model sources
+	modsrc = {'3C461 (CasA)', '3C405 (CygA)', '3C144 (TauA)', '3C274 (VirA)', ...
+			'Sun'};
+	for ind = 1:rec.calsrcs
+		% subplot (2,3,ind);
+		% [ax, h1, h2] = plotyy ([1:length(srcpos_th)], 180/pi*srcpos_th(:,ind), [1:length(srcpos_th)], 180/pi*srcpos_phi(:,ind));
+		% set (ax(1), 'YLim', [-0.2 0.2]);
+		% set (ax(2), 'YLim', [-0.2 0.2]);
+
+		figure;
+		subplot (211); plot (180/pi*srcpos_th(:,ind), '-'); grid on; axis tight;
+		title (sprintf ('Src %s', modsrc{ind})); ylabel ('Ele. angle (deg)')
+		axis ([1, length(srcpos_th), -0.1, 0.1]);
+
+		subplot (212); plot (180/pi*srcpos_phi(:,ind), '-'); grid on;axis tight;
+		title (sprintf ('Src %s', modsrc{ind})); ylabel ('Azi. angle (deg)')
+	end;

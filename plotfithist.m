@@ -7,6 +7,9 @@
 %   hdl: Plot handle, usually obtained by calling 'gca'
 
 function redchisq = plotfithist (vec, nbin, hdl)
+	if (isempty (vec)) 
+		fprintf (2, 'plotfithist: Empty vector!\n'); return;
+	end;
 	[bin_cnt, bin_loc] = hist (vec, nbin);
 	binwid = bin_loc(2) - bin_loc (1);
 	histarea = binwid*(sum(bin_cnt));

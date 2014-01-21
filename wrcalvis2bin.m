@@ -94,10 +94,18 @@ function wrcalvis2bin (fname, offset, ntslices, wrcalsol, trackcal, array)
 			outsolfname = [fname(1:k-1) '_' num2str(offset) '_convcalsol.bin'];
 		end;
 		disp (['Writing Calibration solutions to file :' outsolfname]);
+		if (exist (outsolfname, 'file') == 2)
+			fprintf (2, 'Overwriting existing file: %s. Continue? (Ctrl-C to kill, any key to continue.)\n', outsolfname);
+			pause;   % To prevent overwriting already written files!
+		end;
 		fsol = fopen (outsolfname, 'wb');
 	end;
 		
 	fin = fopen (fname, 'rb');
+	if (exist (outfname, 'file') == 2)
+		fprintf (2, 'Overwriting existing file: %s. Continue? (Ctrl-C to kill, any key to continue.)\n', outfname);
+		pause;   % To prevent overwriting already written files!
+	end;
 	fout = fopen (outfname, 'wb'); 
 	[acc, t_obs, freq] = readms2float (fin, offset, -1, Nelem);
 	if (isempty(acc) == true)
@@ -112,13 +120,13 @@ function wrcalvis2bin (fname, offset, ntslices, wrcalsol, trackcal, array)
 	% For LBA_INNER_BAND60 data
     % flagant = [1:12, 47, 48, 95,96, 143, 144, 191, 192, 239, 240, 287, 288 ];   
 	% For LBA_OUTER_BAND60 data
-    flagant = [1:12, 51, 193, 239,273 ]; 
+    % flagant = [1:12, 51, 193, 239,273 ]; 
 
 	% For LBA_OUTER_BAND_SPREAD data
-    % flagant = [1:48, 51, 239]; 
+    flagant = [1:48, 51, 239]; 
 
 	% For LBA_OUTER_BAND_SPREAD, 18min data
-    % flagant = [51, 238, 273]; 
+    % flagant = [51, 239, 273]; 
 	
 	% For 03285_dawn_spread data
     % flagant = [49:96, 239, 241:288]; 

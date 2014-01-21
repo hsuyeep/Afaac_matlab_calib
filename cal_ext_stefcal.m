@@ -21,6 +21,8 @@
 %	mask     : Nelem x Nelem matrix with ones marking the entries for which
 %	           the noise covariance matrix should be estimated and zeros
 %	           elsewhere
+%   uvflag   : NelemxNelem matrix with ones marking the visibilities to ignore
+%			   for other estimators.
 %	calim.diffstop: optional argument defining the stop criterion based on the
 %	           difference between the solution vectors found in consecutive
 %	           iterations, default value is 1e-10
@@ -58,7 +60,7 @@
 %  Modified to return a structured gain solution, including stefcal gains.
 
 % function [g, sigmas, Sigma_n] = cal_ext_stefcal(Rhat, A, sigmas, mask, calim)
-function [sol, sol_gainsolv] = cal_ext_stefcal(Rhat, A, sigmas, mask, calim)
+function [sol, sol_gainsolv] = cal_ext_stefcal(Rhat, A, sigmas, mask, uvflag, calim)
 	% parameters
 	[Nelem, Nsrc] = size(A);
 	
@@ -74,6 +76,8 @@ function [sol, sol_gainsolv] = cal_ext_stefcal(Rhat, A, sigmas, mask, calim)
 	Sigma_n = zeros(Nelem);					 % Initialize noise matrix.
 	
 	total_stefcal_iters = 0;
+	vismask = 1-(mask | uvflag);             % 1's in both mask & uvflag mean 
+											 % ignore the baseline.
 	% implementation using WALS
 	for iter = 2:calim.maxiter+1
 	    
@@ -100,20 +104,26 @@ function [sol, sol_gainsolv] = cal_ext_stefcal(Rhat, A, sigmas, mask, calim)
 	    % gain estimation using StefCal - experimental
 		%--------- Comment this part to get to the full WALS solver --------%
  	    sol_gainsolv = gainsolv (1e-6, (A * diag(sigmahat(:, iter-1)) * A')...
- 			.* (1 - mask), Rhat .* (1 - mask), ghat(:, iter-1),...  
+ 			.* vismask, Rhat .* vismask, ghat(:, iter-1),...  
 			calim.maxiter_gainsolv, calim.debug);
 		total_stefcal_iters = total_stefcal_iters + sol_gainsolv.iter;
  	    ghat(:, iter) = sol_gainsolv.ghat;
 		%--------- Comment this part to get to the full WALS solver --------%
 
-	    GA = diag(ghat(:, iter)) * A;
-	    Rest = GA * diag(sigmahat(:, iter-1)) * GA';
-	    compidx = (1 - mask) ~= 0;
+%	    GA = diag(ghat(:, iter)) * A;
+%	    Rest = GA * diag(sigmahat(:, iter-1)) * GA';
+%	    compidx = (1 - mask) ~= 0;
+%
+%	    normg = abs(sqrt(pinv(Rest(compidx)) * Rhat(compidx)));
+%	    ghat(:,iter) = normg * ghat(:, iter) / (ghat(1, iter)  ... 
+%					   / abs(ghat(1, iter)));
+%	    ghat(~isfinite(ghat(:, iter)), iter) = 1;
 
-	    normg = abs(sqrt(pinv(Rest(compidx)) * Rhat(compidx)));
-	    ghat(:,iter) = normg * ghat(:, iter) / (ghat(1, iter)  ... 
-					   / abs(ghat(1, iter)));
-	    ghat(~isfinite(ghat(:, iter)), iter) = 1;
+		% NEW CONSTRAINT: Avg. of all gain solutions is unity.
+		avg_gain = mean (abs(ghat(:, iter)));
+		ghat (:, iter) = ghat (:,iter)/avg_gain;
+		% Phase constraint: Phase of first antenna is 0.
+		ghat (:, iter) = ghat (:,iter) / (ghat (1, iter)/abs(ghat(1, iter)));
 	
 		%------------ Model source flux estimation -------------
 	    % estimate sigmahat using sigmanhat and ghat (eq. 42 of [1])
@@ -122,19 +132,25 @@ function [sol, sol_gainsolv] = cal_ext_stefcal(Rhat, A, sigmas, mask, calim)
 	    invR = inv(Rhat);
         
 	    GA = diag(ghat(:, iter)) * A; % new line, use normalized G
-	    sigmahat(:, iter) = real(inv(abs(conj(GA' * invR * GA)).^2) ... 
-							* diag(GA' * invR * (Rhat - Sigma_n) * invR * GA));
+%	    sigmahat(:, iter) = real(inv(abs(conj(GA' * invR * GA)).^2) ... 
+%  						* diag(GA' * invR * (Rhat - Sigma_n) * invR * GA));
+%%  						* diag(GA' * invR * (Rhat .* (1-mask)) * invR * GA));
+		r = Rhat (mask(:) == 0);   % Ignore the shortest baselines, take the others.
+		M = khatrirao(conj(GA), GA);
+		M = M(mask(:)==0, :);
+		sigmahat(:,iter) = real ((M'*M)\M' * r);
+
 	    if sum(~isfinite(sigmahat(:, iter))) ~= 0
 	        sigmahat(:, iter) = sigmahat(:, iter-1);
 	    end
 	
 	    % use first source as amplitude reference (normalize by CasA flux).
-	    if (sigmahat(1, iter) ~= 0)
-	        sigmahat(:, iter) = sigmahat(:, iter) / sigmahat(1, iter);
-	    end
+%	    if (sigmahat(1, iter) ~= 0)
+%	        sigmahat(:, iter) = sigmahat(:, iter) / sigmahat(1, iter);
+%	    end
 	
 	    % remove negative values
-	    sigmahat(:, iter) = max(sigmahat(:, iter), 0);
+%	    sigmahat(:, iter) = max(sigmahat(:, iter), 0);
 	    
 		%------------ Noise covariance estimation -------------
 		%i----------- assuming Sigma_n = diag(sig_n)-------------

@@ -11,7 +11,10 @@
 % 	rodata.normal  : 3 x 1 normal vector to the station field
 % 	calim.restriction: relative baseline restriction in wavelength
 % 	calim.maxrestriction: maximum absolute baseline restriction in meters
-% 	uvflag         : Nelem x Nelem matrix to flag (reject) specific baselines
+% 	uvflag         : NelemxNelem bool matrix to reject(=0) specific baselines.
+%   intaper        : Nelem x Nelem matrix to taper out the shortest baselines
+%					 during estimation of gains, sigmas and select them for
+%					 sigma_n estimation.
 %
 % Return values:
 % 	cal    : Nelem x 1 vector with complex valued calibration corrections
@@ -22,7 +25,7 @@
 % modified on 18 May 2011 by SJW to use ITRF coordinates
 
 function [cal, sigmas, Sigman] = statcal_stefcal(acc, t_obs, freq, ...
-					 rodata, calim, uvflag)
+					 rodata, calim, uvflag, intap)
 % parameter section
 	Nsb = length(freq);
 	srcsel = rodata.srcsel;
@@ -62,21 +65,23 @@ function [cal, sigmas, Sigman] = statcal_stefcal(acc, t_obs, freq, ...
 	    Rhat = squeeze(acc(:, :, idx));
 	
 		% Choose vis. subset based on visibility cut-off criteria and flags
-	    mask = reshape(calim.uvdist, [calim.rem_ants, calim.rem_ants]) < ... 
-					   min([calim.restriction * (rodata.C / freq(idx)), ... 
-						calim.maxrestriction]);
-	    mask = mask | uvflag;
+	    % mask = reshape(calim.uvdist, [calim.rem_ants, calim.rem_ants]) < ... 
+	    % 		   min([calim.restriction * (rodata.C / freq(idx)), ... 
+		%			calim.maxrestriction]);
+	    % mask =(1- mask) | uvflag; % Masked visibilties are used for tsys est.
+		mask = intap & (1-uvflag); % if uvflag == 1, ignore vis.
 	
 		% Model source flux estimation via least squares imaging.
+		% Ignore visibilities in the inner taper.
 	    flux = real(((abs(A' * A).^2) \ khatrirao(conj(A), A)') * (Rhat(:) ... 
-					.* (1 - mask(:))));
-	    flux = flux / flux(1);
+					.* mask (:)));
+	    % flux = flux / flux(1);
 		
 		% For debug: pep/15Jan13
 		% abs(A' * A)
 		% figure; plot (khatrirao(conj(A), A)');
 		
-	    flux(flux < 0) = 0;
+	    % flux(flux < 0) = 0;
 	    if (calim.debug > 0)
 	      disp ('Statcal_stefcal: model src flux estimates from LSimaging: ');
 	      disp (flux');
@@ -89,7 +94,7 @@ function [cal, sigmas, Sigman] = statcal_stefcal(acc, t_obs, freq, ...
 		if (calim.debug > 1)
 			fprintf (1, 'statcal_stefcal: Carrying out cal_ext.\n');
 		end;
-	    [sol, stefsol] = cal_ext_stefcal(Rhat, A, flux, mask, calim);
+	    [sol, stefsol] = cal_ext_stefcal(Rhat, A, flux, (1-intap), uvflag, calim);
 	    
 %	    cal(idx, :) = conj(1./ghat);
 %	    sigmas(idx, up) = sigmahat; % Returning sigmahat

@@ -6,6 +6,7 @@
 %	ntslices:   Number of timeslices to image. -1 => all timeslices.
 %	offset:		Initial offset in visibility file from which to start imaging.
 %				Set to 0 for no offset.
+%   skip  :     Number of records to skip, in the interest of faster imaging.
 %	posfilename:Name of file containing the local positions of the array 
 %				configuration corresponding to the data in fname.
 %	mosaic:		Bool controlling generation of mosaic images. If false,  zenith
@@ -16,17 +17,24 @@
 %				out using floats. NOTE: If writing to file,images are not shown.
 %   elbeam:     Bool controlling applying an element beam pattern correction.
 %				NOTE: Currently only for X-dipole.
+%   pol   :     Polarization to choose: 0 => X, 1 => Y, 2 => I(?)
+%  Returns:
+%	img_l:      The l-axis of the generated image.
+%	img_m:      The m-axis of the generated image.
+%     img:      The actual image matrix.
+%	NOTE :      The values returned are for the last image in the image 
+%				timeseries!
 
 
 function [img_l, img_m, img] =  ... 
-    genfftimage (fname, ntslices, offset, posfilename, mosaic, caxisrng, ... 
-				 wr2file, elbeam)
+    genfftimage (fname, ntslices, offset, skip, posfilename, mosaic,caxisrng,...
+				 wr2file, elbeam, pol)
     % genfftimage (fname,ntslices, offset, posfilename, weight, uvcellsize, mosaic, caxisrng, wr2file)
 	radec = 0;
     duv = 2.5;						% Default, reassigned from freq. of obs. to
 									% image just the full Fov (-1<l<1)
-    Nuv = 1000;						% size of gridded visibility matrix
-    uvpad = 1024;					% specifies if any padding needs to be added
+    Nuv = 2000;						% size of gridded visibility matrix
+    uvpad = 2048;					% specifies if any padding needs to be added
 	nfacet = 3;
 	facetsize = 256;
 
@@ -110,9 +118,14 @@ function [img_l, img_m, img] =  ...
 	mask (meshgrid (img.l).^2 + meshgrid(img.m).'.^2 < 0.9) = 1;
 
 	if (elbeam == 1)
-		fprintf (1, 'NOTE! NOTE! Working only with LBA X-dipoles primary beam correction now!');
 		addpath '~/WORK/AARTFAAC/Afaac_matlab_calib/LBA_beam/CS1/';
-		elembeam = calculateLBAbeam (img.l, img.m, img.freq, [1:2:96]); 
+		if (pol == 1) % Ypol beam.
+			elembeam = calculateLBAbeam (img.l, img.m, img.freq, [1:2:96]); 
+			fprintf (1, 'Generating X-pol beam.\n');
+		else          % Xpol beam. NOTE: Default is X-pol!
+			fprintf (1, 'Generating X-pol beam.\n');
+			elembeam = calculateLBAbeam (img.l, img.m, img.freq, [2:2:96]); 
+		end;
 		elembeam = max(max(elembeam(:,:,1))) ./ elembeam (:,:,1);
 	else
 		elembeam = ones (size (mask));
@@ -142,7 +155,11 @@ function [img_l, img_m, img] =  ...
 % figure;
 % mesh (weightmask);
 
-	for ts = 1:ntslices
+	if (skip == 0 || isempty (skip)) skip = 1; end;
+	fprintf (1, 'Skipping %d recs.\n', skip);
+	ts = 1;
+	while (ts < ntslices)
+	% for ts = 1:ntslices % Can't accomodate skips within a for loop.
 
 		if (isempty (acc) == false)
 			fprintf (1, 'Slice: %3d, Time:%.2f, Freq:%.2f.\n', ... 
@@ -161,8 +178,9 @@ function [img_l, img_m, img] =  ...
 								uloc(:), vloc(:), posITRF, 0);
 			end;
 
-			% Apply dipole primary beam correction. 
 			% Comment to not apply element beam.
+			% Apply dipole primary beam correction. 
+			% NOTE: Multiply with elembeam pulls up the image edges.
 			img.map = img.map .* (elembeam.*mask); 
 			
 			if (wr2file == 0)
@@ -191,7 +209,9 @@ function [img_l, img_m, img] =  ...
 			end;
 	
 			% Read in next visibility set.
-			[acc, img.tobs, img.freq] = readms2float (fin, -1, -1, 288);
+			for ind = 1:skip
+				[acc, img.tobs, img.freq] = readms2float (fin, -1, -1, 288);
+			end;
 			if (isempty (acc))
 				disp ('End of file reached!');
 				break;
@@ -201,6 +221,7 @@ function [img_l, img_m, img] =  ...
 		else
 			disp ('File end reached!');
 		end;
+		ts = ts + skip;
 	end;
 	% Return out only the last image
 	img_l = img.l; img_m = img.m; img = img.map;

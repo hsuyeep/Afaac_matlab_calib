@@ -136,7 +136,8 @@ function [radecskymap, lmskymap, vispad, l, m] =  ...
 	% the horizon.)
     mask = NaN (length(l));
     mask(meshgrid(l).^2 + meshgrid(l).'.^2 < 1) = 1;
-    lmskymap = single (real(skymap) .* mask);
+    % lmskymap = single (real(skymap) .* mask);
+    lmskymap = single ((skymap) .* mask);
     % disp (['-->Max/min from lm skymap: ' num2str(max(max(lmskymap))) ' ' ... 
     % 		num2str(min(min(lmskymap)))]);
     

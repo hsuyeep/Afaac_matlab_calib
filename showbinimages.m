@@ -2,23 +2,44 @@
 % pep/28Jan13
 % Arguments:
 %	fname  : image binary file name
-%	nrecs  : Number of images to show. -1 => show all images.
+%   colrng : caxis color range.
+%   figarea: The area of the image to display, between 0 or 1.
+%	 nrecs : Number of images to show. -1 => show all images.
+%    movie : Flag to control creation of a .avi movie.
+%			 -1 => Write out frames as png.
+%			  0 => Just display on screen.
+%			  1 => Write out frames as a single .avi
 
-function showbinimages (fname, nrecs)
+function showbinimages (fname, colrng, figarea, nrecs, movie)
 	fid = fopen (fname, 'rb');
 	if (fid < 0)
 		disp ('showbinimages: fid < 0! Quitting.');
 		return;
 	end;
 
+	% Open movie related
+	if (movie == 1)
+		movname = strcat (fname, '.avi');
+		vidObj = VideoWriter (movname, 'Indexed AVI');
+		open (vidObj);
+	end;
+
+	if (movie == -1)
+		mkdir ('binimg');
+	end;
+
 	img = readimg2bin (fid);
 	map = reshape (img.map, img.pix2laxis, img.pix2maxis);
     mask = NaN(size (map));
-    mask(meshgrid(img.l).^2 + meshgrid(img.m).'.^2 < 1) = 1;
-	fprintf (1, sprintf ('Obs   info: Time: %f, freq: %f', img.tobs, img.freq));
+	if (isempty(figarea))
+		figarea = 1;
+	end;
+    mask(meshgrid(img.l).^2 + meshgrid(img.m).'.^2 < figarea) = 1;
+	fprintf (1, sprintf ('Obs   info: Time: %.2f, freq: %.2f\n', ...
+			 img.tobs, img.freq));
+	fprintf (1,sprintf ('Image info: %fX%f, %f<l<%f, %f<m<%f\n',img.pix2laxis,...
+			 img.pix2maxis, min(img.l), max(img.l), min(img.m), max(img.m)));
 
-	fprintf (1, sprintf ('Image info: %fX%f, %f<l<%f, %f<m<%f',img.pix2laxis,...
-		  img.pix2maxis, min(img.l), max(img.l), min(img.m), max(img.m)));
 
 	if (nrecs < 0)
 		fdir = dir (fname);
@@ -28,29 +49,47 @@ function showbinimages (fname, nrecs)
 		nrecs = filesize/imgsize;
 	end;
 
-	figure;
+	fig1 = figure;
+	winsize = get (fig1, 'Position');
+	winsize (1:2) = [0 0];
 
 	for im = 1:nrecs
 		img = readimg2bin (fid);
 		map = reshape (img.map, img.pix2laxis, img.pix2maxis);
     	disp (sprintf('Showing image %03d of %03d, Time: %.2f', im, nrecs, ...
 			  (img.tobs)));
-    	imagesc(img.l, img.m, map .* mask);
-    
+    	imagesc(img.l, img.m, real(map .* mask));
     
     	set(gca, 'FontSize', 16);
-    	title (sprintf ('Time: %f, freq: %f', img.tobs, img.freq));
+    	title (sprintf ('Time: %.2f, Freq: %.2f', img.tobs, img.freq));
 	    axis equal
    		axis tight
    		set (gca, 'YDir', 'Normal'); % To match orientation with station images
    		set (gca, 'XDir', 'Reverse'); % To match orientation with station images
 
-    	ylabel('South $\leftarrow$ m $\rightarrow$ North');
-    	xlabel('East $\leftarrow$ l $\rightarrow$ West');
-    
+    	ylabel('South \leftarrow m \rightarrow North');
+    	xlabel('East \leftarrow l \rightarrow West');
+		if (~isempty (colrng))
+			caxis (colrng);
+		end;
     
     	set(colorbar, 'FontSize', 16);
-    	pause (0.1);
+		if (movie == 1)
+			currFrame = getframe (fig1, winsize);
+			writeVideo (vidObj, currFrame);
+		end;
+
+		if (movie == -1)
+			currFrame = getframe (fig1, winsize);
+			fimgname = sprintf ('binimg/%.0f.png', img.tobs);
+			imwrite (currFrame.cdata, fimgname, 'png');
+		end;
+		pause (0.01);
 	end;
+
+	if (movie == 1)
+		close (vidObj);
+	end;
+	fclose (fid);
 
 	 
