@@ -33,8 +33,8 @@ function [img_l, img_m, img] =  ...
 	radec = 0;
     duv = 2.5;						% Default, reassigned from freq. of obs. to
 									% image just the full Fov (-1<l<1)
-    Nuv = 2000;						% size of gridded visibility matrix
-    uvpad = 2048;					% specifies if any padding needs to be added
+    Nuv = 1000;						% size of gridded visibility matrix
+    uvpad = 1024;					% specifies if any padding needs to be added
 	nfacet = 3;
 	facetsize = 256;
 
@@ -198,8 +198,12 @@ function [img_l, img_m, img] =  ...
 						img.freq));
 		        axis equal
 		        axis tight
-		        xlabel('South \leftarrow m \rightarrow North');
-		        ylabel('East \leftarrow l \rightarrow West');
+				% To match orientation with station images
+   				set (gca, 'YDir', 'Normal'); 
+		   		set (gca, 'XDir', 'Reverse'); 
+
+		        ylabel('South $\leftarrow$ m $\rightarrow$ North', 'interpreter', 'latex');
+		        xlabel('East $\leftarrow$ l $\rightarrow$ West', 'interpreter', 'latex');
 		        set(colorbar, 'FontSize', 16);
 			else
 				% Write image to output file.

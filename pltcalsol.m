@@ -302,6 +302,7 @@ function [srcflux, re_gain, im_gain] = pltcalsol (fname, nrecs, showplt)
 			'Sun');
 	grid; 
 
+
 	figure;
 	h(1) = subplot (2,1,1);
 	for ind = 1:6 % 6 stations
@@ -394,7 +395,7 @@ function [srcflux, re_gain, im_gain] = pltcalsol (fname, nrecs, showplt)
 
 		figure;
 		subplot (211); plot (180/pi*srcpos_th(:,ind), '-'); grid on; axis tight;
-		title (sprintf ('Src %s', modsrc{ind})); ylabel ('Ele. angle (deg)')
+		title (sprintf ('Src %s', modsrc{ind})); ylabel ('Ele. angle (deg)');
 		axis ([1, length(srcpos_th), -0.1, 0.1]);
 
 		subplot (212); plot (180/pi*srcpos_phi(:,ind), '-'); grid on;axis tight;

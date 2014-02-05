@@ -4,7 +4,7 @@
 % Arguments:
 %   solwindow: The solution window consisting of an array of solution records
 %   currsol  : The current calibration solution on which judgement needs to be 
-%				passed.
+%				passed. Passed as a structure containing many solution parameters.
 %  gainmask  : Mask holding flagged antennas. Not passed through solparm due to 
 %			   duplication of gainmask several times. 
 %   solparm  : Structure containing the thresholds used to determine goodness.
@@ -13,7 +13,7 @@
 %			   across a station. Assumed that a station is mostly calibrated.
 %  solparm.errthresh: Threshold on the relative error on current calsol. wrt. 
 % 			   mean calsol.
-%   debug  : Debug level of script. Uses handles passed in solparm for plotting 
+%   debuglev  : Debug level of script. Uses handles passed in solparm for plotting 
 %			 thresholds against data.
 % Returns:
 % solstat.goodstncal:Bool desc. the goodness of a calsol wrt.intra station test.
@@ -30,7 +30,7 @@
 % solution is determined. If this is large, the phase is checked with a more 
 % stringent condition (since a phase error is more damaging than an amp. error).
 
-function [solstat] =  goodcalsol (solwindow, nsol, currsol, gainmask, solparm, debug)
+function [solstat] =  goodcalsol (solwindow, nsol, currsol, gainmask, solparm, debuglev)
 	
 	if (nsol == 0) % Window is empty
 		% NOTE: Order in which structure entries are filled matters! CRAZY!
@@ -49,8 +49,8 @@ function [solstat] =  goodcalsol (solwindow, nsol, currsol, gainmask, solparm, d
 			sta_ind = [sta*48+1 : (sta+1)*48];
 			% Use only unflagged antennas per station, check phase variance.
 			% Take care of phase wraps.
-			station_ph = angle (currsol (gainmask(sta_ind) == 0));
-			station_amp = abs (currsol (gainmask (sta_ind) == 0));
+			station_ph = angle (currsol.gainsol (gainmask(sta_ind) == 0));
+			station_amp = abs (currsol.gainsol (gainmask (sta_ind) == 0));
 			
 			% Phase unwrap
 			diffphfact = abs(station_ph ./ pi);
@@ -86,7 +86,7 @@ function [solstat] =  goodcalsol (solwindow, nsol, currsol, gainmask, solparm, d
 		meansol = mean(solwindow (1:nsol,:));
 	end;
 
-%	if (debug >= 4)
+%	if (debuglev >= 4)
 %		figure (solparm.gainplt);
 %		subplot (1, 2, 1);
 %		plot (abs(solwindow)');
@@ -97,19 +97,19 @@ function [solstat] =  goodcalsol (solwindow, nsol, currsol, gainmask, solparm, d
 %		subplot (1,2,1);
 %		plot (abs(meansol), '-b');
 %		hold on;
-%		plot (abs(currsol), '-r');
+%		plot (abs(currsol.gainsol), '-r');
 %		hold off;
 %		subplot (1,2,2);
 %		plot (angle(meansol), '-b');
 %		hold on;
-%		plot (angle(currsol), '-r');
+%		plot (angle(currsol.gainsol), '-r');
 %		hold off;
 %	end;
 
 	% Generate mean squared error (mse) and sum of squared error (sse).
-	diffcart = meansol - currsol; % Cartesian complex difference 
-	diffamp = abs (meansol) - abs (currsol); % Ampl. difference.
-	diffph  = (angle (meansol) - angle (currsol)); 
+	diffcart = meansol - currsol.gainsol; % Cartesian complex difference 
+	diffamp = abs (meansol) - abs (currsol.gainsol); % Ampl. difference.
+	diffph  = (angle (meansol) - angle (currsol.gainsol)); 
 
 	% Take care of phase wraps.
 	diffphfact = abs(diffph ./ pi);
@@ -139,18 +139,18 @@ function [solstat] =  goodcalsol (solwindow, nsol, currsol, gainmask, solparm, d
 	solstat.mse_ph  = sum (diffph(sel == 1).^2)/npar;% avg. err in ph, in deg.
 
 	% Compute relative error of this solution wrt. mean solution.
-	solstat.err = 100*sum(abs(meansol - currsol)) / sum(abs(meansol));
+	solstat.err = 100*sum(abs(meansol - currsol.gainsol)) / sum(abs(meansol));
 	% If phases are constant, but amplitudes change, it is still a good sol.
-	solstat.pherr = 100*sum(angle(meansol - currsol)) / sum(abs(meansol));
+	solstat.pherr = 100*sum(angle(meansol - currsol.gainsol)) / sum(abs(meansol));
 
 	% Compute per station gain variances. NOTE: All solution always have 288 
 	% elements. Also, std (complex number) = sqrt (std(re).^2 + std(im).^2);
 	for sta=0:5
 		sta_ind = [sta*48+1 : (sta+1)*48];
 		% Use only unflagged antennas per station
-		stat_std = std(currsol (gainmask(sta_ind) == 0));
-		stat_std_re = std(real(currsol (gainmask(sta_ind) == 0)));
-		stat_std_im = std(imag(currsol (gainmask(sta_ind) == 0)));
+		stat_std = std(currsol.gainsol (gainmask(sta_ind) == 0));
+		stat_std_re = std(real(currsol.gainsol (gainmask(sta_ind) == 0)));
+		stat_std_im = std(imag(currsol.gainsol (gainmask(sta_ind) == 0)));
 
 		solwin_std = std (meansol (gainmask(sta_ind) == 0));
 		solwin_std_re = std(real (meansol(gainmask(sta_ind) == 0)));
@@ -189,7 +189,7 @@ function [solstat] =  goodcalsol (solwindow, nsol, currsol, gainmask, solparm, d
 	fprintf (1, '{e:%5.1f, %4.1f, m:%5.2f, r:%5.2f, i:%5.2f, a:%5.2f, p:%5.2f} ', solstat.err, solstat.pherr, solstat.mse, solstat.mse_re, solstat.mse_im, solstat.mse_amp, solstat.mse_ph);
 
 	% Uncomment conditional to plot only the bad solutions.
-	if (debug >= 4) % && goodstncal == 0)
+	if (debuglev >= 4) % && goodstncal == 0)
 		
 		figure (solparm.gainplt);
 		subplot (1, 2, 1);
@@ -209,12 +209,12 @@ function [solstat] =  goodcalsol (solwindow, nsol, currsol, gainmask, solparm, d
 		xlabel ('Antenna number');
 		title ('Mean solution Vs. current solution');
 		hold on;
-		plot (abs(currsol), '-r');
+		plot (abs(currsol.gainsol), '-r');
 		hold off;
 		subplot (1,2,2);
 		plot (angle(meansol), '-b');
 		hold on;
-		plot (angle(currsol), '-r');
+		plot (angle(currsol.gainsol), '-r');
 		hold off;
 		drawnow;
 		% pause;

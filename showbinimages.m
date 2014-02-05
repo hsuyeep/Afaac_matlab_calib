@@ -67,8 +67,8 @@ function showbinimages (fname, colrng, figarea, nrecs, movie)
    		set (gca, 'YDir', 'Normal'); % To match orientation with station images
    		set (gca, 'XDir', 'Reverse'); % To match orientation with station images
 
-    	ylabel('South \leftarrow m \rightarrow North');
-    	xlabel('East \leftarrow l \rightarrow West');
+    	ylabel('South $\leftarrow$ m $\rightarrow$ North', 'interpreter', 'latex');
+    	xlabel('East $\leftarrow$ l $\rightarrow$ West', 'interpreter', 'latex');
 		if (~isempty (colrng))
 			caxis (colrng);
 		end;

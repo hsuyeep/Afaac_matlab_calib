@@ -88,12 +88,12 @@ function [currsol] = pelican_sunAteamsub (acc, t_obs, ...
 		calim.parm.type = 'Gaussian';
 		calim.parm.minlambda = 10;    % NOTE: Units of lambda. 
 		calim.parm.maxmeters = 350;	  % NOTE: Units of meters.
-		calim.parm.pa(1) = 0.2;		  % NOTE: Units of lambda. 
+		calim.parm.pa(1) = -1; %0.2;		  % NOTE: Units of lambda. 
 		calim.parm.pa(2) = calim.parm.pa(1); % Inner taper sigx/sigy
 		calim.parm.pa(3) = 100; 	  % NOTE: Units of lambda.
 		calim.parm.pa(4) = calim.parm.pa(3); % Outer taper sigx/sigy
 		[calim.intap, calim.outtap, calim.den, calim.mask, uvdist] =  ...
-				taper (rodata.posITRF, calim.parm, -1, freq, 4);
+				taper (rodata.posITRF, calim.parm, -1, freq, 0);
 		calim.intap_fl = calim.intap; calim.outtap_fl = calim.outtap;
 		calim.den_fl   = calim.den; calim.mask_fl = calim.mask;
 	    calim.debug    = debug;      	  % Set debug level.

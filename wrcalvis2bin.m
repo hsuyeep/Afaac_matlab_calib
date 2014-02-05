@@ -40,8 +40,14 @@ function wrcalvis2bin (fname, offset, ntslices, wrcalsol, trackcal, array)
 	solparm.solthresh=0.15;% Reject calsolutions with std. across antennas
 						% in a station > solthresh percent from mean solutions.
 	solparm.errthresh = 10; % Tolerance as offset from mean gainsol, in percent
-	solparm.gainplt = figure;
-	solparm.currsolplt = figure;
+	solparm.mse_ph_thresh = 0.1; % Radian
+	% if (debuglev > 0)
+		solparm.gainplt = figure;
+		solparm.currsolplt = figure;
+	% else
+% 		solparm.gainplt = [];
+% 		solparm.currsolplt =[];
+% 	end;
 
 	window = zeros (1, winsize); % Actual norm sliding window.
 
@@ -123,7 +129,7 @@ function wrcalvis2bin (fname, offset, ntslices, wrcalsol, trackcal, array)
     % flagant = [1:12, 51, 193, 239,273 ]; 
 
 	% For LBA_OUTER_BAND_SPREAD data
-    flagant = [1:48, 51, 239]; 
+    % flagant = [1:48, 51, 239]; 
 
 	% For LBA_OUTER_BAND_SPREAD, 18min data
     % flagant = [51, 239, 273]; 
@@ -133,6 +139,9 @@ function wrcalvis2bin (fname, offset, ntslices, wrcalsol, trackcal, array)
 
 	% For *_dawn_spread data (only 03285 has station 2 issues)
     % flagant = [51, 239, 240, 241:288]; 
+
+	% For 24 Hr run on 20Nov13, r02
+	flagant = [129, 140, 149];
 
 	% [uvflag, missant] = flagdeadcorr (acc, t_obs, freq, visamphithresh, ...
 	%									visamplothresh);
@@ -183,6 +192,7 @@ function wrcalvis2bin (fname, offset, ntslices, wrcalsol, trackcal, array)
 	currflagant = unique ([flagant missant]); % Not reshaping
 	prevsol = pelican_sunAteamsub (acc, t_obs, freq, uvflag, ... 
 						currflagant, debuglev, ptSun, [], [], posfilename);
+    clear pelican_sunAteamsub;
 
 	% Main loop iterating over timeslices. Functional parts:
 	% - Carry out flagging over time window, also visibility flagging.
@@ -270,7 +280,7 @@ function wrcalvis2bin (fname, offset, ntslices, wrcalsol, trackcal, array)
 			end;
 
 	   	    currsol = pelican_tracking_cal (acc, t_obs, freq, uvflag, ... 
-						currflagant, debuglev, ptSun, prevsol, 1, 2);
+						currflagant, debuglev, ptSun, prevsol, 3, 4);
 		end; 
 
 		fprintf (1, 'wrcalvis:currsol calext (iter/pinv): %d, %f\n', ...
@@ -304,7 +314,7 @@ function wrcalvis2bin (fname, offset, ntslices, wrcalsol, trackcal, array)
 %			plot (angle(solwindow)');
 
 		else % Window filled!
-			solstat = goodcalsol (solwindow, currsol, gainmask, solparm, 4);	
+			solstat = goodcalsol (solwindow, solwinsize, currsol, gainmask, solparm, debuglev);	
 %			meansol = mean(solwindow);
 %
 %			err = 100*sum(abs(meansol - currsol.gainsol)) / sum(abs(meansol));
@@ -331,15 +341,15 @@ function wrcalvis2bin (fname, offset, ntslices, wrcalsol, trackcal, array)
 	
 			% elseif (err > 10) % Handle a bad solution.
 			else % (err > 10) % Handle a bad solution.
-				fprintf (2, '-->Rejecting sol at rec %03d, tobs: %.2f, err: %d.\n', ...
-						 ts+offset, currsol.tobs, err);
+				fprintf (2, '-->Rejecting sol at rec %03d, tobs: %.2f\n', ...
+						 ts+offset, currsol.tobs);
 
 				% Try to do a calibration to convergence on this data.
 				if (trackcal == 1) % Do so only for tracking calibration.
 					fprintf (2, '   --> Calibrating to convergence\n');
 					currsol = pelican_sunAteamsub (acc, t_obs, freq, uvflag, ...
 									currflagant, debuglev, ptSun, [], [], posfilename);
-					solstat = goodcalsol (solwindow,currsol,gainmask, ...
+					solstat = goodcalsol (solwindow, solwinsize, currsol, gainmask, ...
 											solparm, debuglev);	
 
 	%				figure (currsolplt);

@@ -76,6 +76,19 @@ function [currsol] = pelican_tracking_cal (acc, t_obs, ...
    		                                   % wavelengths length.
    		calim.maxrestriction = 60;         % Avoid vis. above 'maxrestriction' 
    		                                   % meters (NOT wavelengths!)
+
+		% NOTE: Taper computation now pulled out from statcal_stefcal.
+%		calim.parm.type = 'Gaussian';
+%		calim.parm.minlambda = 10;    % NOTE: Units of lambda. 
+%		calim.parm.maxmeters = 350;	  % NOTE: Units of meters.
+%		calim.parm.pa(1) = 0.2;		  % NOTE: Units of lambda. 
+%		calim.parm.pa(2) = calim.parm.pa(1); % Inner taper sigx/sigy
+%		calim.parm.pa(3) = 100; 	  % NOTE: Units of lambda.
+%		calim.parm.pa(4) = calim.parm.pa(3); % Outer taper sigx/sigy
+%		[calim.intap, calim.outtap, calim.den, calim.mask, uvdist] =  ...
+%				taper (rodata.posITRF, calim.parm, -1, freq, 0);
+%		calim.intap_fl = calim.intap; calim.outtap_fl = calim.outtap;
+%		calim.den_fl   = calim.den; calim.mask_fl = calim.mask;
    		calim.debug = debug;      		   % Set debug level.
    		calim.rem_ants = rodata.Nelem;
 		calim.flagant = flagant;
@@ -266,7 +279,7 @@ function [currsol] = pelican_tracking_cal (acc, t_obs, ...
 	% If this is not a first call, prevsol will be initialized already.
 	if (first_call == 0 || ~isempty (prevsol))
 		% sel = prevsol.sigmas > 0.01 & up'; 
-		sel = prevsol.sigmas > 0.01 & up; 
+		sel = prevsol.sigmas > (0.01*prevsol.sigmas(1)) & up; 
 	    nsrc = sum(sel);
 	end;
 	
@@ -287,7 +300,7 @@ function [currsol] = pelican_tracking_cal (acc, t_obs, ...
 
     	% Initial estimate of source flux by LS imaging
     	[cal1, sigmas1, Sigman1] = statcal_stefcal (acc, t_obs, freq, ... 
-       							 rodata, calim, calim.uvflag);
+       							 rodata, calim, calim.uvflag, calim.intap_fl);
 	
 	    if (calim.debug > 1)
 	    	disp('First round of antenna calibration completed, sigmas1:'); 
@@ -411,7 +424,7 @@ function [currsol] = pelican_tracking_cal (acc, t_obs, ...
     %  						squeeze(abs(prevsol.sigman)) > 0, calim);
 	% prevsol.sigmas = sigmas1
 	 [sol, stefsol] = track_cal_ext_stefcal (acc, A, sel, ... 
-      					squeeze (abs(prevsol.sigman)) > 0, calim, prevsol);  
+      					squeeze (abs(prevsol.sigman)) > 0, calim.uvflag, calim, prevsol);  
 	% 					squeeze (abs(Sigman1)) > 0, calim, prevsol);  
 
 	% currsol = prevsol; % debugging tracking cal: calibrate with previous sol
