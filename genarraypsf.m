@@ -4,24 +4,22 @@
 %	poslocal: The array element positions in CS002 local coords. 
 %   flagant : list of flagged antennas
 %	   freq : The frequency of operation, in Hz.
-%     taper : Visibility taper to apply.
-%     weight: Visibility weighting to apply.
+%     taper : Visibility taper to apply.[TODO]
+%     weight: Visibility weighting to apply.[TODO]
 %        duv: The grid spacing in meters.
 %        Nuv: The grid size in pixels.
-%     debug : Bool turning on debug information.
+%     uvpad : Padding to apply for higher spatial resolution in 2D FFT.
+%       deb : Bool turning on debug information.
 
 % Returns:
 %	psf  : Actual PSF as an image matrix
 
-function [psf] = genarraypsf (poslocal, flagant, freq,  taper, weight, duv,...
-							  Nuv, debug)
-% function [psf] = genarraypsf (poslocal, flagant, freq,  taper, weight, duv,...
-% 							  Nuv, debug)
-
-    duv = 2.5;						% Default, reassigned from freq. of obs. to
-									% image just the full Fov (-1<l<1)
-    Nuv = 1000;						% size of gridded visibility matrix
-    uvpad = 1024;					% specifies if any padding needs to be added
+function [l, m, psf] = genarraypsf (poslocal, flagant, freq,  taper, weight,...
+			 						duv, Nuv, uvpad, deb)
+	% Default values are for 60MHz, and image just the full Fov (-1<l<1). 
+	if (isempty(duv) == 1) duv = 2.5; end;
+	if (isempty(Nuv) == 1) Nuv = 1000; end;
+	if (isempty(uvpad) == 1) uvpad = 1024; end;
 
 	% Generate the visibility taper function
 %	switch lower (taper)
@@ -65,11 +63,15 @@ function [psf] = genarraypsf (poslocal, flagant, freq,  taper, weight, duv,...
 %	end;
 		
 	% Create the uloc, vloc meshgrid for frequency independent coords.
-	load (posfilename, 'poslocal');
 	uloc = meshgrid (poslocal (:,1)) - meshgrid (poslocal(:,1)).';
 	vloc = meshgrid (poslocal (:,2)) - meshgrid (poslocal(:,2)).';
 	
-	[uloc_flag, vloc_flag] = gen_flagged_uvloc (uloc, vloc, flagant);
+	if (isempty(flagant) == 0)
+		[uloc_flag, vloc_flag] = gen_flagged_uvloc (uloc, vloc, flagant);
+		fprintf (2, 'Flagging %d antennas.\n', length (flagant));
+	else 
+		uloc_flag = uloc; vloc_flag = vloc;
+	end;
 	% Set the visibilities at corresponding (uv) points to 1.
 	acc = ones (size (uloc_flag));
 
@@ -86,25 +88,28 @@ function [psf] = genarraypsf (poslocal, flagant, freq,  taper, weight, duv,...
 	% psf = fft2 (gridacc);
 
 	% If required, generate plots of PSF.
-	if (debug > 0)
+	if (deb > 0)
 		subplot (122);
 		% imagesc (l, m, 20*log10 (abs (psf))); colorbar;
 		mesh (l, m, double (20*log10 (abs (psf)/max(max(abs(psf)))))); colorbar;
 		title ('AARTFAAC PSF: ');
-		xlabel ('m'); ylabel ('l');
+		xlabel ('m'); ylabel ('l'); zlabel ('dB');
 		axis ([-1 1 -1 1 -60 0]);
 
 		subplot (221);
 		scan = abs (psf (Nuv/2, :));
 		plot (l, 20*log10 (scan/max(scan)));
-		axis ([-1 1 -60 0]);
+		axis ([-0.2 0.2 -60 0]);
+		% axis ([-1 1 -60 0]);
 		% title (sprintf ('l-scan at m=0, taper=%s, weight=%s', taper, weight));
+		grid on;
 		xlabel ('l'); ylabel ('Power (dB)');
 
 		subplot (223);
 		scan = abs (psf (:, Nuv/2));
 		plot (m, 20*log10 (scan/max(scan)));
-		axis ([-1 1 -60 0]);
+		axis ([-0.2 0.2 -60 0]);
+		grid on;
 		% title (sprintf ('m-scan at l=0, taper=%s, weight=%s', taper, weight));
 		xlabel ('m'); ylabel ('Power (dB)');
 	end; 
