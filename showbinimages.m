@@ -4,13 +4,14 @@
 %	fname  : image binary file name
 %   colrng : caxis color range.
 %   figarea: The area of the image to display, between 0 or 1.
+%   offset : The record offset from which to start showing images.
 %	 nrecs : Number of images to show. -1 => show all images.
 %    movie : Flag to control creation of a .avi movie.
 %			 -1 => Write out frames as png.
 %			  0 => Just display on screen.
 %			  1 => Write out frames as a single .avi
 
-function showbinimages (fname, colrng, figarea, nrecs, movie)
+function showbinimages (fname, colrng, figarea, offset, nrecs, movie)
 	fid = fopen (fname, 'rb');
 	if (fid < 0)
 		disp ('showbinimages: fid < 0! Quitting.');
@@ -29,6 +30,26 @@ function showbinimages (fname, colrng, figarea, nrecs, movie)
 	end;
 
 	img = readimg2bin (fid);
+	if (offset > 1)
+		fprintf (2, 'Moving to image offset %d\n', offset);
+		% NOTE that getting the size of a structured variable does not work like this...
+		% tmp = whos ('img');
+		% recsize = tmp.bytes;
+		% NOTE: Hardcoded size of img constituents!
+		recsize = 8 + ... % Frequency of image (double)
+				  4 + ... % img.pix2laxis (float)
+				  4*img.pix2laxis + ... % l axis values (floats)
+				  4 + ... % img.pix2maxis (float)
+				  4*img.pix2maxis + ... % m axis values (floats)
+				  4*img.pix2maxis*img.pix2laxis; % Image pixel values (floats)
+
+		if (fseek (fid, (offset-1)*recsize, 'bof') < 0)
+			err = MException('showbinimages:fseek OutOfRange', ...
+        			'recoffset is outside expected range');	
+			error ('readms2float: seek error!');
+			throw (err);
+		end;
+	end;
 	map = reshape (img.map, img.pix2laxis, img.pix2maxis);
     mask = NaN(size (map));
 	if (isempty(figarea))
