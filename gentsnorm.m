@@ -4,7 +4,7 @@
 % Updated to produce a histogram of norm values, in order to detect outliers.
 % pep/29Jan13
 
-function [times, normts] = gentsnorm (fname, ntimes)
+function [times, normts] = gentsnorm (fname, ntimes, showplt)
 	fid = fopen (fname, 'rb');
  	if ntimes == -1
 		[ntimes, tmin, tmax, dt] = getnrecs (fname);
@@ -65,27 +65,42 @@ function [times, normts] = gentsnorm (fname, ntimes)
 		statind = statind + 1;
 		% if (mod (ts, 100) == 99) disp ('.');
 	end;
-	subplot (2, 3, 1);
-	% plot (times, normts);
-	plot (normts);
-	title (sprintf ('Frobenius norm time series.'));
 
-	subplot (2, 3, 2);
-	plot (normtsdiff);
-	title (sprintf ('Frobenius norm time series 1st derivative.'));
-
-	subplot (2, 3, 3);
-	hist (normts, 100);
-	title (sprintf ('Frobenius norm histogram.'));
-
-	subplot (2, 3, 4);
-	plot (movavg);
-	title (sprintf ('Frobenius norm moving average.'));
-
-	subplot (2, 3, 5);
-	plot (movmed);
-	title (sprintf ('Frobenius norm moving median.'));
-
-	subplot (2, 3, 6);
-	plot (movmad);
-	title (sprintf ('Frobenius norm moving MAD.'));
+	if (showplt ~= 0)
+	    t_first = times(1);
+		num = mjdsec2datenum (t_first);
+		subplot (2, 3, 1);
+		% plot (times, normts);
+		plot ((times-t_first)/86400+num, normts);
+		grid on; axis tight;
+		title (sprintf ('Frobenius norm time series.'));
+		datetick ('x', 13, 'keepticks'); % Print HH:MM:SS legend on the time axis.	
+	
+		subplot (2, 3, 2);
+		plot ((times-t_first)/86400+num, normtsdiff);
+		grid on; axis tight;
+		title (sprintf ('Frobenius norm time series 1st derivative.'));
+		datetick ('x', 13, 'keepticks'); % Print HH:MM:SS legend on the time axis.	
+	
+		subplot (2, 3, 3);
+		hist (normts, 100);
+		title (sprintf ('Frobenius norm histogram.'));
+	
+		subplot (2, 3, 4);
+		plot ((times(winsize+1:end)-t_first)/86400+num, movavg);
+		grid on; axis tight;
+		title (sprintf ('Frobenius norm moving average.'));
+		datetick ('x', 13, 'keepticks'); % Print HH:MM:SS legend on the time axis.	
+	
+		subplot (2, 3, 5);
+		plot ((times(winsize+1:end)-t_first)/86400+num, movmed);
+		grid on; axis tight;
+		title (sprintf ('Frobenius norm moving median.'));
+		datetick ('x', 13, 'keepticks'); % Print HH:MM:SS legend on the time axis.	
+	
+		subplot (2, 3, 6);
+		plot ((times(winsize+1:end)-t_first)/86400+num,movmad);
+		grid on; axis tight;
+		title (sprintf ('Frobenius norm moving MAD.'));
+		datetick ('x', 13, 'keepticks'); % Print HH:MM:SS legend on the time axis.	
+	end;

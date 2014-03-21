@@ -105,7 +105,8 @@ function showbinimages (fname, colrng, figarea, offset, nrecs, movie)
 			fimgname = sprintf ('binimg/%.0f.png', img.tobs);
 			imwrite (currFrame.cdata, fimgname, 'png');
 		end;
-		pause (0.01);
+		% pause (0.01);
+		pause;
 	end;
 
 	if (movie == 1)
