@@ -11,7 +11,7 @@
 %			  0 => Just display on screen.
 %			  1 => Write out frames as a single .avi
 
-function showbinimages (fname, colrng, figarea, offset, nrecs, movie)
+function showbinimages (fname, colrng, figarea, offset, skip, nrecs, strail, movie)
 	fid = fopen (fname, 'rb');
 	if (fid < 0)
 		disp ('showbinimages: fid < 0! Quitting.');
@@ -29,7 +29,7 @@ function showbinimages (fname, colrng, figarea, offset, nrecs, movie)
 		mkdir ('binimg');
 	end;
 
-	img = readimg2bin (fid);
+	img = readimg2bin (fid, 0);
 	if (offset > 1)
 		fprintf (2, 'Moving to image offset %d\n', offset);
 		% NOTE that getting the size of a structured variable does not work like this...
@@ -75,10 +75,14 @@ function showbinimages (fname, colrng, figarea, offset, nrecs, movie)
 	winsize (1:2) = [0 0];
 
 	for im = 1:nrecs
-		img = readimg2bin (fid);
-		map = reshape (img.map, img.pix2laxis, img.pix2maxis);
-    	disp (sprintf('Showing image %03d of %03d, Time: %.2f', im, nrecs, ...
-			  (img.tobs)));
+		img = readimg2bin (fid, skip);
+		if (strail == 1)
+			map = (map + reshape (img.map, img.pix2laxis, img.pix2maxis))/2;
+		else
+			map = reshape (img.map, img.pix2laxis, img.pix2maxis);
+		end;
+    	fprintf(1, 'Showing image %03d of %03d, Time: %.2f\n', im, nrecs, ...
+			  (img.tobs));
     	imagesc(img.l, img.m, real(map .* mask));
     
     	set(gca, 'FontSize', 16);
@@ -105,8 +109,8 @@ function showbinimages (fname, colrng, figarea, offset, nrecs, movie)
 			fimgname = sprintf ('binimg/%.0f.png', img.tobs);
 			imwrite (currFrame.cdata, fimgname, 'png');
 		end;
-		% pause (0.01);
-		pause;
+		pause (0.01);
+		% pause;
 	end;
 
 	if (movie == 1)

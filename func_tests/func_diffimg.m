@@ -111,7 +111,7 @@ function func_diffimg (fname, posfname, offset, ntslices, winsize, noisereg)
 	mask (xtr, ybl:ytr) = 0;
 	
 	% Single snapshot noise measurement
-	mapnoisereg = prevmap (xbl:xtr, ybl:ytr);
+	mapnoisereg = real (prevmap (xbl:xtr, ybl:ytr));
 	mmap = mean (mapnoisereg(:));
 	vmap = std (mapnoisereg(:));
 	imagesc ([xbl:xtr], [ybl:ytr], mapnoisereg); colorbar;
