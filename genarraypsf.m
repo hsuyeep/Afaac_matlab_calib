@@ -52,15 +52,15 @@ function [l, m, psf, weight, intap, outtap] = genarraypsf (posfilename, flagant,
 	if (isstruct (tparm))
 		[intap, outtap, den, mask, uvdist] =  taper (posITRF, tparm, -1, freq, deb);
 	else
-		tparm.type = 'Gaussian';
-		tparm.minlambda = 10;    % Spatial filter lower cutoff, Units of lambda. 
-		tparm.maxmeters = 350;	 % Spatial filter upper cutoff, Units of meters.
-		tparm.pa(1) = -1; %0.2;	 % Inner gaussian taper sigx, Units of lambda. 
-								 % -1 => no inner taper. 
-		tparm.pa(2) =tparm.pa(1);% Inner gaussian taper sigy,Units of lambda
-		tparm.pa(3) = 100; 	     % Outer gaussian taper sigx, Units of lambda
-		tparm.pa(4) =tparm.pa(3);% Outer gaussian taper sigy, Units of lambda
-		[intap, outtap, den, mask, uvdist] =  taper (posITRF, tparm, -1, freq, deb);
+%		tparm.type = 'Gaussian';
+%		tparm.minlambda = 10;    % Spatial filter lower cutoff, Units of lambda. 
+%		tparm.maxmeters = 350;	 % Spatial filter upper cutoff, Units of meters.
+%		tparm.pa(1) = -1; %0.2;	 % Inner gaussian taper sigx, Units of lambda. 
+%								 % -1 => no inner taper. 
+%		tparm.pa(2) =tparm.pa(1);% Inner gaussian taper sigy,Units of lambda
+%		tparm.pa(3) = 100; 	     % Outer gaussian taper sigx, Units of lambda
+%		tparm.pa(4) =tparm.pa(3);% Outer gaussian taper sigy, Units of lambda
+%		[intap, outtap, den, mask, uvdist] =  taper (posITRF, tparm, -1, freq, deb);
 		
 		fprintf (2, '!! taper unspecified! Continuing with no tapering.\n');
 		intap = ones (size (posITRF,1)*size(posITRF,1), 1); outtap = intap;
@@ -75,10 +75,12 @@ function [l, m, psf, weight, intap, outtap] = genarraypsf (posfilename, flagant,
 	% Generate the visibility density weighting function
 	if (isstruct (wparm))
 		weight = genvisweight (posITRF, wparm, 1);
+	elseif isempty(wparm)
+		fprintf (2, '!! wparm empty! Continuing with Natural weighting.\n');
+		weight = ones (length(uvdist), 1);
 	else
 		fprintf (2, '!! wparm unspecified! Continuing with user specified weighting.\n');
 		weight = wparm;
-		
 	end;
 
 %
@@ -114,7 +116,7 @@ function [l, m, psf, weight, intap, outtap] = genarraypsf (posfilename, flagant,
 
 	% Generate weighting noise for this configuration
 	% see SIRA-2, pp. 131 for the formula
-	weighting_noise = sqrt(sum((intap .* outtap).^2.*(1./weight).^2))./(sum(intap.*outtap).*(1./weight)); 
+	weighting_noise = sqrt(sum((intap .* outtap).^2.*(1./weight).^2))./sum((intap.*outtap).*(1./weight)); 
 	fprintf (2, 'Weighting noise for this arrangement: %f.\n', weighting_noise);
 
 	% If required, generate plots of PSF.
@@ -143,13 +145,13 @@ function [l, m, psf, weight, intap, outtap] = genarraypsf (posfilename, flagant,
 		grid on;
 		% title (sprintf ('m-scan at l=0, taper=%s, weight=%s', taper, weight));
 		xlabel ('m'); ylabel ('Power (dB)');
-		print (gcf, 'psf.eps', '-depsc', '-r300'); 
+		% print (gcf, 'psf.eps', '-depsc', '-r300'); 
 
 		figure;
 		plot (uvdist, acc, '.');
 		grid on; axis tight;
 		xlabel ('uvdist (m)'); ylabel ('Final weights');
-		print (gcf, 'weights.eps', '-depsc', '-r300'); 
+		% print (gcf, 'weights.eps', '-depsc', '-r300'); 
 		% title (sprintf ('Weight: %s, cellrad: %d', wparm.type, wparm.cellrad));
 %		tparm.type = 'Gaussian';
 %		tparm.minlambda = 10;    % Spatial filter lower cutoff, Units of lambda. 
