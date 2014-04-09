@@ -2,7 +2,7 @@
 % pep/04Apr14
 
 %% LBA_OUTER
-load ('poslocal_outer.mat', 'poslocal', 'posITRF');
+load ('../poslocal_outer.mat', 'poslocal', 'posITRF');
 freq = 60000000;
 flagant = [];
 deb=1;

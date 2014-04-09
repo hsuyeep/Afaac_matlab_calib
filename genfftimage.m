@@ -30,7 +30,7 @@ function [img_l, img_m, img] =  ...
     genfftimage (fname, ntslices, offset, skip, posfilename, mosaic,caxisrng,...
 				 wr2file, elbeam, pol)
     % genfftimage (fname,ntslices, offset, posfilename, weight, uvcellsize, mosaic, caxisrng, wr2file)
-	radec = 0;
+	radec = 1;
     duv = 2.5;						% Default, reassigned from freq. of obs. to
 									% image just the full Fov (-1<l<1)
     Nuv = 1000;						% size of gridded visibility matrix
@@ -46,6 +46,9 @@ function [img_l, img_m, img] =  ...
 
 	if (wr2file == 0)
 		hdl = figure;
+		if (radec == 1)
+			projimg = figure;
+		end;
 	else
 		k = strfind (fname, '.bin');
 		if (mosaic == 1)
@@ -205,6 +208,10 @@ function [img_l, img_m, img] =  ...
 		        ylabel('South $\leftarrow$ m $\rightarrow$ North', 'interpreter', 'latex');
 		        xlabel('East $\leftarrow$ l $\rightarrow$ West', 'interpreter', 'latex');
 		        set(colorbar, 'FontSize', 16);
+				if (radec == 1)
+					figure (projimg);
+					imagesc (radecmap); colorbar;
+				end;
 			else
 				% Write image to output file.
 				img.pix2laxis = length (img.l);

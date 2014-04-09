@@ -149,10 +149,10 @@ function [radecskymap, lmskymap, vispad, l, m] =  ...
 	  % Regular sampling in lm coordinates leads to irregular sampling in RA/Dec
       alpha = zeros (uvsize, 1);
       delta = zeros (uvsize, 1);
-      t_obs  = t_obs/86400 + 2400000.5; % Convert to MJD day units
+      % t_obs  = t_obs/86400 + 2400000.5; % Convert to MJD day units
 
 	  % Convert image coordinates to RA/Dec. coordinates.
-      [alpha, delta] = lmtoradec (l, l, t_obs);
+      [alpha, delta] = lmtoradec (l, l, JulianDay (mjdsec2datenum (t_obs)), 6.869837540, 52.915122495);
       sel = ~isnan (alpha(:));
       
 	  % Create a Matlab interpolation object,
