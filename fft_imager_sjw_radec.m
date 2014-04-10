@@ -23,93 +23,102 @@
 function [radecskymap, lmskymap, vispad, l, m] =  ... 
 		fft_imager_sjw_radec(acc, u, v, duv, Nuv, uvsize, t_obs, freq, radec)
 
-    % create object for interpolation
-    vis = zeros(Nuv);
-	missed_vis = 0;   % cumulative count of ignored visibilities due to 
-					  % gridded value exeeding grid size.
-    %W = zeros(Nuv);
-    for idx = 1:length(u(:))            % For every recorded visibility
-    
-    	% Get amp. and direction vector of visibility
-        ampl = abs(acc(idx));			
-        phasor = acc(idx) / ampl;
-    
-    	% Determine the grid along U-axis in which observed visibility falls.
-        uidx = u(idx) / duv + Nuv / 2;  
-        uidxl = floor(uidx);		% Find the lower and higher gridded U-value.
-        uidxh = ceil(uidx);
-    
-        % Find absolute distance of measured visibility from grid points, in the
-    	% U-direction only.
-        dul = abs(uidx - uidxl);		
-        duh = abs(uidx - uidxh);
-    
-        % Distribute the visiblity amplitude among the two grid points on the 
-		% U-axis in proportion to their distance from the observed visiblity.
-        sul = duh * ampl;
-        suh = dul * ampl;
-        
-    	% Determine the grid along V-axis in which observed visibility falls.
-        vidx = v(idx) / duv + Nuv / 2;
-        vidxl = floor(vidx);		% Find the lower and higher gridded V-value.
-        vidxh = ceil(vidx);
-    
-        % Find absolute distance of measured visibility from grid points, in the
-    	% V-direction only.
-        dvl = abs(vidx - vidxl);
-        dvh = abs(vidx - vidxh);
-    
-    	% Distribute the HIGHER u-grid point's share of the observed visibility
-		% amp. between the higher and lower V-grid point.
-        sull = dvh * sul;
-        suhl = dvh * suh;
-    
-    	% Distribute the LOWER u-grid point's share of the observed visibility 
-		% amp. between the higher and lower V-grid point.
-        sulh = dvl * sul;
-        suhh = dvl * suh;
-        
-    	% Now that the observed visiblity amplitude is distributed among its 
-    	% surrounding 4 grid points, fill the gridded visibility matrix with
-    	% vectors with the same phase as the original observed visibility.
-    	% NOTE: Adding the 4 vectors at the corners of the grid square will give
-    	% back the original ungridded observed visibility.
-    	% NOTE: We need to accumulate this to prevent overwriting the gridded 
-		% values from a visibility from a neighbouring grid square.
-		% fprintf (1, 'bline: %06d (%03.2f,%6.2f), uidx: %03d %03d, vidx: %03d, %03d\n', idx, u(idx), v(idx), uidxl, uidxh, vidxl, vidxh);
-		if ((uidxl < 1) || (uidxh < 1) || (uidxl > Nuv) || (uidxh > Nuv))
-			missed_vis = missed_vis + 1;
-			continue;
-		end;
+%
+%    % create object for interpolation
+%    vis = zeros(Nuv);
+%	missed_vis = 0;   % cumulative count of ignored visibilities due to 
+%					  % gridded value exeeding grid size.
+%    %W = zeros(Nuv);
+%    for idx = 1:length(u(:))            % For every recorded visibility
+%    
+%    	% Get amp. and direction vector of visibility
+%        ampl = abs(acc(idx));			
+%        phasor = acc(idx) / ampl;
+%    
+%    	% Determine the grid along U-axis in which observed visibility falls.
+%        uidx = u(idx) / duv + Nuv / 2;  
+%        uidxl = floor(uidx);		% Find the lower and higher gridded U-value.
+%        uidxh = ceil(uidx);
+%    
+%        % Find absolute distance of measured visibility from grid points, in the
+%    	% U-direction only.
+%        dul = abs(uidx - uidxl);		
+%        duh = abs(uidx - uidxh);
+%    
+%        % Distribute the visiblity amplitude among the two grid points on the 
+%		% U-axis in proportion to their distance from the observed visiblity.
+%        sul = duh * ampl;
+%        suh = dul * ampl;
+%        
+%    	% Determine the grid along V-axis in which observed visibility falls.
+%        vidx = v(idx) / duv + Nuv / 2;
+%        vidxl = floor(vidx);		% Find the lower and higher gridded V-value.
+%        vidxh = ceil(vidx);
+%    
+%        % Find absolute distance of measured visibility from grid points, in the
+%    	% V-direction only.
+%        dvl = abs(vidx - vidxl);
+%        dvh = abs(vidx - vidxh);
+%    
+%    	% Distribute the HIGHER u-grid point's share of the observed visibility
+%		% amp. between the higher and lower V-grid point.
+%        sull = dvh * sul;
+%        suhl = dvh * suh;
+%    
+%    	% Distribute the LOWER u-grid point's share of the observed visibility 
+%		% amp. between the higher and lower V-grid point.
+%        sulh = dvl * sul;
+%        suhh = dvl * suh;
+%        
+%    	% Now that the observed visiblity amplitude is distributed among its 
+%    	% surrounding 4 grid points, fill the gridded visibility matrix with
+%    	% vectors with the same phase as the original observed visibility.
+%    	% NOTE: Adding the 4 vectors at the corners of the grid square will give
+%    	% back the original ungridded observed visibility.
+%    	% NOTE: We need to accumulate this to prevent overwriting the gridded 
+%		% values from a visibility from a neighbouring grid square.
+%		% fprintf (1, 'bline: %06d (%03.2f,%6.2f), uidx: %03d %03d, vidx: %03d, %03d\n', idx, u(idx), v(idx), uidxl, uidxh, vidxl, vidxh);
+%		if ((uidxl < 1) || (uidxh < 1) || (uidxl > Nuv) || (uidxh > Nuv))
+%			missed_vis = missed_vis + 1;
+%			continue;
+%		end;
+%
+%		if ((vidxl < 1) || (vidxh < 1) || (vidxl > Nuv) || (vidxh > Nuv))
+%			missed_vis = missed_vis + 1;
+%			continue;
+%		end;
+%
+%        vis(uidxl, vidxl) = vis(uidxl, vidxl) + sull * phasor;
+%        vis(uidxl, vidxh) = vis(uidxl, vidxh) + sulh * phasor;
+%        vis(uidxh, vidxl) = vis(uidxh, vidxl) + suhl * phasor;
+%        vis(uidxh, vidxh) = vis(uidxh, vidxh) + suhh * phasor;
+%        
+%        %W(uidx, vidx) = W(uidx, vidx) + 1;
+%    end
+%
+%	if (missed_vis > 0)
+%	 	fprintf (2, 'Missed vis: %d\n', missed_vis); 
+%	end;
+%
+%    % zero padding to desired (u,v)-size
+%    N = size(vis, 1);
+%    N1 = floor((uvsize - N) / 2);
+%    N2 = ceil((uvsize + 1 - N) / 2) - 1;
+%    
+%    % Surround gridded visibilities with 0-padding to create padded visibility 
+%    % matrix.
+%    vispad = [zeros(N1, uvsize); ...
+%              zeros(N, N1), vis, zeros(N, N2); ...
+%              zeros(N2, uvsize)];
+%    vispad(~isfinite(vispad)) = 0;
 
-		if ((vidxl < 1) || (vidxh < 1) || (vidxl > Nuv) || (vidxh > Nuv))
-			missed_vis = missed_vis + 1;
-			continue;
-		end;
-
-        vis(uidxl, vidxl) = vis(uidxl, vidxl) + sull * phasor;
-        vis(uidxl, vidxh) = vis(uidxl, vidxh) + sulh * phasor;
-        vis(uidxh, vidxl) = vis(uidxh, vidxl) + suhl * phasor;
-        vis(uidxh, vidxh) = vis(uidxh, vidxh) + suhh * phasor;
-        
-        %W(uidx, vidx) = W(uidx, vidx) + 1;
-    end
-
-	if (missed_vis > 0)
-	 	fprintf (2, 'Missed vis: %d\n', missed_vis); 
-	end;
-
-    % zero padding to desired (u,v)-size
-    N = size(vis, 1);
-    N1 = floor((uvsize - N) / 2);
-    N2 = ceil((uvsize + 1 - N) / 2) - 1;
-    
-    % Surround gridded visibilities with 0-padding to create padded visibility 
-    % matrix.
-    vispad = [zeros(N1, uvsize); ...
-              zeros(N, N1), vis, zeros(N, N2); ...
-              zeros(N2, uvsize)];
-    vispad(~isfinite(vispad)) = 0;
+	parm.type = 'wijnholds';
+	parm.duv = duv;
+	parm.Nuv = Nuv;
+	parm.uvpad = uvsize;
+	parm.lim = 0;
+	parm.pa = [0 0 0 0];
+	vispad = genvisgrid (acc, u, v, parm, 0);
     
     % compute image
     % ac = zeros(size(vispad));

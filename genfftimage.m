@@ -27,10 +27,10 @@
 
 
 function [img_l, img_m, img] =  ... 
-    genfftimage (fname, ntslices, offset, skip, posfilename, mosaic,caxisrng,...
+    genfftimage (fname, ntslices, offset, skip, posfilename, mosaic, caxisrng,...
 				 wr2file, elbeam, pol)
     % genfftimage (fname,ntslices, offset, posfilename, weight, uvcellsize, mosaic, caxisrng, wr2file)
-	radec = 1;
+	radec = 0;
     duv = 2.5;						% Default, reassigned from freq. of obs. to
 									% image just the full Fov (-1<l<1)
     Nuv = 1000;						% size of gridded visibility matrix
