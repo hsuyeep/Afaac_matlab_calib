@@ -31,10 +31,12 @@ function [img_l, img_m, img] =  ...
 				 wr2file, elbeam, pol)
     % genfftimage (fname,ntslices, offset, posfilename, weight, uvcellsize, mosaic, caxisrng, wr2file)
 	radec = 0;
-    duv = 2.5;						% Default, reassigned from freq. of obs. to
+	% Gridding parameters
+	gparm.type = 'pillbox';
+    gparm.duv = 2.5;				% Default, reassigned from freq. of obs. to
 									% image just the full Fov (-1<l<1)
-    Nuv = 1000;						% size of gridded visibility matrix
-    uvpad = 1024;					% specifies if any padding needs to be added
+    gparm.Nuv = 1000;				% size of gridded visibility matrix
+    gparm.uvpad = 1024;				% specifies if any padding needs to be added
 	nfacet = 3;
 	facetsize = 256;
 
@@ -86,11 +88,11 @@ function [img_l, img_m, img] =  ...
 	% acc = acc_tmp (1:48, 1:48);
 	% acc = acc_tmp (49:96, 49:96);
 	% acc = acc_tmp (97:144, 97:144);
-    dl = (299792458/(img.freq * uvpad * duv)); % dimensionless, in dir. cos. units
+    dl = (299792458/(img.freq * gparm.uvpad * gparm.duv)); % dimensionless, in dir. cos. units
     
     % NOTE: Total imaged Field of View is determined by the visibility 
 	% grid-spacing, duv.
-    lmax = dl * uvpad / 2;
+    lmax = dl * gparm.uvpad / 2;
     % l = [-lmax:dl:lmax-1e-3];
     % m = l;  % Identical resolution and extent along m-axis
 
@@ -110,7 +112,7 @@ function [img_l, img_m, img] =  ...
 		% Image current timeslice. Generate a zenith image.
    		[radecmap, img.map, calvis, img.l, img.m] = ... 
 		  fft_imager_sjw_radec (acc(:), uloc(:), vloc(:), ... 
-					duv, Nuv, uvpad, img.tobs, img.freq, radec);
+					gparm, [], [], img.tobs, img.freq, radec);
 	else
 		% Image current timeslice. Generate a mosaic image.
    		[img.map, img.l, img.m] = ... 
@@ -173,7 +175,7 @@ function [img_l, img_m, img] =  ...
 				% Image current timeslice. Generate a zenith image.
 		   		[radecmap, img.map, calvis, img.l, img.m] = ... 
 				  fft_imager_sjw_radec (acc_weighted(:), uloc(:), vloc(:), ... 
-							duv, Nuv, uvpad, img.tobs, img.freq, radec);
+							gparm, [], [], img.tobs, img.freq, radec);
 			else
 				% Image current timeslice. Generate a mosaic image.
 		   		[img.map, img.l, img.m] = ... 

@@ -22,10 +22,12 @@ function pltviscalsol (fvis, fsol, nrecs, kbhit)
 	col = {'bo', 'mo', 'ro', 'ko', 'go', 'yo', 'wo', 'co'};
 	waitind = 0;
 	radec = 0;
-    duv = 2.5;						% Default, reassigned from freq. of obs. to
-									% image just the full Fov (-1<l<1)
-    Nuv = 500; %1000                % size of gridded visibility matrix
-    uvpad = 512; %1024              % specifies if any padding needs to be added
+
+	gparm.type = 'pillbox';
+	gparm.duv = 2.5; 
+	gparm.Nuv = 1000;
+	gparm.uvpad = 1024; 
+	gparm.fft = 1;
 
 	% Figure management
 	visplt = figure;
@@ -152,7 +154,7 @@ function pltviscalsol (fvis, fsol, nrecs, kbhit)
 		figure (skyimg);
    		[radecmap, img.map, calvis, img.l, img.m] = ... 
 		  fft_imager_sjw_radec (acc(:), uloc(:), vloc(:), ... 
-					duv, Nuv, uvpad, sol.tobs, sol.freq, radec);
+					gparm, [], [], sol.tobs, sol.freq, radec);
 		mask (meshgrid (img.l).^2 + meshgrid(img.m).'.^2 < 0.9) = 1;
 		imagesc (img.map.*mask);
 		colorbar;

@@ -126,9 +126,13 @@ function [currsol] = pelican_sunAteamsub (acc, t_obs, ...
 	    	vloc = meshgrid (rodata.poslocal(:,2)) - ... 
 					meshgrid (rodata.poslocal (:,2)).';
 		    [uloc_flag, vloc_flag] = gen_flagged_uvloc (uloc, vloc, flagant); 
-	    	duv = 2.5;
-	    	Nuv = 500; %1000                % size of gridded visibility matrix
-	    	uvpad = 512; %1024              % specifies if any padding needs to be added
+
+			gparm.type = 'pillbox';
+			gparm.duv = 2.5; 
+			gparm.Nuv = 500;
+			gparm.uvpad = 512; 
+			gparm.fft = 1;
+
 			modsky = figure;
 			calsky = figure;
 			subsky = figure;
@@ -361,7 +365,7 @@ function [currsol] = pelican_sunAteamsub (acc, t_obs, ...
 	    % load ('poslocal.mat', 'posITRF', 'poslocal'); 
 	    [radecmap, calmap, calvis, l, m] = ... 
 			fft_imager_sjw_radec (RAteam (:), uloc_flag(:), vloc_flag(:), ... 
-									duv, Nuv, uvpad, t_obs, freq, 0);
+									gparm, [], [], t_obs, freq, 0);
 		mask = zeros (size (calmap));
 		mask (meshgrid (l).^2 + meshgrid(m).'.^2 < 0.9) = 1;
 		figure(modsky);
@@ -372,7 +376,7 @@ function [currsol] = pelican_sunAteamsub (acc, t_obs, ...
 		figure(calsky);
 	    [radecmap, acccalmap, calvis] = ... 
 			fft_imager_sjw_radec (acccal(:), uloc_flag(:), vloc_flag(:), ... 
-									duv, Nuv, uvpad, t_obs, freq, 0);
+									gparm, [], [], t_obs, freq, 0);
 		imagesc (l, m, real (acccalmap.* mask));
 		% imagesc (abs(accsubAteam));
 		colorbar;
@@ -382,7 +386,7 @@ function [currsol] = pelican_sunAteamsub (acc, t_obs, ...
 		acc_taper = accsubAteam .* calim.mask_fl;
 	    [radecmap, calmap, calvis] = ... 
 			fft_imager_sjw_radec (acc_taper(:), uloc_flag(:), vloc_flag(:), ... 
-									duv, Nuv, uvpad, t_obs, freq, 0);
+									gparm, [], [], t_obs, freq, 0);
 		figure(subsky);
 		imagesc (l,m,real(calmap.*mask));
 		colorbar;

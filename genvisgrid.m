@@ -3,7 +3,6 @@
 % Arguments:
 %	 acc  : observed visibilities
 %    u,v  : UV coordinates of observed visibilities, in m.
-%    type : Type of convolutional kernel. 
 %    parm : Parameters associated with the convolutional kernel.
 %        .type: Type of GCF; Currently only Gaussian supported
 %   	 .duv : Grid spacing of GCF, in m
@@ -62,7 +61,7 @@ function [gridvis] = genvisgrid (acc, u, v, parm, deb)
 			gridviscnt (grvis) = length (vislist); 
 		end;
 
-	case 'wijnholds'
+	case 'pillbox'
 	    % create object for interpolation
 	    gridvis = zeros(parm.uvpad);
 		gridviscnt = gridvis;
@@ -159,6 +158,18 @@ function [gridvis] = genvisgrid (acc, u, v, parm, deb)
 		gridrng = [-floor(parm.uvpad/2)*parm.duv:parm.duv:(floor(parm.uvpad/2)-1)*parm.duv];
 		[uc, vc] = meshgrid (gridrng);
 		uc = uc (:); vc = vc (:); % Vectorize the grid.
+
+	case 'exponential'
+		error ('genvisgrid: GCF Exponential not yet implemented!');
+
+	case 'sinc'
+		error ('genvisgrid: GCF Sinc not yet implemented!');
+
+	case 'expsinc'
+		error ('genvisgrid: GCF Exponential*Sinc not yet implemented!');
+
+	case 'spheroid'
+		error ('genvisgrid: GCF Spheriod not yet implemented!');
 
 	otherwise
 		error (2, 'genvisgrid: Unknown gridding type! Quitting!\n');

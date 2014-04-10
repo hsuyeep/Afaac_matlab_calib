@@ -25,15 +25,16 @@ function [img, imgparm] = cmpimg (acc, nacc, imgparm, tobs, freq, flagant)
 
 	% Check if imgparm is empty, if yes, generate default.
 	if (isempty(imgparm) == 1)
-		imgparm.dofft = 1;    % Carry out FFT imaging
-    	imgparm.duv=lambda./2;% Default image just the full Fov (-1<l<1)
-    	imgparm.Nuv = 500;    % size of gridded visibility matrix
-    	imgparm.uvpad = 512;  % specifies if any padding needs to be added
+		gparm.type = 'pillbox';
+		gparm.fft = 1;    % Carry out FFT imaging
+    	gparm.duv=lambda./2;% Default image just the full Fov (-1<l<1)
+    	gparm.Nuv = 500;    % size of gridded visibility matrix
+    	gparm.uvpad = 512;  % specifies if any padding needs to be added
 
 		% dimensionless, in dir. cos. units
 		if (imgparm.dofft == 1)
-	    	dl = 299792458./(freq .* (imgparm.uvpad .* imgparm.duv)); 
-			img.map = zeros (imgparm.uvpad, imgparm.uvpad, nacc);
+	    	dl = 299792458./(freq .* (gparm.uvpad .* gparm.duv)); 
+			img.map = zeros (gparm.uvpad, gparm.uvpad, nacc);
 			img.diffmap = img.map;
 		else	
 			img.l = linspace (-1, 1, 512);
@@ -44,7 +45,7 @@ function [img, imgparm] = cmpimg (acc, nacc, imgparm, tobs, freq, flagant)
 		
 		% Assuming LBA_OUTER array
     	load ('poslocal.mat', 'posITRF', 'poslocal'); 
-		if (imgparm.dofft == 1)
+		if (gparm.fft == 1)
 			uloc = meshgrid (poslocal(:,1)) - meshgrid (poslocal (:,1)).';
 			vloc = meshgrid (poslocal(:,2)) - meshgrid (poslocal (:,2)).';
 			% Generate flagged positions
@@ -59,7 +60,7 @@ function [img, imgparm] = cmpimg (acc, nacc, imgparm, tobs, freq, flagant)
 		imgparm.radec = 0; % Only zenith maps
 	end;
 
-	if (imgparm.dofft == 1)
+	if (gparm.fft == 1)
 		fprintf (2, 'Forming FFT images!\n');
 	else
 		fprintf (2, 'Forming DFT images!\n');
@@ -67,11 +68,10 @@ function [img, imgparm] = cmpimg (acc, nacc, imgparm, tobs, freq, flagant)
 
 	% Form images from all the ACMs.
 	for ind = 1:nacc
-		if (imgparm.dofft == 1)
+		if (gparm.fft == 1)
    			[radecmap, img.map(:,:,ind), calvis, img.l, img.m] = ... 
 		 fft_imager_sjw_radec (acc(:,:,ind),imgparm.uloc_fl(:), ... 
-			imgparm.vloc_fl(:), imgparm.duv(ind), imgparm.Nuv, imgparm.uvpad,...
-				tobs(ind), freq(ind), imgparm.radec);
+		imgparm.vloc_fl(:), gparm, [], [],  tobs(ind), freq(ind), imgparm.radec);
 			img.map(isnan(img.map) == 1) = 0;
 		else
 			img.map(:,:,ind) = acm2skyimage (acc(:,:,ind),imgparm.uloc_fl, ... 

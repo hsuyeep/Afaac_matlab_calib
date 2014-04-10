@@ -4,11 +4,21 @@
 %     acc   : Complex, Hermitean symmetric Array Correlation Matrix
 %     u/v   : u/v coordinates of antenna elements in ITRF coordinates (meters) 
 %             wrt. CS002
-%     duv   : Grid size in meters, in the uv domain. Keep at least a couple of 
+%    
+%  gparm    : -- Gridding parameters, passed onto genvisgrid.m --
+%    .type  : Type of grid convolution function.
+%    .duv   : Grid size in meters, in the uv domain. Keep at least a couple of 
 %             gridpoints per wavelength.
-%     Nuv   : Number of gridpoints sampling the available UV plane.
-%     uvsize: Padded size of uv grid, for imaging with higher resolution than
+%    .Nuv   : Number of gridpoints sampling the available UV plane.
+%    .uvpad : Padded size of uv grid, for imaging with higher resolution than
 %             warranted by uv coverage.
+%    .lim   : Limit (in meters) of the GCF. Use if appropriate to GCF type.
+%	 .pa(1:4): Additional parameters for describing	the GCF.
+
+%  wparm    : -- Weighting parameters, passed onto genvisweight.m -- 
+
+%  tparm    : -- Tapering parameters, passed onto taper.m -- 
+% 
 %     t_obs : Time of observation in MJD seconds, for converting local 
 %             coordinates to absolute RA/DEC coordinates.
 %     freq  : Frequency of observation in Hz, of this ACM.
@@ -21,104 +31,16 @@
 %    l,m        : l,m coordinates for this skymap.
 
 function [radecskymap, lmskymap, vispad, l, m] =  ... 
-		fft_imager_sjw_radec(acc, u, v, duv, Nuv, uvsize, t_obs, freq, radec)
+		fft_imager_sjw_radec(acc, u, v, gparm, wparm, tparm, t_obs, freq, radec)
 
-%
-%    % create object for interpolation
-%    vis = zeros(Nuv);
-%	missed_vis = 0;   % cumulative count of ignored visibilities due to 
-%					  % gridded value exeeding grid size.
-%    %W = zeros(Nuv);
-%    for idx = 1:length(u(:))            % For every recorded visibility
-%    
-%    	% Get amp. and direction vector of visibility
-%        ampl = abs(acc(idx));			
-%        phasor = acc(idx) / ampl;
-%    
-%    	% Determine the grid along U-axis in which observed visibility falls.
-%        uidx = u(idx) / duv + Nuv / 2;  
-%        uidxl = floor(uidx);		% Find the lower and higher gridded U-value.
-%        uidxh = ceil(uidx);
-%    
-%        % Find absolute distance of measured visibility from grid points, in the
-%    	% U-direction only.
-%        dul = abs(uidx - uidxl);		
-%        duh = abs(uidx - uidxh);
-%    
-%        % Distribute the visiblity amplitude among the two grid points on the 
-%		% U-axis in proportion to their distance from the observed visiblity.
-%        sul = duh * ampl;
-%        suh = dul * ampl;
-%        
-%    	% Determine the grid along V-axis in which observed visibility falls.
-%        vidx = v(idx) / duv + Nuv / 2;
-%        vidxl = floor(vidx);		% Find the lower and higher gridded V-value.
-%        vidxh = ceil(vidx);
-%    
-%        % Find absolute distance of measured visibility from grid points, in the
-%    	% V-direction only.
-%        dvl = abs(vidx - vidxl);
-%        dvh = abs(vidx - vidxh);
-%    
-%    	% Distribute the HIGHER u-grid point's share of the observed visibility
-%		% amp. between the higher and lower V-grid point.
-%        sull = dvh * sul;
-%        suhl = dvh * suh;
-%    
-%    	% Distribute the LOWER u-grid point's share of the observed visibility 
-%		% amp. between the higher and lower V-grid point.
-%        sulh = dvl * sul;
-%        suhh = dvl * suh;
-%        
-%    	% Now that the observed visiblity amplitude is distributed among its 
-%    	% surrounding 4 grid points, fill the gridded visibility matrix with
-%    	% vectors with the same phase as the original observed visibility.
-%    	% NOTE: Adding the 4 vectors at the corners of the grid square will give
-%    	% back the original ungridded observed visibility.
-%    	% NOTE: We need to accumulate this to prevent overwriting the gridded 
-%		% values from a visibility from a neighbouring grid square.
-%		% fprintf (1, 'bline: %06d (%03.2f,%6.2f), uidx: %03d %03d, vidx: %03d, %03d\n', idx, u(idx), v(idx), uidxl, uidxh, vidxl, vidxh);
-%		if ((uidxl < 1) || (uidxh < 1) || (uidxl > Nuv) || (uidxh > Nuv))
-%			missed_vis = missed_vis + 1;
-%			continue;
-%		end;
-%
-%		if ((vidxl < 1) || (vidxh < 1) || (vidxl > Nuv) || (vidxh > Nuv))
-%			missed_vis = missed_vis + 1;
-%			continue;
-%		end;
-%
-%        vis(uidxl, vidxl) = vis(uidxl, vidxl) + sull * phasor;
-%        vis(uidxl, vidxh) = vis(uidxl, vidxh) + sulh * phasor;
-%        vis(uidxh, vidxl) = vis(uidxh, vidxl) + suhl * phasor;
-%        vis(uidxh, vidxh) = vis(uidxh, vidxh) + suhh * phasor;
-%        
-%        %W(uidx, vidx) = W(uidx, vidx) + 1;
-%    end
-%
-%	if (missed_vis > 0)
-%	 	fprintf (2, 'Missed vis: %d\n', missed_vis); 
-%	end;
-%
-%    % zero padding to desired (u,v)-size
-%    N = size(vis, 1);
-%    N1 = floor((uvsize - N) / 2);
-%    N2 = ceil((uvsize + 1 - N) / 2) - 1;
-%    
-%    % Surround gridded visibilities with 0-padding to create padded visibility 
-%    % matrix.
-%    vispad = [zeros(N1, uvsize); ...
-%              zeros(N, N1), vis, zeros(N, N2); ...
-%              zeros(N2, uvsize)];
-%    vispad(~isfinite(vispad)) = 0;
-
-	parm.type = 'wijnholds';
-	parm.duv = duv;
-	parm.Nuv = Nuv;
-	parm.uvpad = uvsize;
-	parm.lim = 0;
-	parm.pa = [0 0 0 0];
-	vispad = genvisgrid (acc, u, v, parm, 0);
+%  Example gridding parameters
+%	gparm.type = 'wijnholds';
+%	gparm.duv = duv;
+%	gparm.Nuv = Nuv;
+%	gparm.uvpad = uvsize;
+%	gparm.lim = 0;
+%	gparm.pa = [0 0 0 0];
+	vispad = genvisgrid (acc, u, v, gparm, 0);
     
     % compute image
     % ac = zeros(size(vispad));
@@ -132,12 +54,12 @@ function [radecskymap, lmskymap, vispad, l, m] =  ...
     % Create l,m axis corresponding to choices of duv
     % NOTE: Resolution of image is determined by total array aperture extent, 
     % resolution = lambda/D. 
-    dl = (299792458/(freq * uvsize * duv)); % dimensionless, in dir. cos. units
+    dl = (299792458/(freq * gparm.uvpad * gparm.duv)); % dimensionless, in dir. cos. units
     
     % NOTE: Total imaged Field of View is determined by the visibility 
 	% grid-spacing, duv.
-    lmax = dl * uvsize / 2;
-	l = linspace (-lmax, lmax, uvsize);
+    lmax = dl * gparm.uvpad/ 2;
+	l = linspace (-lmax, lmax, gparm.uvpad);
     % l = [-lmax:dl:lmax-1e-3];
     m = l;  % Identical resolution and extent along m-axis
     

@@ -26,7 +26,12 @@ function [reph_acc, integ_acc, integ_tobs] = integvis (acc, ntslices, tobs, freq
 		uloc = meshgrid (poslocal(:,1)) - meshgrid (poslocal(:,1)).';
 		vloc = meshgrid (poslocal(:,2)) - meshgrid (poslocal(:,2)).';
 		% imaging parameters
-		duv = 2.5; Nuv = 700; uvpad = 768; % Each facet is 512x512 pixels
+		gparm.type = 'pillbox';
+		gparm.duv = 2.5; 
+		gparm.Nuv = 700;
+		gparm.uvpad = 768; 
+		gparm.fft = 1;
+
 	end
 
 	mask = [];
@@ -44,7 +49,7 @@ function [reph_acc, integ_acc, integ_tobs] = integvis (acc, ntslices, tobs, freq
 			% Debug imaging
 			tmpacc = reph_acc(:,:,ind);
     		[radecmap1, rephmap, calvis, l, m] = fft_imager_sjw_radec(tmpacc(:), ...
-					 uloc(:), vloc(:), duv, Nuv, uvpad, tobs(ind), freq, 0);
+					 uloc(:), vloc(:), gparm, [], [], tobs(ind), freq, 0);
     		if isempty (mask)
 	     		% mask = NaN (length (l));
 	     		mask = zeros (length (l));
@@ -79,7 +84,7 @@ function [reph_acc, integ_acc, integ_tobs] = integvis (acc, ntslices, tobs, freq
     
 	if debug == 1
     	[radecmap1, calmap, calvis, l, m] = fft_imager_sjw_radec(integ_acc (:),...
-                    uloc(:), vloc(:), duv, Nuv, uvpad, tobs, freq, 0);
+                    uloc(:), vloc(:), gparm, [], [], tobs, freq, 0);
 	    map = abs (calmap) .* mask;
 		map_nonan = abs(rephmap);
 		map_nonan (isnan(map_nonan)) = 0;

@@ -23,8 +23,12 @@
 function [mosaic, laxis, maxis] = genmosaic (acc, tobs, freq, nfacet, facetsize, uloc, vloc, posITRF, debug)
 
 	% imaging parameters
-	Nuv = 700;
-	duv = 2.5; uvpad = facetsize *nfacet; % Each facet is 512x512 pixels
+	gparm.type = 'pillbox';
+	gparm.duv = 2.5; 
+	gparm.Nuv = 700;
+	gparm.uvpad = facetsize *nfacet; % Each facet is 512x512 pixels
+	gparm.fft = 1;
+	 
 	
 	%% load an acm
 	% fid = fopen ('~/WORK/AARTFAAC/rawdat/SB000_ch30-35_5sec_3hr_cal.bin', 'rb');
@@ -64,7 +68,7 @@ function [mosaic, laxis, maxis] = genmosaic (acc, tobs, freq, nfacet, facetsize,
 	   			[reph_acc] = rephaselm (acc, l_reph, m_reph, tobs, freq, posITRF);
 	   		 	[radecmap1, calmap, calvis, l, m] = ... 
 					fft_imager_sjw_radec (reph_acc (:), ... 
-	   	                 uloc(:), vloc(:), duv, Nuv, uvpad, tobs, freq, 0);
+	   	                 uloc(:), vloc(:), gparm, [], [], tobs, freq, 0);
 	
 		   		if isempty (mask)
 		     		mask = NaN (length (l));

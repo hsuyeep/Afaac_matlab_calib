@@ -40,10 +40,12 @@ function gengalimages (fnamecal, fnamesol, ntslices, offset, skip, ...
 
 	
 	% Imaging parameters
-    duv = 2.5;						% Default, reassigned from freq. of obs. to
-									% image just the full Fov (-1<l<1)
-    Nuv = 1000;						% size of gridded visibility matrix
-    uvpad = 1024;					% specifies if any padding needs to be added
+	gparm.type = 'pillbox';
+	gparm.duv = 2.5; 			% Default, reassigned from freq. of obs. to
+								% image just the full Fov (-1<l<1)
+	gparm.Nuv = 1000;
+	gparm.uvpad = 1024; 
+	gparm.fft = 1;
 	nfacet = 3;
 	facetsize = 256;
 
@@ -107,7 +109,7 @@ function gengalimages (fnamecal, fnamesol, ntslices, offset, skip, ...
 		% Image current timeslice. Generate a zenith image.
 	 	[radecmap, img.map, calvis, img.l, img.m] = ... 
 			  fft_imager_sjw_radec (acc1(:), uloc_fl(:), ...
-					vloc_fl(:), duv, Nuv, uvpad, img.tobs, img.freq, 0);
+					vloc_fl(:), gparm, [], [], img.tobs, img.freq, 0);
 	else
 		% Image current timeslice. Generate a mosaic image.
    		[img.map, img.l, img.m] = ... 
@@ -185,7 +187,7 @@ function gengalimages (fnamecal, fnamesol, ntslices, offset, skip, ...
 				% Image current timeslice. Generate a zenith image.
 		   		[radecmap, img.map, calvis, img.l, img.m] = ... 
 					  fft_imager_sjw_radec (acc_weighted(:), uloc_fl(:), ...
-							vloc_fl(:), duv, Nuv, uvpad, img.tobs, img.freq, 0);
+							vloc_fl(:), gparm, [], [], img.tobs, img.freq, 0);
 			else
 				% Image current timeslice. Generate a mosaic image.
    				[img.map, img.l, img.m] = ... 

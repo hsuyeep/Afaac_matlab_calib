@@ -7,7 +7,7 @@
 %     tparm : Visibility taper parameters to apply. (See taper.m for fields)
 %     wparm : Visibility weighting parameters to apply. (See genvisweight.m for 
 %			  fields)
-%     iparm : Imaging parameters to apply. Fields as below:
+%     gparm : Gridding parameters to apply. Fields as below:
 %		 .fft: Bool indicating FFT or DFT imaging.
 %        .duv: The grid spacing in meters.
 %        .Nuv: The grid size in pixels.
@@ -21,13 +21,14 @@
 %  taper : The applied taper for this psf.
 
 function [l, m, psf, weight, intap, outtap] = ...
-	genarraypsf (posfilename, flagant, freq,  tparm, wparm, iparm, deb)
+	genarraypsf (posfilename, flagant, freq,  tparm, wparm, gparm, deb)
 	% Default values are for 60MHz, and image just the full Fov (-1<l<1). 
-	if (isempty (iparm) == 1)
-		iparm.duv = 2.5; 
-		iparm.Nuv = 1000;
-		iparm.uvpad = 1024; 
-		iparm.fft = 1;
+	if (isempty (gparm) == 1)
+		gparm.type = 'pillbox';
+		gparm.duv = 2.5; 
+		gparm.Nuv = 1000;
+		gparm.uvpad = 1024; 
+		gparm.fft = 1;
 	end;
 
 	% Load coordinates
@@ -93,11 +94,11 @@ function [l, m, psf, weight, intap, outtap] = ...
 	weight (weight == 0) = 1;
 	acc = ones (length (weight), 1) .* 1./weight .* intap .* outtap;
 
-	if (iparm.fft == 1)
+	if (gparm.fft == 1)
 		[rdsky, psf, vispad, l, m] = fft_imager_sjw_radec (acc, uloc_flag, ...
-						vloc_flag, iparm.duv, iparm.Nuv, iparm.uvpad, 0, freq, 0);
+						vloc_flag, gparm, [], [], 0, freq, 0);
 	else
-		l = linspace (-1, 1, iparm.Nuv); m = l;
+		l = linspace (-1, 1, gparm.Nuv); m = l;
 		% l = [-1:0.01:1]; m = l;
 		psf = acm2skyimage (reshape (acc, [288 288]), poslocal(:,1), poslocal(:,2), freq, l, m);
 	end;
@@ -122,7 +123,7 @@ function [l, m, psf, weight, intap, outtap] = ...
 		axis ([-1 1 -1 1 -60 0]);
 
 		subplot (221);
-		scan = abs (psf (iparm.Nuv/2, :));
+		scan = abs (psf (gparm.Nuv/2, :));
 		plot (l, 20*log10 (scan/max(scan)));
 		axis ([-0.2 0.2 -60 0]);
 		% axis ([-1 1 -60 0]);
@@ -131,7 +132,7 @@ function [l, m, psf, weight, intap, outtap] = ...
 		xlabel ('l'); ylabel ('Power (dB)');
 
 		subplot (223);
-		scan = abs (psf (:, iparm.Nuv/2));
+		scan = abs (psf (:, gparm.Nuv/2));
 		plot (m, 20*log10 (scan/max(scan)));
 		axis ([-0.2 0.2 -60 0]);
 		grid on;

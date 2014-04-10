@@ -182,12 +182,14 @@ function [simsky_acc, simsky_A, mod_acc, mod_A, mod_up] = ...
 	    vloc = meshgrid (rodata.poslocal(:,2)) - ... 
 				meshgrid (rodata.poslocal (:,2)).';
 		[uloc_flag, vloc_flag] = gen_flagged_uvloc (uloc, vloc, calim.flagant); 
-	    duv = 2.5;
-	    Nuv = 500; %1000        % size of gridded visibility matrix
-	    uvpad = 512; %1024      % specifies if any padding needs to be added
+		gparm.type = 'pillbox';
+		gparm.duv = 2.5; 
+		gparm.Nuv = 500;
+		gparm.uvpad = 512; 
+		gparm.fft = 1;
 	    [radecmap, calmap, calvis] = ... 
 			fft_imager_sjw_radec (simsky_acc (:), uloc_flag(:), vloc_flag(:), ... 
-									duv, Nuv, uvpad, t_obs, freq, 0);
+								  gparm, [], [], t_obs, freq, 0);
 		figure;
 		imagesc (abs(calmap));
 		colorbar;

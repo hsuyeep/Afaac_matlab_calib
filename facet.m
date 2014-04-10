@@ -22,6 +22,13 @@ function [image] = facet(acc, tobs, freq, nfacets, pix2facet, poslocal)
 	uloc = meshgrid (poslocal(:,1)) - meshgrid (poslocal(:,1)).';
 	vloc = meshgrid (poslocal(:,2)) - meshgrid (poslocal(:,2)).';
 
+	% Gridding parameters; added on 11Apr14	
+	gparm.type = 'pillbox';
+	gparm.fft = 1;    % Carry out FFT imaging
+    gparm.duv = facet_duv;% Default image just the full Fov (-1<l<1)
+    gparm.Nuv = 256;    % size of gridded visibility matrix
+    gparm.uvpad = pix2facet;  % specifies if any padding needs to be added
+
 	% For each facet
 	for l_ind = 1:nfacets
 		for m_ind = 1:nfacets
@@ -38,7 +45,7 @@ function [image] = facet(acc, tobs, freq, nfacets, pix2facet, poslocal)
 		% carry out imaging of the facet
   		[radecmap1, calmap, calvis, l, m] =  ...
 				fft_imager_sjw_radec (reph_acc (:), ... 
-                    uloc(:), vloc(:), facet_duv, 256, pix2facet, tobs, freq, 0);
+                    uloc(:), vloc(:), gparm, [], [], tobs, freq, 0);
 
 		figure;
 		imagesc (abs(calmap));
