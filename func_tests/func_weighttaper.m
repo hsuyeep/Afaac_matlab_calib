@@ -18,8 +18,8 @@ deb=1;
 
 % Generate PSF without any taper/weight
 fname = sprintf ('lba_outer_uni_notap_noweight');
-tparm = []; wparm = []; iparm = [];
-[l,m,psf,weight, intap, outtap] = genarraypsf ('poslocal.mat', flagant, freq, tparm, wparm, iparm, deb);
+tparm = []; wparm = []; gparm = [];
+[l,m,psf,weight, intap, outtap] = genarraypsf ('poslocal.mat', flagant, freq, tparm, wparm, gparm, deb);
 % Get figure handles
 hand = get (0, 'Children');
 print (hand(1), strcat (fname,'_psf.png'), '-dpng');

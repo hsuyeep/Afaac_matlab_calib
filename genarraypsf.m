@@ -25,14 +25,25 @@ function [l, m, psf, weight, intap, outtap] = ...
 	% Default values are for 60MHz, and image just the full Fov (-1<l<1). 
 	if (isempty (gparm) == 1)
 		gparm.type = 'pillbox';
-		gparm.duv = 2.5; 
-		gparm.Nuv = 1000;
-		gparm.uvpad = 1024; 
+		% gparm.type = 'gaussian';
+		gparm.duv = 0.5;  % Now in wavelengths
+		gparm.Nuv = 241;
+		gparm.lim = 1.5; % In wavelength
+		gparm.uvpad = 256; 
 		gparm.fft = 1;
+		gparm.pa(1) = 0.5; gparm.pa(2) = gparm.pa(1);
 	end;
 
 	% Load coordinates
 	load (posfilename, 'poslocal', 'posITRF');
+
+	% Flag antennas as specified in flagant;
+	if (~isempty (flagant))
+		sel = zeros (length (posITRF), 1);
+		sel (flagant) = 1;
+		posITRF = posITRF(sel == 0,:);
+		poslocal = poslocal (sel == 0, :);
+	end;
 
 	% Generate an appropriate taper
 	if (isstruct (tparm))
@@ -56,6 +67,7 @@ function [l, m, psf, weight, intap, outtap] = ...
 	    uvw = [u(:), v(:), w(:)];
         normal  = [0.598753, 0.072099, 0.797682].'; % Normal to CS002
 	    uvdist = sqrt(sum(uvw.^2, 2) - (uvw * normal).^2);
+		tparm.pa = [-1 -1 -1 -1]; weighting_noise = 0;
 	end;
 
 	% Generate the visibility density weighting function
@@ -69,25 +81,17 @@ function [l, m, psf, weight, intap, outtap] = ...
 		weight = wparm;
 	end;
 
-%
-%	% Choose gridding interpolation method
-%	switch gcf
-%		case {'linear'}
-%			fprintf (1, 'Applying linear interpolation\n');
-%		otherwise,
-%			fprintf (2, 'GCF %s not known! Applying linear interpolation..\n');
-%	end;
-		
 	% Create the uloc, vloc meshgrid for frequency independent coords.
-	uloc = meshgrid (poslocal (:,1)) - meshgrid (poslocal(:,1)).';
-	vloc = meshgrid (poslocal (:,2)) - meshgrid (poslocal(:,2)).';
+	uloc_flag = meshgrid (poslocal (:,1)) - meshgrid (poslocal(:,1)).';
+	vloc_flag = meshgrid (poslocal (:,2)) - meshgrid (poslocal(:,2)).';
 	
-	if (isempty(flagant) == 0)
-		[uloc_flag, vloc_flag] = gen_flagged_uvloc (uloc, vloc, flagant);
-		fprintf (2, 'Flagging %d antennas.\n', length (flagant));
-	else 
-		uloc_flag = uloc; vloc_flag = vloc;
-	end;
+%%%% Now flagging earlier!
+%	if (isempty(flagant) == 0)
+%		[uloc_flag, vloc_flag] = gen_flagged_uvloc (uloc, vloc, flagant);
+%		fprintf (2, 'Flagging %d antennas.\n', length (flagant));
+%	else 
+%		uloc_flag = uloc; vloc_flag = vloc;
+%	end;
 
 	% Set the visibilities at corresponding (uv) points to 1. add their weights
 	% and taper.
@@ -98,14 +102,11 @@ function [l, m, psf, weight, intap, outtap] = ...
 		[rdsky, psf, vispad, l, m] = fft_imager_sjw_radec (acc, uloc_flag, ...
 						vloc_flag, gparm, [], [], 0, freq, 0);
 	else
-		l = linspace (-1, 1, gparm.Nuv); m = l;
+		l = linspace (-1, 1, gparm.uvpad); m = l;
 		% l = [-1:0.01:1]; m = l;
-		psf = acm2skyimage (reshape (acc, [288 288]), poslocal(:,1), poslocal(:,2), freq, l, m);
+		nelem = sqrt (length(acc));
+		psf = acm2skyimage (reshape (acc, [nelem nelem]), poslocal(:,1), poslocal(:,2), freq, l, m);
 	end;
-
-	% Generate gridded visibilities
-	% gridacc = visgrid (acc, duv, uloc_flag, vloc_flag, Nuv);
-
 
 	% Generate weighting noise for this configuration
 	% see SIRA-2, pp. 131 for the formula
@@ -115,35 +116,52 @@ function [l, m, psf, weight, intap, outtap] = ...
 	% If required, generate plots of PSF.
 	if (deb > 0)
 		subplot (122);
-		% imagesc (l, m, 20*log10 (abs (psf))); colorbar;
-		mesh (l, m, double (20*log10 (abs (psf)/max(max(abs(psf)))))); colorbar;
+		d = intersect (find (l > -0.2), find (l < 0.2)); 
+		% mesh (l(d), m(d), double (20*log10 (abs (psf(d, d))/max(max(abs(psf)))))); colorbar;
+		% xlabel ('m'); ylabel ('l'); zlabel ('dB');
+		% axis ([-1 1 -1 1 -60 0]);
+		imagesc (l(d), m(d), 20*log10 (abs (psf(d,d))/max(max(abs(psf))))); colorbar;
+		caxis ([-75 0]); % Match colorbar limit to line plot limit.
 		% title (sprintf ('AARTFAAC PSF: weight=%s, cellrad=%d ', wparm.type, wparm.cellrad));
-		title (sprintf ('AARTFAAC PSF:')); 
-		xlabel ('m'); ylabel ('l'); zlabel ('dB');
-		axis ([-1 1 -1 1 -60 0]);
+		% title (sprintf ('AARTFAAC PSF:')); 
 
 		subplot (221);
-		scan = abs (psf (gparm.Nuv/2, :));
-		plot (l, 20*log10 (scan/max(scan)));
-		axis ([-0.2 0.2 -60 0]);
-		% axis ([-1 1 -60 0]);
+		scan = abs (psf (gparm.uvpad/2, d));
+		plot (l(d), 20*log10 (scan/max(scan)));
+		ylim ([-75 0]);
 		% title (sprintf ('l-scan at m=0, taper=%s, weight=%s', taper, weight));
 		grid on;
 		xlabel ('l'); ylabel ('Power (dB)');
 
 		subplot (223);
-		scan = abs (psf (:, gparm.Nuv/2));
-		plot (m, 20*log10 (scan/max(scan)));
-		axis ([-0.2 0.2 -60 0]);
+		scan = abs (psf (d, gparm.uvpad/2));
+		plot (m(d), 20*log10 (scan/max(scan)));
+		ylim ([-75 0]);
+		% axis ([-0.2 0.2 -60 0]);
 		grid on;
 		% title (sprintf ('m-scan at l=0, taper=%s, weight=%s', taper, weight));
 		xlabel ('m'); ylabel ('Power (dB)');
 		% print (gcf, 'psf.eps', '-depsc', '-r300'); 
+		mtit (sprintf ('out: %.2f, in: %.2f, wnoise: %.4g', tparm.pa(1), tparm.pa(3), weighting_noise), 'yoff', 0.025);
 
 		figure;
+		subplot (211);
 		plot (uvdist, acc, '.');
 		grid on; axis tight;
 		xlabel ('uvdist (m)'); ylabel ('Final weights');
+
+		subplot (212);
+		paduvlim = floor (gparm.uvpad/2)*gparm.duv;
+    	padgridrng = linspace (-paduvlim, paduvlim, gparm.uvpad);
+		ugrid = meshgrid (padgridrng);
+		paduvcoor = [ugrid(:) ugrid(:)];
+		griduvdist = sqrt (sum(paduvcoor.^2, 2));
+		[n,x]=hist (griduvdist.*vispad(:), 50);
+		% bar (x(2:end), n(2:end));
+		plot(griduvdist, vispad(:), '.');
+		xlabel ('uvdist (\lambda)');
+		ylabel ('visibility weights');
+		
 		% print (gcf, 'weights.eps', '-depsc', '-r300'); 
 		% title (sprintf ('Weight: %s, cellrad: %d', wparm.type, wparm.cellrad));
 %		tparm.type = 'Gaussian';

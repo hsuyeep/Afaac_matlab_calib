@@ -25,7 +25,7 @@ function [weight] = genvisweight (posITRF, wparm, plt)
 	uvec = u(:); vvec = v(:);
 
 	% Find out type of weighting requested
-	switch wparm.type
+	switch lower (wparm.type)
 
 		case {'uniform'}
 			% For every visibility, figure out how many other sampled 

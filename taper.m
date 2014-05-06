@@ -163,7 +163,7 @@ function [intap, outtap, density, mask, uvdist] = ...
 
 		 	% Generate an inner taper with specified parameters.
 			% Gaussians on an idealized circle of radius parm.minlambda
-			if ((parm.pa(2) > 0) && (parm.pa(2) > 0))
+			if ((parm.pa(1) > 0) && (parm.pa(2) > 0))
 				intap = zeros (length (uvdist), 1);
 
 				for ind = 1:length(uvec)
@@ -180,6 +180,8 @@ function [intap, outtap, density, mask, uvdist] = ...
 				intap = 1-intap; 
 				% set shortest baselines to 0;
 				intap (uvdist < lambda*parm.minlambda) = 0; 
+			else
+				intap = ones (length (uvdist), 1);
 			end;
 
 		case {'arctan'}
@@ -197,15 +199,23 @@ function [intap, outtap, density, mask, uvdist] = ...
 		case {'blackman'}
 			fprintf (2, 'Taper mode Blackman not implemented!\n');
 
+		case {'notaper'}
+			fprintf (2, 'No taper requested.\n');
+			intap = ones (length (uvdist), 1);
+			outtap = intap;
+			density = intap;
 		otherwise,
 			fprintf (2, ...
 			'Taper mode %s not known! Only applying short baseline filter.');
 			tap = ones (nants);
 	end;
 
-	if ((parm.pa (1) < 0) || (parm.pa(2) < 0))
+	% -1 implies no inner taper
+	%  0 implies hard inner taper at specified limits.
+	% pep/21Apr14
+	if ((parm.pa (1) == 0) || (parm.pa(2) == 0)) 
 		fprintf ('taper: Applying hard spatial filter at min of %f lambda or % m.\n',...
-				 parm.pa(1), parm.pa(2));
+				 parm.minlambda, parm.maxmeters);
 		t = reshape (uvdist, [nants, nants]);
 		% Hard cutoff mask.
  		intap = t(:) > min([lambda*parm.minlambda, parm.maxmeters]); 
@@ -255,7 +265,9 @@ function [intap, outtap, density, mask, uvdist] = ...
 	mask = intap .* outtap .* density;
 
 	% Pull up mask values to lie between 0 and 1
-	mask = (mask - min(min(mask))) ./ (max(max(mask - min(min(mask)))));
+	if (strcmp (lower(parm.type), 'notaper')== 0)
+		mask = (mask - min(min(mask))) ./ (max(max(mask - min(min(mask)))));
+	end;
 	% d (incirc(:) == 0) = 1; % Set values outside the circle to 1.
 
 

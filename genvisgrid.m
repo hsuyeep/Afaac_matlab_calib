@@ -5,37 +5,67 @@
 %    u,v  : UV coordinates of observed visibilities, in m.
 %    parm : Parameters associated with the convolutional kernel.
 %        .type: Type of GCF; Currently only Gaussian supported
-%   	 .duv : Grid spacing of GCF, in m
+%   	 .duv : Grid spacing of GCF, in WAVELENGTH units. 
 %    	 .Nuv : Grid extent, in number of grid cells.
 %		 .uvpad: Padding to be added to UV grid, for higher resolution.
-%		 .lim : Limit of convoutional kernel, in m.
+%		 .lim : Limit of convoutional kernel, in WAVELENGTH units.
 %        .pa(1..4): Array of other parameters. For Gaussian GCF, 
-%				  pa(1)/pa(2) = sigx/sigy of GCF gaussian.
+%				  pa(1)/pa(2) = sigx/sigy of GCF gaussian, in WAVELENGTH units.
+%   freq  : Frequency of observation in Hz.
 %	deb   : Debug, turns on intermediate plotting etc.
 
-function [gridvis] = genvisgrid (acc, u, v, parm, deb)
+%  Returns:
+%  gridvis: The padded gridded visibility values of dim parm.uvpad x parm.uvpad
+%  padgridrng: The coordinates of the padded gridded visibilities, assumed symmetrical.
+
+% function [gridvis, padgridrng] = genvisgrid (acc, u, v, parm, freq, deb)
+function [gridvis] = genvisgrid (acc, u, v, parm, freq, deb)
 	
 	if (isempty (acc) || isempty (parm))
 		error ('genvisgrid: Cannot grid with no acc OR no parameters specified!');
 	end;
 
+	% Convert u,v coordinates of visibilities to wavelength units.
+	lambda = 299792458./freq;
+	u = u(:) ./ lambda; v = v(:) ./ lambda;
+
+	% Generate UV grid in wavelength units
+	uvlim = floor (parm.Nuv/2)*parm.duv;
+	gridrng = linspace (-uvlim, uvlim, parm.Nuv);
+	paduvlim = floor (parm.uvpad/2)*parm.duv;
+	padgridrng = linspace (-paduvlim, paduvlim, parm.uvpad);
+
+	%gridrng=[-floor(parm.Nuv/2)*parm.duv:parm.duv:(floor(parm.Nuv/2)-1)*parm.duv];
+	[uc, vc] = meshgrid (gridrng);
+	uc = uc (:); vc = vc (:); % Vectorize the grid.
+	% ngrid = length (gridrng);
+
+	% Generate convolutional kernel with the same gridsize as underlying grid.
+	kernrng = [-parm.lim:parm.duv:parm.lim];
+	[uk, vk] = meshgrid (kernrng);	
+	fprintf (1, 'NOTE: GCF kernel size is %dx%d cells.\n', ...
+			 length (kernrng), length(kernrng));
+
 	% Currently adding visibility gridding in an ad-hoc manner
 	switch (lower (parm.type))
 		case 'gaussian'
-		% Generate UV grid
-		gridrng = [-floor(parm.Nuv/2)*parm.duv:parm.duv:(floor(parm.Nuv/2)-1)*parm.duv];
-		[uc, vc] = meshgrid (gridrng);
-		uc = uc (:); vc = vc (:); % Vectorize the grid.
-		ngrid = length (gridrng);
+
+		fprintf (1, 'Gaussian GCF requested.\n');
+		if (deb > 0)
+			fprintf (1, 'parm.duv=%.2f, parm.Nuv=%d, parm.lim=%.2f, parm.pa(1)=%.2f\n',...
+					 parm.duv, parm.Nuv, parm.lim, parm.pa(1));
+		end;
+
 	
-		% Generate convolutional kernel
-		kernrng = [-parm.lim:parm.duv:parm.lim];
 	
 		% Initialize matrix for holding gridded visibilities and the intermediate
 		% weights.
 		gridvis = zeros (1, length (uc));
 		gridviscnt = gridvis; 
 		weight = zeros (size (acc));
+
+		% Generate gcf (for illustration purposes only)
+		kern = exp (-((uk.^2 / (2*parm.pa(1)^2)) + (vk.^2 / (2*parm.pa(2)^2))));
 	
 		% Convolve visibilities with GCF 
 		% For each grid point:
@@ -59,11 +89,38 @@ function [gridvis] = genvisgrid (acc, u, v, parm, deb)
 			% Generate statistics
 			% How many vis. contributed to this grid point?
 			gridviscnt (grvis) = length (vislist); 
+			if (mod (grvis, 1000) == 999) fprintf (1, '.'); end;
 		end;
 
+		% Pad gridded visibilities for higher resolution
+	    % zero padding to desired (u,v)-size
+	    N = parm.Nuv;
+	    N1 = floor(parm.uvpad/2) - floor (N/ 2);
+	    % N2 = ceil((parm.uvpad + 1 - N) / 2) - 1; % Removed, works for odd Nuv. pep/23Apr14
+	    % N2 = ceil((parm.uvpad + 1 - N) / 2);
+		N2 = parm.uvpad - (N1 + parm.Nuv);
+	    
+	    % Surround gridded visibilities with 0-padding to create padded visibility 
+	    % matrix.
+	    gridvis = [zeros(N1, parm.uvpad); ...
+	               zeros(N, N1), reshape(gridvis, [parm.Nuv parm.Nuv]) zeros(N, N2); ...
+	               zeros(N2, parm.uvpad)];
+	    gridvis(~isfinite(gridvis)) = 0;
+		% Vectorize again
+		gridvis = gridvis (:);
+
 	case 'pillbox'
+		fprintf (1, 'Pillbox GCF requested.\n');
+		if (deb > 0)
+			fprintf (1, 'parm.duv=%.2f, parm.Nuv=%d, parm.uvpad=%d, parm.lim=%.2f, parm.pa(1)=%.2f\n',...
+					 parm.duv, parm.Nuv, parm.uvpad, parm.lim, parm.pa(1));
+		end;
+
+		% Generate gcf (for illustration purposes only)
+		kern = ones (size (uk));
+
 	    % create object for interpolation
-	    gridvis = zeros(parm.uvpad);
+	    gridvis = zeros(parm.Nuv);
 		gridviscnt = gridvis;
 		missed_vis = 0;   % cumulative count of ignored visibilities due to 
 						  % gridded value exeeding grid size.
@@ -143,9 +200,11 @@ function [gridvis] = genvisgrid (acc, u, v, parm, deb)
 		end;
 	
 	    % zero padding to desired (u,v)-size
-	    N = size(gridvis, 1);
-	    N1 = floor((parm.uvpad - N) / 2);
-	    N2 = ceil((parm.uvpad + 1 - N) / 2) - 1;
+	    N = parm.Nuv; % size (gridvis, 1);
+	    N1 = floor(parm.uvpad/2) - floor (N/ 2);
+		N2 = parm.uvpad - (N1 + parm.Nuv);
+	    % N1 = floor((parm.uvpad - N) / 2);
+	    % N2 = ceil((parm.uvpad + 1 - N) / 2) - 1;
 	    
 	    % Surround gridded visibilities with 0-padding to create padded visibility 
 	    % matrix.
@@ -155,9 +214,10 @@ function [gridvis] = genvisgrid (acc, u, v, parm, deb)
 	    gridvis(~isfinite(gridvis)) = 0;
 
 		% Generate a gridded uv coordinate for display purposes
-		gridrng = [-floor(parm.uvpad/2)*parm.duv:parm.duv:(floor(parm.uvpad/2)-1)*parm.duv];
-		[uc, vc] = meshgrid (gridrng);
-		uc = uc (:); vc = vc (:); % Vectorize the grid.
+		% gridrng = [-floor(parm.uvpad/2)*parm.duv:parm.duv:(floor(parm.uvpad/2)-1)*parm.duv];
+		% [uc, vc] = meshgrid (gridrng);
+		% uc = uc (:); vc = vc (:); % Vectorize the grid.
+		gridvis = gridvis (:);  % Vectorize padded and gridded visibilities
 
 	case 'exponential'
 		error ('genvisgrid: GCF Exponential not yet implemented!');
@@ -179,8 +239,79 @@ function [gridvis] = genvisgrid (acc, u, v, parm, deb)
 	% plot statistics
 	if (deb > 0)
 		figure; 
-		subplot (121);
-		plot3 (uc, vc, abs(gridvis(:)), '.');
+		subplot (221);
+		plot3 (u, v, abs(acc), '.');
+		colorbar;
+		view (0, 90);
+		xlim ([gridrng(1) gridrng(end)]); % Assumed symmetrical grid.
+		ylim ([gridrng(1) gridrng(end)]);
+		xlabel ('u(\lambda)'); ylabel ('v(\lambda)'); title ('Ungridded visibilities');
+
+		subplot (222);
+		imagesc (padgridrng, padgridrng, reshape (abs(gridvis), [parm.uvpad parm.uvpad])); % Assumed symmetrical grid.
+		colorbar;
+		xlabel ('u(\lambda)'); ylabel ('v(\lambda)'); title ('Gridded visibilities');
+
+		
+%		plot3 (uc, vc, abs(gridvis(:)), '.');
+%		xlabel ('u (m)'); ylabel ('v(m)'); zlabel ('Gridded vis. value');
+%		subplot (122);
+%		plot3 (uc, vc, gridviscnt(:), '.');
+%		xlabel ('u (m)'); ylabel ('v(m)'); zlabel ('No. of contributing vis. per grid point');
+	
+		% Plot the GCF and its FFT
+		% Generate the GCF
+		subplot (223);
+		gcf = zeros (length (padgridrng));
+		ind = int32 (parm.uvpad/2 - length (kernrng)/2);
+		gcf (ind:ind+length(kernrng)-1, ind:ind+length(kernrng)-1) = kern;
+		imagesc (gridrng, gridrng, gcf); colorbar;
+		xlabel ('u(\lambda)'); ylabel ('v(\lambda)'); 
+		title ('GCF, visibility domain');
+    	gcf = conj(flipud(fliplr(fftshift(gcf))));
+		
+		subplot (224);
+		dl = 1/(parm.uvpad*parm.duv);
+		lmax = dl * parm.uvpad/2;
+		lrng = linspace (-lmax, lmax, parm.uvpad);
+    	GCF = fftshift(fft2(gcf));
+		GCF = GCF ./ (max(max(abs(GCF)))); % Is this normalization valid??
+
+		% Restrict image to lie between -1 and 1 l,m coordinates.
+		d = intersect (find (lrng > -0.2), find (lrng < 0.2)); 
+		% imagesc (lrng(d), lrng(d), abs(GCF(d, d))); colorbar;
+		plot (lrng (d), abs(GCF (int32(length (GCF)/2), d)));
+		
+		xlabel ('l'); ylabel ('m'); title ('GCF, Image domain');
+		
+		figure;
+    	gridvis = conj(flipud(fliplr(fftshift(reshape (gridvis, [parm.uvpad parm.uvpad])))));
+    	psf = fftshift(fft2(gridvis));
+		% psf = fftshift(fft2(reshape(gridvis, [parm.uvpad parm.uvpad])));
+		psf = psf ./ max(max(abs(psf)));
+
+		% Carry out grid correction on the generated PSF.
+		psf = psf./GCF;
+
+		subplot (221);
+		plot (lrng(d), 20*log10(abs(psf (length(psf)/2, d))));
+		xlabel ('l'); ylabel ('Power (dB)');
+		ylim ([-75 0])
+		% xlim ([lrng(1) lrng(end)]);
+		grid on;
+		subplot (223);
+		plot (lrng(d), 20*log10(abs(psf (d,length(psf)/2))));
+		xlabel ('m'); ylabel ('Power (dB)');
+		ylim ([-75 0])
+
+		% xlim ([lrng(1) lrng(end)]);
+		grid on;
 		subplot (122);
-		plot3 (uc, vc, gridviscnt(:), '.');
+		imagesc (lrng(d), lrng(d), 20*log10(abs(psf(d,d))));
+		xlabel ('l'); ylabel ('m'); title ('FFT image');
+		colorbar;
+		caxis ([-75 0]);
 	end;
+
+	% Reshape gridded visibility to maintain compatibility with fft_imager*
+	gridvis = reshape (gridvis, [parm.uvpad parm.uvpad]);

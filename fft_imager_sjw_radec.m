@@ -40,7 +40,7 @@ function [radecskymap, lmskymap, vispad, l, m] =  ...
 %	gparm.uvpad = uvsize;
 %	gparm.lim = 0;
 %	gparm.pa = [0 0 0 0];
-	vispad = genvisgrid (acc, u, v, gparm, 0);
+	vispad = genvisgrid (acc, u, v, gparm, freq, 1);
     
     % compute image
     % ac = zeros(size(vispad));
@@ -54,7 +54,9 @@ function [radecskymap, lmskymap, vispad, l, m] =  ...
     % Create l,m axis corresponding to choices of duv
     % NOTE: Resolution of image is determined by total array aperture extent, 
     % resolution = lambda/D. 
-    dl = (299792458/(freq * gparm.uvpad * gparm.duv)); % dimensionless, in dir. cos. units
+    % dl = (299792458/(freq * gparm.uvpad * gparm.duv)); % dimensionless, in dir. cos. units
+    dl = (1/(gparm.uvpad * gparm.duv)); % dimensionless, in dir. cos. units
+	% Changed due to gparm.duv now being specified in wavelengths, not meters.
     
     % NOTE: Total imaged Field of View is determined by the visibility 
 	% grid-spacing, duv.

@@ -3,10 +3,15 @@
 % pep/08Apr14
 
 function func_testvisgrid ()
+
+	% If a real image needs to be created.
 	% Open a calibrated vis. set
 	fid = fopen ('~/WORK/AARTFAAC/Reobs/20Nov13/r01/SB002_LBA_OUTER_8b2sbr01_1ch_1_convcal.bin', 'r');
    [acc, tacc, freq] = readms2float (fid, 1, -1, 288);
 	flagant = [129, 140, 149];
+
+	sampfn = ones (288); flagant = [];
+	freq = 60000000; % LBA Resonance
 
 	% Create the u,v coordinates for the visibilities
 	load ('../poslocal_outer.mat', 'poslocal');
@@ -15,12 +20,22 @@ function func_testvisgrid ()
 	[uloc_flag, vloc_flag] = gen_flagged_uvloc (uloc, vloc, flagant); 
 
 	% Generate the parameter structure for visgrid
-	parm.type = 'Gaussian';
-	parm.duv = 2.5;
-	parm.Nuv = 240;
-	parm.lim = 15; 
-	parm.pa(1) = 5; parm.pa(2) = 5; % in meters
+	parm.type = 'pillbox';
+	% parm.type = 'Gaussian';
+	parm.duv   = 0.5; % In wavelengths
+	parm.Nuv   = 1001; % Size of gridded visibilities, no. of rows/cols.
+	parm.uvpad = 1024;
+	parm.lim   = 1.5; % In wavelength
+	parm.pa(1) = 0.5; % 2D Gaussian x/ysigma, in wavelengths
+	parm.pa(2) = 0.5; 
+	parm.fft   =   0; % Carry out FFT imaging.   
 
 
-	% Generate gridded visibilities
-	gridvis = genvisgrid (acc(:), uloc(:), vloc(:), parm, 1);
+	% Generate gridded visibilities with different 
+	gridvis = genvisgrid (sampfn(:), uloc_flag(:), vloc_flag(:), parm, freq, 1);
+
+	% Generate an image with GCF.
+	% [rdsky, map, vispad, l, m] = fft_imager_sjw_radec (acc, uloc_flag, ...
+% 						vloc_flag, parm, [], [], 0, freq, 0);
+	
+% 	imagesc (l, m, abs(map));
