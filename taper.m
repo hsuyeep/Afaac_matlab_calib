@@ -7,8 +7,8 @@
 %   posITRF: Matrix of antenna positions in the array.
 %   parm   : Structure containing parameters of the type of taper to apply.
 %           type : ['Gaussian', 'Blackman']
-%		  	pa(1/2): sigx/sigy of inner taper. 
-%		  	pa(3/4): sigx/sigy of outer taper. 
+%		  	pa(1/2): sigx/sigy of inner taper, units of wavelength. 
+%		  	pa(3/4): sigx/sigy of outer taper, units of wavelength.
 %		  	minlambda: lower limit of visibility cut off(lambda).
 %         	maxmeters: higher limit of visiblity cut off(m).
 %	densitybins: turn on weighting by the density of visibilities.

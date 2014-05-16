@@ -30,7 +30,7 @@ function [l, m, psf, weight, intap, outtap] = ...
 		gparm.Nuv = 241;
 		gparm.lim = 1.5; % In wavelength
 		gparm.uvpad = 256; 
-		gparm.fft = 1;
+		gparm.fft = 0;
 		gparm.pa(1) = 0.5; gparm.pa(2) = gparm.pa(1);
 	end;
 
@@ -99,13 +99,16 @@ function [l, m, psf, weight, intap, outtap] = ...
 	acc = ones (length (weight), 1) .* 1./weight .* intap .* outtap;
 
 	if (gparm.fft == 1)
+		fprintf (1, '-- Generating FFT image, gridding with supplied params.\n');
 		[rdsky, psf, vispad, l, m] = fft_imager_sjw_radec (acc, uloc_flag, ...
 						vloc_flag, gparm, [], [], 0, freq, 0);
 	else
+		fprintf (1, '-- Generating DFT image.\n');
 		l = linspace (-1, 1, gparm.uvpad); m = l;
 		% l = [-1:0.01:1]; m = l;
 		nelem = sqrt (length(acc));
 		psf = acm2skyimage (reshape (acc, [nelem nelem]), poslocal(:,1), poslocal(:,2), freq, l, m);
+		vispad = fftshift (fft2(psf));
 	end;
 
 	% Generate weighting noise for this configuration
@@ -142,7 +145,7 @@ function [l, m, psf, weight, intap, outtap] = ...
 		% title (sprintf ('m-scan at l=0, taper=%s, weight=%s', taper, weight));
 		xlabel ('m'); ylabel ('Power (dB)');
 		% print (gcf, 'psf.eps', '-depsc', '-r300'); 
-		mtit (sprintf ('out: %.2f, in: %.2f, wnoise: %.4g', tparm.pa(1), tparm.pa(3), weighting_noise), 'yoff', 0.025);
+		mtit (sprintf ('out: %.2f, in: %.2f, wnoise: %.4g', tparm.pa(3), tparm.pa(1), weighting_noise), 'yoff', 0.025);
 
 		figure;
 		subplot (211);
@@ -156,11 +159,13 @@ function [l, m, psf, weight, intap, outtap] = ...
 		ugrid = meshgrid (padgridrng);
 		paduvcoor = [ugrid(:) ugrid(:)];
 		griduvdist = sqrt (sum(paduvcoor.^2, 2));
-		[n,x]=hist (griduvdist.*vispad(:), 50);
-		% bar (x(2:end), n(2:end));
-		plot(griduvdist, vispad(:), '.');
-		xlabel ('uvdist (\lambda)');
-		ylabel ('visibility weights');
+		if (gparm.fft == 1)
+			[n,x]=hist (griduvdist.*vispad(:), 50);
+			% bar (x(2:end), n(2:end));
+			plot(griduvdist, vispad(:), '.');
+			xlabel ('uvdist (\lambda)');
+			ylabel ('visibility weights');
+		end;
 		
 		% print (gcf, 'weights.eps', '-depsc', '-r300'); 
 		% title (sprintf ('Weight: %s, cellrad: %d', wparm.type, wparm.cellrad));

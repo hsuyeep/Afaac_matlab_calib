@@ -43,11 +43,15 @@ function showbinimages (fname, colrng, figarea, offset, skip, nrecs, strail, mov
 				  4*img.pix2maxis + ... % m axis values (floats)
 				  4*img.pix2maxis*img.pix2laxis; % Image pixel values (floats)
 
-		if (fseek (fid, (offset-1)*recsize, 'bof') < 0)
-			err = MException('showbinimages:fseek OutOfRange', ...
-        			'recoffset is outside expected range');	
-			error ('readms2float: seek error!');
-			throw (err);
+% THIS DID NOT WORK AND LED TO MOVING TO WRONG OFFSETS WITHIN THE FILE. pep/13May14
+%		if (fseek (fid, (offset-1)*recsize, 'bof') < 0)
+%			err = MException('showbinimages:fseek OutOfRange', ...
+%        			'recoffset is outside expected range');	
+%			error ('readms2float: seek error!');
+%			throw (err);
+%		end;
+		for ind = 1:offset
+			img = readimg2bin (fid, 0);
 		end;
 	end;
 	map = reshape (img.map, img.pix2laxis, img.pix2maxis);
@@ -74,7 +78,7 @@ function showbinimages (fname, colrng, figarea, offset, skip, nrecs, strail, mov
 	winsize = get (fig1, 'Position');
 	winsize (1:2) = [0 0];
 
-	for im = 1:nrecs
+	for im = offset:offset+nrecs
 		img = readimg2bin (fid, skip);
 		if (strail == 1)
 			map = (map + reshape (img.map, img.pix2laxis, img.pix2maxis))/2;
