@@ -4,6 +4,7 @@
 % Arguments:
 %	fid: File id of the binary file to which calibrated visibilities should be
 %		 written.
+%  skip: Number of records to skip from the current file offset.
 
 % Returns:
 %	img.tobs: The MJD sec. time corresponding to this map.
@@ -23,9 +24,8 @@ function [img] = readimg2bin (fid, skip)
 		return;
 	end;
 
-
-	% Ideally, just an fseek should work, but recsize should be determined 
-	% everytime. Doing the lazy thing for now...
+	% Going back to the dumb way of reading all records. The fseek method 
+	% turns out to fail at certain offsets for unknown reasons.
 	for ind = 0:skip  % Because skip == 0 should result in one record being read.
 		img.tobs = fread (fid, 1, 'double');	
 		if (isempty(img.tobs) == 1) 
@@ -41,3 +41,45 @@ function [img] = readimg2bin (fid, skip)
 		map = single (fread (fid, img.pix2laxis * img.pix2maxis, 'float32'));
 		img.map = reshape (map, img.pix2laxis, img.pix2maxis); 
 	end;
+
+	% Ideally, just an fseek should work, but recsize should be determined 
+	% everytime. Doing the lazy thing for now...
+%		img.tobs = fread (fid, 1, 'double');	
+%		if (isempty(img.tobs) == 1) 
+%			disp('readimg2bin: End of file reached!'); 
+%			return;
+%		end;
+%
+%		img.freq      = fread (fid, 1, 'double');	
+%		img.pix2laxis = single (fread (fid, 1, 'float32'));
+%		img.l = single (fread (fid, img.pix2laxis, 'float32'));
+%		img.pix2maxis = single (fread (fid, 1, 'float32'));
+%		img.m = single (fread (fid, img.pix2maxis, 'float32'));
+%		map = single (fread (fid, img.pix2laxis * img.pix2maxis, 'float32'));
+%		img.map = reshape (map, img.pix2laxis, img.pix2maxis); 
+%
+%		if (skip > 1) % Skip of 1 has already occured due to the previous read.
+%			recsize = 8+ ... % tobs
+%					  8+ ... % freq
+%					  4+ ... % pix2laxis
+%					  4*img.pix2laxis + ... % laxis
+%					  4+...  % pix2maxis
+%					  4*img.pix2maxis + ... % maxis
+%				      4*img.pix2laxis*img.pix2maxis; % img contents.
+%			fprintf (1, 'recsize: %d, skip: %d\n', recsize, skip);
+%			st = fseek (fid, (skip-1)*recsize, 'cof');
+%			clear img;
+%			img.tobs = fread (fid, 1, 'double');	
+%			if (isempty(img.tobs) == 1) 
+%				disp('readimg2bin: End of file reached!'); 
+%				return;
+%			end;
+%			img.freq      = fread (fid, 1, 'double');	
+%			img.pix2laxis = single (fread (fid, 1, 'float32'));
+%			img.l = single (fread (fid, img.pix2laxis, 'float32'));
+%			img.pix2maxis = single (fread (fid, 1, 'float32'));
+%			img.m = single (fread (fid, img.pix2maxis, 'float32'));
+%			map = single (fread (fid, img.pix2laxis * img.pix2maxis, 'float32'));
+%			img.map = reshape (map, img.pix2laxis, img.pix2maxis); 
+%		end;
+	% end;
