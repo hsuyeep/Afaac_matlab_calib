@@ -127,14 +127,164 @@ for cellrad = 0.5:1:3.5
 	print (hand(1), strcat (fname,'_weights.png'), '-dpng');
 end
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Optimized PSF %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% LBA_OUTER
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Optimized PSF %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% PSF generated with optimized parameters based on above.
 %% INNER and OUTER Taper, with parameters determined over the previous scan.
-%	tparm.pa(1) = 60;  
-%	tparm.pa(2) = 60; 
-%	tparm.pa(3) = 7;%NO outer taper yet!
-%	tparm.pa(4) = 17;
-%	tparm.minlambda = 10;
-%	tparm.maxmeters = 350;
-%	wparm = []; gparm = [];
-%	[l,m,psf,weight, intap, outtap] = genarraypsf ('poslocal.mat', flagant, freq,...
-%		tparm, wparm, gparm, deb);
+tparm.type = 'Gaussian';
+tparm.minlambda = 10;
+tparm.maxmeters = 350;
+tparm.pa(1) = 17;  
+tparm.pa(2) = 17; 
+tparm.pa(3) = 60
+tparm.pa(4) = 60;
+
+wparm.type = 'uniform';
+wparm.cellrad = 10;
+
+gparm.type = 'Gaussian';
+gparm.duv = 0.5;
+gparm.Nuv = 500;
+gparm.lim= 1.5;
+gparm.uvpad= 512;
+gparm.fft= 1;
+gparm.pa= [0.5 0.5]
+[l,m,psf,weight, intap, outtap, uvdist] = genarraypsf ('poslocal.mat', flagant, freq,...
+	tparm, wparm, gparm, deb);
+
+% Generate sample images from real data
+fname = '/Users/peeyush/WORK/AARTFAAC/Reobs/11Jul12/LBA_OUTER_BAND_SPREAD/full_conv/SB004_LBA_OUTER_SPREAD_1ch_1_convcal.bin';
+flagant = [51, 238, 239, 273];
+fid = fopen (fname, 'rb');
+[acc, tobs, freqobs] = readms2float (fid, 1, -1, 288);
+fclose (fid);
+
+% DFT image
+load ('poslocal_outer.mat', 'poslocal');
+l = linspace (-1, 1, 512); m = l;
+antsel = ones (1, length (poslocal(:,1)));
+antsel (flagant) = 0;
+visflag = ones (size (acc));
+for ind = 1:length (flagant)
+	visflag (:, flagant(ind)) = 0;
+	visflag (flagant(ind), :) = 0;
+end;
+rem_ants = length(acc)-length(flagant);
+acc_flag = reshape (acc(visflag == 1), [rem_ants rem_ants]);
+skymap = acm2skyimage(acc_flag, poslocal(antsel==1, 1), poslocal(antsel==1, 2), freqobs, l, m);
+figure;
+imagesc (abs(skymap)); colorbar; caxis ([0 1200]);
+title ('DFT image with natural taper, no weighting');
+
+% acc_opt = acc(:) .* intap .* outtap .* 1./weight;
+acc_opt = acc(:) .* (1./weight);
+acc_opt = reshape (acc_opt (visflag==1), [rem_ants rem_ants]);
+skymap_opt = acm2skyimage(acc_opt, poslocal(antsel==1, 1), poslocal(antsel==1, 2), freqobs, l, m);
+figure;
+imagesc (abs(skymap_opt)); colorbar; caxis ([0 1200]);
+title ('DFT image with inner/outer taper, uniform weighting');
+
+% FFT image with default pillbox
+uloc = meshgrid (poslocal(:,1)) - meshgrid (poslocal (:,1)).';
+vloc = meshgrid (poslocal(:,2)) - meshgrid (poslocal (:,2)).';
+[uloc_flag, vloc_flag] = gen_flagged_uvloc (uloc, vloc, flagant);
+gparm.type = 'pillbox';
+gparm.duv = 0.5; % NOTE: This is now in wavelength units.
+gparm.Nuv = 500;
+gparm.lim= 1.5; % 'Dont care' for pillbox
+gparm.uvpad= 512;
+gparm.fft= 1;
+gparm.pa= [0.5 0.5] % 'Dont care' for pillbox
+[radecmap, img.map, calvis, img.l, img.m] = ... 
+	fft_imager_sjw_radec (acc_flag(:), uloc_flag(:), vloc_flag(:), ... 
+					gparm, [], [], tobs, freqobs, 0);
+
+% FFT image with optimized PSF params
+acc_opt = acc(:) .* intap .* outtap .* 1./weight;
+acc_opt = acc_opt (visflag==1);
+[radecmap, opt.map, calvis, opt.l, opt.m] = ... 
+	fft_imager_sjw_radec (acc_opt(:), uloc_flag(:), vloc_flag(:), ... 
+					gparm, [], [], tobs, freqobs, 0);
+
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Optimized PSF %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% LBA_INNER
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% Optimized PSF %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% PSF generated with optimized parameters based on above.
+%% INNER and OUTER Taper, with parameters determined over the previous scan.
+tparm.type = 'Gaussian';
+tparm.minlambda = 10;
+tparm.maxmeters = 350;
+tparm.pa(1) = 17;  
+tparm.pa(2) = 17; 
+tparm.pa(3) = 60
+tparm.pa(4) = 60;
+
+wparm.type = 'uniform';
+wparm.cellrad = 10;
+
+gparm.type = 'Gaussian';
+gparm.duv = 0.5;
+gparm.Nuv = 500;
+gparm.lim= 1.5;
+gparm.uvpad= 512;
+gparm.fft= 1;
+gparm.pa= [0.5 0.5]
+[l,m,psf,weight, intap, outtap] = genarraypsf ('poslocal.mat', flagant, freq,...
+	tparm, wparm, gparm, deb);
+
+% Generate sample images from real data
+fname_in = '/Users/peeyush/WORK/AARTFAAC/Reobs/11Jul12/LBA_INNER_BAND60/SB002_LBA_INNER_BAND60_1ch.bin'
+flagant = [51, 238, 239, 273];
+fid = fopen (fname, 'rb');
+[acc, tobs, freqobs] = readms2float (fid, 1, -1, 288);
+fclose (fid);
+
+% DFT image
+load ('poslocal_outer.mat', 'poslocal');
+l = linspace (-1, 1, 512); m = l;
+antsel = ones (1, length (poslocal(:,1)));
+antsel (flagant) = 0;
+visflag = ones (size (acc));
+for ind = 1:length (flagant)
+	visflag (:, flagant(ind)) = 0;
+	visflag (flagant(ind), :) = 0;
+end;
+rem_ants = length(acc)-length(flagant);
+acc_flag = reshape (acc(visflag == 1), [rem_ants rem_ants]);
+skymap = acm2skyimage(acc_flag, poslocal(antsel==1, 1), poslocal(antsel==1, 2), freqobs, l, m);
+figure;
+imagesc (abs(skymap)); colorbar; caxis ([0 1200]);
+title ('DFT image with natural taper, no weighting');
+
+% acc_opt = acc(:) .* intap .* outtap .* 1./weight;
+acc_opt = acc(:) .* (1./weight);
+acc_opt = reshape (acc_opt (visflag==1), [rem_ants rem_ants]);
+skymap_opt = acm2skyimage(acc_opt, poslocal(antsel==1, 1), poslocal(antsel==1, 2), freqobs, l, m);
+figure;
+imagesc (abs(skymap_opt)); colorbar; caxis ([0 1200]);
+title ('DFT image with inner/outer taper, uniform weighting');
+
+% FFT image with default pillbox
+uloc = meshgrid (poslocal(:,1)) - meshgrid (poslocal (:,1)).';
+vloc = meshgrid (poslocal(:,2)) - meshgrid (poslocal (:,2)).';
+[uloc_flag, vloc_flag] = gen_flagged_uvloc (uloc, vloc, flagant);
+gparm.type = 'pillbox';
+gparm.duv = 0.5; % NOTE: This is now in wavelength units.
+gparm.Nuv = 500;
+gparm.lim= 1.5; % 'Dont care' for pillbox
+gparm.uvpad= 512;
+gparm.fft= 1;
+gparm.pa= [0.5 0.5] % 'Dont care' for pillbox
+[radecmap, img.map, calvis, img.l, img.m] = ... 
+	fft_imager_sjw_radec (acc_flag(:), uloc_flag(:), vloc_flag(:), ... 
+					gparm, [], [], tobs, freqobs, 0);
+
+% FFT image with optimized PSF params
+acc_opt = acc(:) .* intap .* outtap .* 1./weight;
+acc_opt = acc_opt (visflag==1);
+[radecmap, opt.map, calvis, opt.l, opt.m] = ... 
+	fft_imager_sjw_radec (acc_opt(:), uloc_flag(:), vloc_flag(:), ... 
+					gparm, [], [], tobs, freqobs, 0);

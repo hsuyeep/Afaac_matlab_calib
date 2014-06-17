@@ -40,7 +40,7 @@ function [radecskymap, lmskymap, vispad, l, m] =  ...
 %	gparm.uvpad = uvsize;
 %	gparm.lim = 0;
 %	gparm.pa = [0 0 0 0];
-	vispad = genvisgrid (acc, u, v, gparm, freq, 1);
+	vispad = genvisgrid (acc, u, v, gparm, freq, 0);
     
     % compute image
     % ac = zeros(size(vispad));

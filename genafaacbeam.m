@@ -18,14 +18,18 @@
 %         array configuration.
 % pep/04Mar14
 function [beam] = genafaacbeam (l, m, freq, array)
-	persistent simload = 0;
+	persistent simload;
 
 	% Generate the field pattern at values available in the simulation.
-	if (simload == 0)
+	if (isempty(simload))
 		load ('LBA_beam/arts_sim/LBA_core.mat'); % Load the simulation products
 
 		% Generate list of dipoles in specified array config.
-		% if (~strcmp (array, '
+		switch array
+			case 'lba_inner'
+			case 'lba_outer'
+				
+		end;
 	
 		Glna = 1; % Define Voltage gains of the LNAs
 		Zlna = eye (1152); % Define impedances of the LNAs.
@@ -41,7 +45,8 @@ function [beam] = genafaacbeam (l, m, freq, array)
 					 Vout (:, 2, NT, NP, NF) .* conj (Vout(:,2,NT,NP,NF)));
 				end
 			end
-			E_avg11 = squeeze (mean (E11, 1)); % Should be averaged over only chosen set of antennas.
+			% Should be averaged over only chosen set of antennas.
+			E_avg11 = squeeze (mean (E11, 1)); 
 		end
 		simload = 1;
 	end;

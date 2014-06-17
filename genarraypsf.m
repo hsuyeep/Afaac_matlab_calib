@@ -18,9 +18,11 @@
 % l,m    : local coordinates for this PSF as a matrix.
 %	psf  : Actual PSF as an image matrix
 %  weight: The weighing matrix used.
-%  taper : The applied taper for this psf.
+%  intap : The applied inner taper for this psf.
+%  outtap: The applied outer taper for this psf.
+% uvdist : The uvdistance of each visibility from the UV plane center.
 
-function [l, m, psf, weight, intap, outtap] = ...
+function [l, m, psf, weight, intap, outtap,uvdist] = ...
 	genarraypsf (posfilename, flagant, freq,  tparm, wparm, gparm, deb)
 	% Default values are for 60MHz, and image just the full Fov (-1<l<1). 
 	if (isempty (gparm) == 1)

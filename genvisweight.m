@@ -8,6 +8,8 @@
 %			wparm.cellrad: The radius in meters in the uv space over which to 
 %						   count for generating visibility weights.
 %  plt : Bool to control generation of intermediate plots.
+% Returns:
+%  weight  : The weight associated with each visibility.
 function [weight] = genvisweight (posITRF, wparm, plt)
 	
 	% Convert antenna positions into visibility values
