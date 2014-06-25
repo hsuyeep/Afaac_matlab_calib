@@ -41,8 +41,8 @@ function [beam] = genafaacbeam (l, m, freq, array)
 				for NP=1:length(Phi)
 	           		Vout(:,:,NT,NP,NF)=B*g_z(:,:,NT,NP,NF);
 					E11 (:,NT,NP,NF) = 0.5 * ...
-					(Vout (:, 1, NT, NP, NF) .* conj (Vout(:,1,NT,NP,NF))+...
-					 Vout (:, 2, NT, NP, NF) .* conj (Vout(:,2,NT,NP,NF)));
+					(Vout (:, 1, NT, NP, NF) .* conj (Vout(:,1,NT,NP,NF))); % +...
+					%  Vout (:, 2, NT, NP, NF) .* conj (Vout(:,2,NT,NP,NF)));
 				end
 			end
 			% Should be averaged over only chosen set of antennas.
