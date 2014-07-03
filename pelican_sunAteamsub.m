@@ -10,7 +10,7 @@
 % function [thsrc_cat, phisrc_cat, thsrc_wsf, phisrc_wsf, suncomps, calvis, ...
 %           gainsol, sigmas, sigman, good] = pelican_sunAteamsub (acc, t_obs, ...
 %           freq, uvflag, flagant, debug, ptSun)
-function [currsol] = pelican_sunAteamsub (acc, t_obs, ...
+function [currsol] = pelican_sunAteamsub (acc, station, t_obs, ...
           freq, uvflag, flagant, debug, ptSun, max_calext_iter, ...
 		  max_gainsolv_iter, posfilename)
 
@@ -63,15 +63,24 @@ function [currsol] = pelican_sunAteamsub (acc, t_obs, ...
     	rodata.C       = 299792458;         % speed of light, m/s
         rodata.lon     = 6.869837540;       % longitude of CS002 in degrees
         rodata.lat     = 52.915122495;      % latitude of CS002 in degrees
-        rodata.Nelem   = 288;               % Max. number of elements
+		if (station == -1)					% Use all 6 ST stations
+        	rodata.Nelem   = 288;               % Max. number of elements
+		else
+        	rodata.Nelem   = 48;               % Max. number of elements
+		end;
     	% 3 x 1 normal vector to the station field
         rodata.normal  = [0.598753, 0.072099, 0.797682].'; % Normal to CS002
 
         disp ('Loading 3CR catalog and local antenna positions.');
         % load ('poslocal.mat', 'posITRF', 'poslocal'); 
 		load (posfilename, 'posITRF', 'poslocal');
-    	rodata.posITRF = posITRF;
-    	rodata.poslocal = poslocal;
+		if (station == -1)
+	    	rodata.posITRF = posITRF;
+   		 	rodata.poslocal = poslocal;
+		else
+	    	rodata.posITRF = posITRF((station-1)*48+1:(station*48), :);
+   		 	rodata.poslocal = posITRF((station-1)*48+1:(station*48), :);
+		end;
     	load srclist3CR;
     	rodata.catalog = srclist3CR;  		% Sky catalog to use.
 
@@ -94,6 +103,7 @@ function [currsol] = pelican_sunAteamsub (acc, t_obs, ...
 		calim.parm.pa(4) = calim.parm.pa(3); % Outer taper sigx/sigy
 		[calim.intap, calim.outtap, calim.den, calim.mask, uvdist] =  ...
 				taper (rodata.posITRF, calim.parm, -1, freq, 0);
+		calim.intap = reshape (calim.intap, [rodata.Nelem rodata.Nelem]);
 		calim.intap_fl = calim.intap; calim.outtap_fl = calim.outtap;
 		calim.den_fl   = calim.den; calim.mask_fl = calim.mask;
 	    calim.debug    = debug;      	  % Set debug level.
