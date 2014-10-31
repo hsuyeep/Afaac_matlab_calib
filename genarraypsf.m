@@ -100,6 +100,8 @@ function [l, m, psf, weight, intap, outtap,uvdist] = ...
 	weight (weight == 0) = 1;
 	acc = ones (length (weight), 1) .* 1./weight .* intap .* outtap;
 
+	% Rephase the ACM to the required pointing
+	% [re_acm, rot_uvw] = rephaselm (acc, lreq, mreq, tobs, freq, poslocal);
 	if (gparm.fft == 1)
 		fprintf (1, '-- Generating FFT image, gridding with supplied params.\n');
 		[rdsky, psf, vispad, l, m] = fft_imager_sjw_radec (acc, uloc_flag, ...
