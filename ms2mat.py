@@ -46,7 +46,7 @@ def main ():
 	nbline = nelem * (nelem+1)/2; 
 	nrec   = len (tab.getcol ('TIME')); # = ntimes*npol*nchan;
 	dt     = tab.getcol ('EXPOSURE')[0];
-	ntslot = int ((tab [nrec-1]['TIME'] - tab [0]['TIME'])/dt); 
+	ntslot = int (round ((tab [nrec-1]['TIME'] - tab [0]['TIME'])/dt)) + 1; 
 
 	if (nrec != (ntslot*nbline)):
 		print '### Total records not consistent with total timeslices and total baselines!';
