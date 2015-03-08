@@ -9,7 +9,7 @@ import numpy as n
 import matplotlib
 matplotlib.use('GTKAgg')
 import matplotlib.pyplot as p
-from mpl_toolkits.basemap import Basemap
+# from mpl_toolkits.basemap import Basemap
 
 import healpy as h
 

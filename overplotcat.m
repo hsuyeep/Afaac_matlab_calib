@@ -44,7 +44,8 @@ function [sel, sel_l, sel_m] = overplotcat (tobs, catalog, abovejy, hdl, epoch)
 	% Take care of l.m zenith projection by ignoring sources at the edges.
 	for i = 1:length (namedsrc)
 	  if namedsrc(i).flux > abovejy && abs(sel_m(i))<0.99 && abs(sel_l(i))<0.99
-	    text ('Color' , [1 1 1], 'Position', [sel_m(i) sel_l(i)], ... 
+	    % text ('Color' , [1 1 1], 'Position', [sel_m(i) sel_l(i)], ... 
+	    text ('Color' , [1 1 1], 'Position', [sel_l(i) sel_m(i)], ... 
 			  'String', namedsrc(i).name);
 	  end
 	end	

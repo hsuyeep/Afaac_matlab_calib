@@ -48,9 +48,14 @@ for i, filename in enumerate(args):
         else: skymap = a.map.Map(nside=opts.nside)
         skymap.set_interpol(opts.interpolate)
 
+        # import pdb; pdb.set_trace();
+
         #img=img[freqId,stokesId]
-        img=img0[fid,stokesId]
+        # img=img0[fid,stokesId] # Removed by Peeyush for image files without freq/stokes axis.
+        img = img0;
+        print 'Shape of img0: ' , n.shape (img0), ' img: ',  n.shape (img);
         img = img.squeeze()
+        print '2. Shape of img: ', n.shape (img);
         #transpose and flip image to correct direction
         #img=n.fliplr(n.flipud(img.T))
         img=n.fliplr(n.flipud(img))

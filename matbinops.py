@@ -32,26 +32,45 @@ class matBinImg:
 		self._pol   = 'XX'; # NOTE: Hardcoded for now!
 		self._ttype = 'mjdsec'; # Time is MJD, in seconds
 
+	""" Returns a masked matrix. Sets NaNs in image to 0, 
+		creates mask based on NaNs. Calculates ra/dec
+		of pointing center.
+		NOTE: Expects readimg2bin to be called earlier.
+	"""
 	def getImg (self):
+		mask = np.isnan (self._img);
+		self._img[mask] = 0;
 		self._img.shape = (self._nlpix, self._nmpix);
-		return self._tobs, self._fobs, self._laxis, self._maxis, self._img;
+		self._mask_img = np.ma.array (self._img, mask=mask);
+
+		# Generate RA of zenith position (based on tobs);
+		self._dec = 52.5; # Always fixed for a zenith pointing
+		self._ra = float (self.tobs2ra());
+		self._dra  =  (np.arcsin(self._laxis[len(self._laxis)/2 - 1])*2*180.0)/np.pi;
+		self._ddec = -(np.arcsin(self._maxis[len(self._maxis)/2 - 1])*2*180.0)/np.pi;
+		print '<-- getImg: zenith [ra/dra,dec/ddec] = [%4.3f/%.3f, %4.3f/%.3f]' % (self._ra, self._dra, self._dec, self._ddec);
+		self._filename = '%.0f.fits' % (self._tobs);
+		return self._tobs, self._fobs, self._laxis, self._maxis, self._mask_img;
 
 #	default_fits_format_codes = {
 #    np.bool_:'L', np.uint8:'B', np.int16:'I', np.int32:'J', np.int64:'K',
 #    np.float32:'E', np.float64:'D', np.complex64:'C', np.complex128:'M'
 #	}
 
-	""" Returns the RA of a zenith pointing, given the observation time """
+	""" Returns the RA of a zenith pointing in degrees, given the observation time
+		in various formats.
+	"""
 	def tobs2ra (self):
 		if self._ttype.lower() == 'mjdsec':
 			self._JD = self._tobs/86400. + 2400000.5; # MJDSec to JD
 		elif self._ttype.lower() == 'jd':
-            self._JD = self._tobs;
-		elif self._ttype.lower() = 'utcdatenum':
-            # Convert UTC time provided as datenum, to JD
-            self._JD = self._tobs - datenum(1998, 2, 13, 12,0,0) + 2450858;
+			self._JD = self._tobs;
+		elif self._ttype.lower() == 'utcdatenum':
+			# Convert UTC time provided as datenum, to JD
+			self._JD = self._tobs - datenum(1998, 2, 13, 12,0,0) + 2450858;
 		else:
 			print 'Unknown time type!';
+		print 'tobs type ', self._ttype;
 
 		# Obtain LST for this time
 		a1 = 24110.54841;
@@ -59,32 +78,37 @@ class matBinImg:
 		a3 = 0.093104;
 		a4 = -6.2e-6;
 		polcoeff = [a4, a3, a2, a1];
-		# Westerbork coordinates (From http://www.sonel.org/spip.php?page=gps&idStation=884)
-		wsrt_lat = 52.91460037;
-		wsrt_lon =  6.60449982;
+		# LOFAR CS002 coordinates 
+		lon = 6.869837540;                         # longitude of CS002 in degrees
+		lat = 52.915122495;
 		
 		# Time in Julian centuries
-		TU = (floor(JD) + 0.5 - 2451545) / 36525;
+		TU = (np.floor(self._JD) + 0.5 - 2451545) / 36525;
 		
 		# Greenwich Star Time in seconds
-		GST = (JD - floor(JD) - 0.5) * 86400 * 1.002737811906 + polyval(polcoeff, TU);
+		GST = (self._JD - np.floor(self._JD) - 0.5) * 86400 * 1.002737811906 + np.polyval(polcoeff, TU);
 		
-		# Local Siderderial Time in radians
+		# Local Siderial Time in degrees.
 		# 240: number of seconds per degree
-		LST =  ((GST + wsrt_lon*240) / 240) * pi / 180;
-		# Convert to one cycle of 2*pi, which is 24 hrs;
-		LST = LST - 2*pi*(floor (LST/(2*pi)));
-		ra = LST - ha;
+		LST =  ((GST + lon*240) / 240); #  * np.pi / 180;
+
+		# Convert to one cycle of 360deg, which is 24 hrs;
+		LST = LST - 360*(np.floor (LST/(360.)));
+
+		return  LST; # In deg.
+
+		# NOTE: LST == RA at HA = 0 (zenith)
+		# return LST*24/np.pi*2;  # Return value in hours between 0 and 24.
 
 
 
 	
-	def toFits(self, filename, clobber=False, axes=('ra--sin','dec--sin'),
+	def toFits(self, filename=None, clobber=False, axes=('ra--sin','dec--sin'),
 		object='Zenith, Transit', telescope='AARTFAAC', 
 		instrument='AARTFAAC', observer='', origin='AIPY',
 		obs_date=time.strftime('%D'), cur_date=time.strftime('%D'), 
-		ra=0, dec=0, d_ra=0, d_dec=0, epoch=2000.,
-		freq=0, d_freq=0, bscale=0, bzero=0,history=''):
+		# ra=0, dec=0, d_ra=0, d_dec=0, 
+		epoch=2000., freq=0, d_freq=0, bscale=0, bzero=0,history=''):
 		"""Write image self._img to a FITS file.  Follows convention of VLA image
 		headers.  "axes" describes dimensions of "self._img" provided.  (ra,dec) are
 		the degree coordinates of image center in the specified "epoch". 
@@ -99,13 +123,31 @@ class matBinImg:
 			print '### Pyfits not found, unable to proceed.';
 			return;
 		
-	
+		if filename is None:
+			filename = self._filename;
+		
 		self._img = self._img.squeeze()
 		self._img.shape = (1,) * (len(axes) - len(self._img.shape)) + self._img.shape
 		if len(self._img.shape) != len(axes):
 			raise TypeError('to_fits: axes dimension list does not match self._img shape')
 	
 		phdu = pyfits.PrimaryHDU(self._img)
+		phdu.update_header()
+		phdu.header['TRANSPOS'] = (0,'Import code for old AIPY convention.')
+		phdu.header['OBJECT'  ] = ( object, 'SOURCE NAME')
+		phdu.header['TELESCOP'] = ( telescope)
+		phdu.header['INSTRUME'] = ( instrument)
+		phdu.header['OBSERVER'] = ( observer)
+		phdu.header['DATE-OBS'] = ( obs_date, 'OBSERVATION START DATE DD/MM/YY')
+		phdu.header['BSCALE ' ] = ( bscale, 'REAL = FITS_VALUE * BSCALE + BZERO')
+		phdu.header['BZERO  ' ] = ( bzero)
+		phdu.header['BUNIT  ' ] = ( 'JY/BEAM ', 'UNITS OF FLUX')
+		phdu.header['EQUINOX' ] = ( epoch, 'EQUINOX OF RA DEC')
+		phdu.header['EPOCH'   ] = (epoch,'Epoch of coordinate system')
+		phdu.header['DATAMAX' ] = ( np.nanmax(self._img), 'MAX PIXEL VALUE')# NOTE: Ignore nans
+		phdu.header['DATAMIN' ] = ( np.nanmin(self._img), 'MIN PIXEL VALUE')# NOTE: Ignore nans
+
+		"""
 		phdu.update_header()
 		phdu.header.update('TRANSPOS',0,comment='Import code for old AIPY convention.')
 		phdu.header.update('OBJECT', object, comment='SOURCE NAME')
@@ -122,12 +164,13 @@ class matBinImg:
 		phdu.header.update('EPOCH',epoch,'Epoch of coordinate system')
 		phdu.header.update('DATAMAX', np.nanmax(self._img), comment='MAX PIXEL VALUE')# NOTE: Ignore nans
 		phdu.header.update('DATAMIN', np.nanmin(self._img), comment='MIN PIXEL VALUE')# NOTE: Ignore nans
+		"""
 		print '--> Header population complete.';
 	
 		for i,ax in enumerate(axes):
-			if ax.lower().startswith('ra') or ax.lower().startswith('glon'): val,delta = (ra, d_ra)
-			elif ax.lower().startswith('dec') or ax.lower().startswith('glat'): val,delta = (dec, d_dec)
-			elif ax.lower().startswith('freq'): val,delta = (freq, d_freq)
+			if ax.lower().startswith('ra') or ax.lower().startswith('glon'): val,delta = (self._ra, self._dra)
+			elif ax.lower().startswith('dec') or ax.lower().startswith('glat'): val,delta = (self._dec, self._ddec)
+			elif ax.lower().startswith('freq'): val,delta = (self._fobs, d_freq)
 			elif ax.lower().startswith('stokes'): val,delta = (1, 1)
 			else: val,delta = (0,0)
 			phdu.header.update('CTYPE%d' % (i+1), ax.upper())
@@ -184,16 +227,19 @@ if __name__ == '__main__':
 
 	binimg.readimg2bin (fid);
 	tobs, fobs, l, m, img = binimg.getImg();
-	print 'Time: %0.f, freq: %.0f' % (tobs, fobs);
-	zendec = 52.5; # Latitude of AARTFAAC, good for zenith pointing
-	zenra  = 23;  # Currently random, should come from time;
-	ddec = -0.286480091781;
-	dra  = ddec;
+#	zendec = 52.5; # Latitude of AARTFAAC, good for zenith pointing
+#	binimg._tobs = binimg._tobs - 3600; # Winter DST is 1 hr ahead of UTC.
+#	zenra  =  float (binimg.tobs2ra());
+	
+	print 'Time: %0.fsec, RA: %.3f deg, freq: %.0f' % (tobs, binimg._ra, fobs);
+#	dra  =  (np.arcsin(l[len(l)/2 - 1])*2*180.0)/np.pi;
+#	ddec = -(np.arcsin(m[len(m)/2 - 1])*2*180.0)/np.pi;
 
 	# Try to write this out as a fits file.
 	print 'Creating fits file...'
 	try:
-		binimg.toFits('testimage.fits', ra=zenra, dec=zendec, d_ra=dra, d_dec=ddec);
+		# binimg.toFits('testimage.fits', ra=zenra, dec=zendec, d_ra=dra, d_dec=ddec);
+		binimg.toFits(); # 'testimage.fits',  ra=zenra, dec=zendec, d_ra=dra, d_dec=ddec);
 	except:
 		print '### Unable to create fits file!';
 	print 'Done';
