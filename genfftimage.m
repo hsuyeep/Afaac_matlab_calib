@@ -33,10 +33,12 @@ function [img_l, img_m, img] =  ...
 	radec = 0;
 	% Gridding parameters
 	gparm.type = 'pillbox';
-    gparm.duv = 2.5;				% Default, reassigned from freq. of obs. to
+    gparm.lim  = 0;
+    gparm.duv = 0.5;				% Default, reassigned from freq. of obs. to
 									% image just the full Fov (-1<l<1)
-    gparm.Nuv = 1000;				% size of gridded visibility matrix
-    gparm.uvpad = 1024;				% specifies if any padding needs to be added
+    gparm.Nuv = 500;				% size of gridded visibility matrix
+    gparm.uvpad = 512;				% specifies if any padding needs to be added
+    gparm.fft  = 1;
 	nfacet = 3;
 	facetsize = 256;
 

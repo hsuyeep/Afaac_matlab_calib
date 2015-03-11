@@ -46,7 +46,7 @@ function [acc, tobs, freqobs] = readms2float (fid, recoffset, rettime, Nelem)
 		a  = fread (fid, 2*nblines, 'float'); % Read one ccm worth
 		disp (['Time at offset ', num2str(recoffset), ' recs: ', ...
 			  num2str(tobs)]);
-	elseif (recoffset == -1) % Return next record
+    else  % Return next record
 		tobs = fread (fid, 1, 'double');
 		if (isempty (tobs) == true)
  			disp ('readms2float: EoF reached!'); 

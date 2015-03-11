@@ -5,6 +5,7 @@
 %   colrng : caxis color range.
 %   figarea: The area of the image to display, between 0 or 1.
 %   offset : The record offset from which to start showing images.
+%	  skip : Skip some number of images.
 %	 nrecs : Number of images to show. -1 => show all images.
 %    movie : Flag to control creation of a .avi movie.
 %			 -1 => Write out frames as png.
@@ -90,7 +91,7 @@ function showbinimages (fname, colrng, figarea, offset, skip, nrecs, strail, mov
     	imagesc(img.l, img.m, real(map .* mask));
     
     	set(gca, 'FontSize', 16);
-    	title (sprintf ('Time: %.2f, Freq: %.2f', img.tobs, img.freq));
+    	title (sprintf ('Time: %s, %.2f, Freq: %.2f', datestr(mjdsec2datenum(img.tobs)), img.tobs, img.freq));
 	    axis equal
    		axis tight
    		set (gca, 'YDir', 'Normal'); % To match orientation with station images

@@ -13,16 +13,14 @@
 % appavg  : Bool controlling the application of averaged solutions to
 % 			uncalibrated visibilities and their writing out to file. If 0, only
 % 			averaging is carried out.
-
-% NOTE! NOTE: Currently, the list of antennas to be flagged is a parameter
-%			  within the script, and needs to be changed for different datasets!
-
+% usrflagant : Antennas to flag, additional to the ones in the calibration
+%           solution per timeslice.
 % Returns:
 %	 avg_re_gain/avg_im_gain: The mean gain, averaged over the averaging window.
 % pep/20Jan13
 
-function [avg_re_gain, avg_im_gain] = applyavgcal2bin (fname, calsolfname, ... 
-								avgover, offset, ntslices, peelon, appavg)
+function [gain_acc] = applyavgcal2bin (fname, calsolfname, ... 
+								avgover, offset, ntslices, peelon, appavg, usrflagant)
 
 
     % Necessary definitions
@@ -30,12 +28,11 @@ function [avg_re_gain, avg_im_gain] = applyavgcal2bin (fname, calsolfname, ...
     uvflag = eye (Nelem); % Flag only the autocorrelations
 	nblines = Nelem * (Nelem + 1)/2; 
 
-	% TODO: Should obtain the flagged antenna numbers from the calsol file.
     % flagant = [6, 103];  % For day-time observations over 3hr (2011 data)
 
 	% For LBA_INNER_BAND60 data
     % flagant = [1:12, 47, 48, 95,96, 143, 144, 191, 192, 239, 240, 287, 288 ];   
-    flagant = [1:12, 51, 193, 239,273 ]; % For LBA_OUTER_BAND60 data
+    % flagant = [1:12, 51, 193, 239,273 ]; % For LBA_OUTER_BAND60 data
     % flagant = [1:48, 51, 239]; % For LBA_OUTER_BAND_SPREAD data
     % flagant = [49:96, 239, 241:288]; % for 03285_dawn_spread data
 	% disp ('NOTE! NOTE: Currently, the list of antennas to be flagged is a parameter within the script, and needs to be changed for different datasets!');
@@ -52,12 +49,12 @@ function [avg_re_gain, avg_im_gain] = applyavgcal2bin (fname, calsolfname, ...
 	% File operations.
 	fin = fopen (fname, 'rb');
 	if (fin < 1)
-		disp (['Error in opening ' fname]);
+		fprintf (2, '### Error in opening %s.\n', fname);
 		return;
 	end;
 	fsol = fopen (calsolfname, 'rb');
 	if (fsol < 1)
-		disp (['Error in opening ' calsolfname]);
+		fprintf (2, '### Error in opening %s.\n', calsolfname);
 		return;
 	end;
 
@@ -65,15 +62,18 @@ function [avg_re_gain, avg_im_gain] = applyavgcal2bin (fname, calsolfname, ...
 	if (appavg == 1)
 		k = strfind (fname, '.bin');
 		outfname = sprintf ('%s_%02davgcal.bin', fname(1:k-1), avgover); 
-		fprintf (1, 'applyavgcal: Writing Calibrated visibilties to file %s.\n', ...
+		fprintf (1, '<-- applyavgcal: Writing Calibrated visibilties to file %s.\n', ...
 				 outfname);
 		fout = fopen (outfname, 'wb');
 		if (fout < 1)
-			disp (['Error in opening ' outfname]);
+			fprintf (2, '### Error in opening file %s\n.', outfname);
 			return;
+        else
+            fprintf (1, '<-- Writing calibrated visibilities to file %s\n', outfname);
 		end;
 	end;
 
+	% Calculate visibility record size after reading in one record
 	[acc, tobs, freq] = readms2float (fin, offset, -1, 288);
 	visrecsize = 8*(2+nblines); % Bytes, assumed double =8, float=4 bytes.
 	if (isempty(acc) == true)
@@ -88,19 +88,20 @@ function [avg_re_gain, avg_im_gain] = applyavgcal2bin (fname, calsolfname, ...
 		disp('applyavgcal2bin: End of solution file reached!'); 
 		return;
 	end;
+    
    	antmask = zeros (size (acc));
 	gainmask = zeros (1, size (acc,1));
-    rem_ants = length(acc) - length(rec.flagant);
+    % rem_ants = length(acc) - length(rec.flagant);
 	recsize = whos ('rec');
-	% re_gain = zeros (rec.gainsol_len, avgover);
-	% im_gain = zeros (rec.gainsol_len, avgover);
-	re_gain = zeros (rem_ants, avgover);
-	im_gain = zeros (rem_ants, avgover);
+	ncycles = int32(ntslices/avgover);
+    fprintf (1, '<-- Avraging over %d timeslices, found %d cycles.\n', avgover, ncycles);
+    gain_acc = zeros (Nelem, ncycles)+i*zeros(Nelem, ncycles);
+	
 	wr_acm = zeros (size (acc, 1), size (acc, 2));
 
 	% Check calibration solution file for timeslices corresponding to visibility files.
 	% Move to matching timeslice, if required.
-	disp (sprintf ('Vis. Time: %f, Gainsol. Time: %f', tobs, rec.tobs));
+	fprintf (1, '<-- Vis. Time: %f, Gainsol. Time: %f', tobs, rec.tobs);
 	toffset = int32 (tobs - rec.tobs); % Round to the nearest record.
 	if (toffset < 0) % Have to move in visibilities!
 		if (fseek (fin, abs(toffset)*visrecsize, 'cof') < 0)
@@ -127,20 +128,20 @@ function [avg_re_gain, avg_im_gain] = applyavgcal2bin (fname, calsolfname, ...
 	
 	disp (sprintf('After align: vis. time: %f, sol. time: %f', tobs, rec.tobs));
 
+    flagant = union (usrflagant, rec.flagant);
 
 	% Create a flagged mask for dealing with flagged antennas.
-	disp (['## Flagging dipole numbers : ' num2str(rec.flagant')]);
-    for ind = 1:length(rec.flagant)
-    	antmask (rec.flagant(ind), :) = 1; antmask (:,rec.flagant(ind)) = 1;
-		% disp (['ind, flagant(ind), sum(sum(antmask)): ' num2str(ind) ' ' ...
-		% num2str(flagant(ind)) ' ' num2str(sum(sum(antmask)))]);
-    end
-	gainmask (rec.flagant) = 1;
-	
+	disp (['## Flagging dipole numbers : ' num2str(flagant')]);
+    for ind = 1:length(flagant)
+    	antmask (flagant(ind), :) = 1; antmask (:,flagant(ind)) = 1;
+	end
+	gainmask (flagant) = 1;
+	rem_ants = length(acc) - length(flagant);
+
 	% Operate on input visibilities.
-	re_sigman = zeros (rec.sigmanlen, 1);
-	im_sigman = zeros (rec.sigmanlen, 1);
-	for avgcycle = 1:int32(ntslices/avgover)
+    sigman_acc = zeros ([size(rec.sigman) ncycles]);
+
+	for avgcycle = 1:ncycles
 		% Average gainsolution parameters over desired timeslices.
 		% TODO: Do sigma clipping over timeslices.
 		for ind = 1:avgover
@@ -151,22 +152,17 @@ function [avg_re_gain, avg_im_gain] = applyavgcal2bin (fname, calsolfname, ...
 				break;
 			end;
 
-			re_gain (:, ind) = real (rec.gainsol (gainmask == 0));
-			im_gain (:, ind) = imag (rec.gainsol (gainmask == 0));
-			re_sigman = re_sigman + real (rec.sigman);
-			im_sigman = im_sigman + imag (rec.sigman);
+            gain_acc (:,avgcycle) = gain_acc (:,avgcycle) + rec.gainsol;
+            sigman_acc (:,:,avgcycle) = sigman_acc (:,:,avgcycle) + rec.sigman;
 		end
-		avg_re_gain (:, avgcycle) = mean (re_gain, 2);
-		avg_im_gain (:, avgcycle)  = mean (im_gain, 2);
-		avg_gain = complex (avg_re_gain (:,avgcycle), avg_im_gain (:,avgcycle));
-		re_sigman = re_sigman ./ avgover;
-		im_sigman = im_sigman ./ avgover;
+        gain_acc (:,avgcycle) = gain_acc (:,avgcycle) ./ avgover;
+        sigman_acc(:,:,avgcycle) = sigman_acc (:,:,avgcycle) ./ avgover;
 	 % try
 		% Apply averaged calibration solutions to uncalibrated visibilities
 		if (appavg == 1)
 			for ts = 1:avgover
 				disp (' ');
-				disp (['###### Working on Timeslice ' num2str(ts+offset)]);
+				disp (['###### Working on Timeslice ' num2str((avgcycle-1)*avgover+ts+offset)]);
 				[acc, tobs, freq] = readms2float (fin, -1, -1, 288);
 				if (isempty(acc) == true)
 					disp ('wrcalvis2bin: Eof reached!');
@@ -177,15 +173,16 @@ function [avg_re_gain, avg_im_gain] = applyavgcal2bin (fname, calsolfname, ...
 				disp (['Time: ' num2str(tobs)]);
 	
 				% Calibrate!
-				calvis = (avg_gain * avg_gain') .* (acc -  complex (reshape (re_sigman, rem_ants, rem_ants), reshape (im_sigman, rem_ants, rem_ants)));
-				wr_acm (antmask == 0) = single (calvis); 
+				% calvis = (gain_acc(gainmask ==0,avgcycle) * gain_acc(gainmask==0,avgcycle)') .* (acc -  sigman_acc(:,:,avgcycle));
+                calvis = (gain_acc(gainmask ==0,avgcycle) * gain_acc(gainmask==0,avgcycle)') .* (acc);                
+                wr_acm (antmask == 0) = single (calvis); 
 				% calvis = single (calvis);
 	
 	
 				%NOTE!NOTE!NOTE!THIS IS REQUIRED FOR wracm2bin TO FUNCTION CORRECTLY!
 				% wr_acm (antmask == 1) = NaN; % Flagged visibilities get a NaN.
 				wr_acm (antmask == 1) = 0; % Flagged visibilities get a 0, as NaN screws up svds...
-				wracm2bin (fout, wr_acm, rec.flagant, tobs, freq);
+				wracm2bin (fout, wr_acm, flagant, tobs, freq);
 			end;
 		end;
 

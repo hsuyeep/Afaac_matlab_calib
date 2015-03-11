@@ -28,9 +28,9 @@ function [img] = readimg2bin (fid, skip)
 	% turns out to fail at certain offsets for unknown reasons.
 	for ind = 0:skip  % Because skip == 0 should result in one record being read.
 		img.tobs = fread (fid, 1, 'double');	
-		if (isempty(img.tobs) == 1) 
-			disp('readimg2bin: End of file reached!'); 
-			return;
+		if (isempty(img.tobs) == 1) 			
+			ME = MException('readimg2bin:EoF','readimg2bin: End of file reached.');
+            throw (ME);
 		end;
 
 		img.freq      = fread (fid, 1, 'double');	
