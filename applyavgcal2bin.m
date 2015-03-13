@@ -89,8 +89,8 @@ function [gain_acc] = applyavgcal2bin (fname, calsolfname, ...
 		return;
 	end;
     
-   	antmask = zeros (size (acc));
-	gainmask = zeros (1, size (acc,1));
+   	antmask = zeros (Nelem);
+	gainmask = zeros (1,Nelem);
     % rem_ants = length(acc) - length(rec.flagant);
 	recsize = whos ('rec');
 	ncycles = int32(ntslices/avgover);
@@ -101,15 +101,30 @@ function [gain_acc] = applyavgcal2bin (fname, calsolfname, ...
 
 	% Check calibration solution file for timeslices corresponding to visibility files.
 	% Move to matching timeslice, if required.
-	fprintf (1, '<-- Vis. Time: %f, Gainsol. Time: %f', tobs, rec.tobs);
+	fprintf (1, '<-- Vis. Time: %f, Gainsol. Time: %f.\n', tobs, rec.tobs);
 	toffset = int32 (tobs - rec.tobs); % Round to the nearest record.
 	if (toffset < 0) % Have to move in visibilities!
-		if (fseek (fin, abs(toffset)*visrecsize, 'cof') < 0)
-			 [msg, num] = ferror (fin); disp (['Seek error! ' msg]);
+		while (toffset < 0)
+			fprintf (2, '<-- Moving by %d visibility records to match calsol.\n', abs(toffset)); 
+			for ind = 1:abs(toffset)
+				[acc, tobs, freq] = readms2float (fin, -1, -1, 288);
+			end;
+			toffset = int32(tobs - rec.tobs);
 		end;
+
+%		if (fseek (fin, abs(toffset)*visrecsize, 'cof') < 0)
+%			 [msg, num] = ferror (fin); disp (['Seek error! ' msg]);
+%		end;
 	elseif (toffset > 0) % Have to move in solutions!
-		if (fseek (fsol, toffset*recsize.bytes, 'cof') < 0 )
-			 [msg, num] = ferror (fsol); disp (['Seek error! ' msg]);
+		while (toffset > 0)
+			fprintf (2, '<-- Moving by %d calsol records to match visibility file.\n', abs(toffset)); 
+			for ind = 1:abs(toffset)
+				rec = readcalsol (fsol);
+			end;
+			toffset = int32(tobs - rec.tobs);
+%		if (fseek (fsol, toffset*recsize.bytes, 'cof') < 0 )
+%			 [msg, num] = ferror (fsol); disp (['Seek error! ' msg]);
+%		end;
 		end;
 	end;
 	
@@ -126,11 +141,13 @@ function [gain_acc] = applyavgcal2bin (fname, calsolfname, ...
 	% Read in new uncalibrated visibilities
 	[acc, tobs, freq] = readms2float (fin, offset, -1, 288);
 	
-	disp (sprintf('After align: vis. time: %f, sol. time: %f', tobs, rec.tobs));
+	fprintf(1, '<-- After align: vis. time: %f, sol. time: %f.\n', tobs, rec.tobs);
 
     flagant = union (usrflagant, rec.flagant);
+	prevflagants = flagant;
+	fprintf(1, '<-- Flagging antennas %s\n', num2str(flagant));
 
-	% Create a flagged mask for dealing with flagged antennas.
+	% Create initial flagged mask for dealing with flagged antennas.
 	disp (['## Flagging dipole numbers : ' num2str(flagant')]);
     for ind = 1:length(flagant)
     	antmask (flagant(ind), :) = 1; antmask (:,flagant(ind)) = 1;
@@ -139,7 +156,8 @@ function [gain_acc] = applyavgcal2bin (fname, calsolfname, ...
 	rem_ants = length(acc) - length(flagant);
 
 	% Operate on input visibilities.
-    sigman_acc = zeros ([size(rec.sigman) ncycles]);
+    sigman_acc = zeros (Nelem, Nelem, ncycles);
+	tmp = zeros (Nelem);
 
 	for avgcycle = 1:ncycles
 		% Average gainsolution parameters over desired timeslices.
@@ -153,7 +171,21 @@ function [gain_acc] = applyavgcal2bin (fname, calsolfname, ...
 			end;
 
             gain_acc (:,avgcycle) = gain_acc (:,avgcycle) + rec.gainsol;
-            sigman_acc (:,:,avgcycle) = sigman_acc (:,:,avgcycle) + rec.sigman;
+			if (length (rec.flagant) ~= length (prevflagants))
+    			flagant = union (usrflagant, rec.flagant);
+				% Create a flagged mask for dealing with flagged antennas.
+				fprintf (2, '<-- Flag ants changed from %s\n to %s\n', num2str(prevflagants'), num2str(flagant'));
+   				antmask = zeros (Nelem);
+				gainmask = zeros (1,Nelem);
+			    for ant = 1:length(flagant)
+			    	antmask (flagant(ant), :) = 1; antmask (:,flagant(ant)) = 1;
+				end
+				gainmask (flagant) = 1;
+				rem_ants = Nelem - length(flagant);
+				prevflagants = flagant;
+			end;
+			tmp (antmask(:) == 0) = rec.sigman(:);	
+            sigman_acc (:,:,avgcycle) = sigman_acc (:,:,avgcycle) + tmp;
 		end
         gain_acc (:,avgcycle) = gain_acc (:,avgcycle) ./ avgover;
         sigman_acc(:,:,avgcycle) = sigman_acc (:,:,avgcycle) ./ avgover;

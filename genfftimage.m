@@ -2,26 +2,26 @@
 % .bin file.
 % pep/18Oct12
 % Arguments:
-%	fname : 	Name of file containing calibrated or uncalibrated visibilities.
+%	fname   :   Name of file containing calibrated or uncalibrated visibilities.
 %	ntslices:   Number of timeslices to image. -1 => all timeslices.
-%	offset:		Initial offset in visibility file from which to start imaging.
-%				Set to 0 for no offset.
-%   skip  :     Number of records to skip, in the interest of faster imaging.
+%	offset  :   Initial offset in visibility file from which to start imaging.
+%               Set to 0 for no offset.
+%   skip    :   Number of records to skip, in the interest of faster imaging.
 %	posfilename:Name of file containing the local positions of the array 
-%				configuration corresponding to the data in fname.
-%	mosaic:		Bool controlling generation of mosaic images. If false,  zenith
-%				pointing images (less computation) are generated.
-%	caxisrng: 	2-element vector with the coloraxis range for display.
-%	wr2file:Bool controlling writing of generated images to file. If true,
-%				the input filename with 'img' appended is created and written
-%				out using floats. NOTE: If writing to file,images are not shown.
-%   elbeam:     Bool controlling applying an element beam pattern correction.
-%				NOTE: Currently only for X-dipole.
-%   pol   :     Polarization to choose: 0 => X, 1 => Y, 2 => I(?)
+%               configuration corresponding to the data in fname.
+%	mosaic  :   Bool controlling generation of mosaic images. If false,  zenith
+%               pointing images (less computation) are generated.
+%	caxisrng:   2-element vector with the coloraxis range for display.
+%	wr2file :   Bool controlling writing of generated images to file. If true,
+%               the input filename with 'img' appended is created and written
+%               out using floats. NOTE: If writing to file,images are not shown.
+%   elbeam  :   Bool controlling applying an element beam pattern correction.
+%               NOTE: Currently only for X-dipole.
+%   pol     :   Polarization to choose: 0 => X, 1 => Y, 2 => I(?)
 %  Returns:
-%	img_l:      The l-axis of the generated image.
-%	img_m:      The m-axis of the generated image.
-%     img:      The actual image matrix.
+%	img_l   :   The l-axis of the generated image.
+%	img_m   :   The m-axis of the generated image.
+%     img   :   The actual image matrix.
 %	NOTE :      The values returned are for the last image in the image 
 %				timeseries!
 
