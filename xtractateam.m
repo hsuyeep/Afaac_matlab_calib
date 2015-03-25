@@ -105,6 +105,9 @@ function [pwr, pwr_ts] = xtractateam (fname, srcsize, offset, skip, nrecs, deb)
 		map = reshape (img.map, img.pix2laxis, img.pix2maxis);
 		jd = img.tobs/86400. + 2400000.5;
 		[ateaml, ateamm] = radectolm ([srclist3CR(ateam_ind).alpha], [srclist3CR(ateam_ind).delta], jd, cs002_lon, cs002_lat, false); 
+        azi = atan2 (ateamm, ateaml); % Compute the azimuth angle
+        ele = asin (hypot (ateaml, ateamm));
+        
 		colpix = int32((1+ateaml)*img.pix2laxis/2 + 1); 
 		rowpix = int32((1+ateamm)*img.pix2maxis/2 + 1); 
 	
@@ -132,18 +135,19 @@ function [pwr, pwr_ts] = xtractateam (fname, srcsize, offset, skip, nrecs, deb)
             pwr (im, src, 1) = sum (imgcut(mask));            
             pwr (im, src, 2) = rowpix(src);
             pwr (im, src, 3) = colpix(src);
-            pwr (im, src, 4) = rowind (colind);
-            pwr (im, src, 5) = colind;
-			fprintf (fout, '%.2f %4d %4d %4d %4d ', ...
-					 pwr(im,src,1), pwr(im,src,2), pwr(im, src, 3), pwr(im, src, 4), pwr(im, src, 5)); 
+            pwr (im, src, 4) = rowpix(src) - srcsize + rowind (colind);
+            pwr (im, src, 5) = colpix(src) - srcsize + colind;
+			fprintf (fout, '%.2f %4d %4d %4d %4d %.3f %.3f', ...
+					 pwr(im,src,1), pwr(im,src,2), pwr(im, src, 3), pwr(im, src, 4), pwr(im, src, 5), azi(src), ele(src)); 
 			if (deb > 0)
                 figure (debimg)
                 subplot (nsrc,2,2*(src-1)+1);
-                imagesc (imgcut); title (srclist3CR(ateam_ind(src)).name);
+                imagesc (imgcut); % colorbar;
+                title (srclist3CR(ateam_ind(src)).name);
                 subplot (nsrc,2,2*(src-1)+2);
                 pltmask = zeros (size(imgcut));
                 pltmask(mask)  = 1;
-                imagesc (pltmask); title (num2str (int32(img.tobs)));           
+                imagesc (pltmask); title (datestr(mjdsec2datenum(img.tobs)));           
                 % pause;
             end;
 		end;

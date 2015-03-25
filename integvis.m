@@ -3,13 +3,17 @@
 % pep/15Nov12
 
 % Arguments:
-%  acc: 3D cube of visibilities, in increasing time order.
-%  tobs: Corresponding observing times for each acm.
+%       acc: 3D cube of visibilities, in increasing time order.
+%  ntslices: 
+%      tobs: Corresponding observing times for each acm.
+%      freq:
+%   posITRF:
+%       deb:
 % Returns:
 %  integ_acc: The integrated visibilities, after rephasing
 %  integ_tobs: The time corresponding to the center of the integrated data range
 
-function [reph_acc, integ_acc, integ_tobs] = integvis (acc, ntslices, tobs, freq, posITRF, debug)
+function [reph_acc, integ_acc, integ_tobs] = integvis (acc, ntslices, tobs, freq, posITRF, deb)
 	% ntslices = size (acc, 3);
 	integ_acc = zeros (size (acc (:,:, 1)));
 	reph_acc = zeros(size(acc));
@@ -18,7 +22,7 @@ function [reph_acc, integ_acc, integ_tobs] = integvis (acc, ntslices, tobs, freq
 	t_reph = tobs (int32(ntslices/2));
 
 	% Debug imaging.
-	if debug == 1
+	if deb == 1
 		rephimg = figure;
 		rephpro = figure;
 		load ('poslocal.mat', 'poslocal','posITRF');
@@ -45,7 +49,7 @@ function [reph_acc, integ_acc, integ_tobs] = integvis (acc, ntslices, tobs, freq
 		integ_acc = integ_acc + reph_acc(:,:,ind);
 		integ_tobs = integ_tobs + tobs(ind);
 
-		if debug == 1
+		if deb == 1
 			% Debug imaging
 			tmpacc = reph_acc(:,:,ind);
     		[radecmap1, rephmap, calvis, l, m] = fft_imager_sjw_radec(tmpacc(:), ...
@@ -82,7 +86,7 @@ function [reph_acc, integ_acc, integ_tobs] = integvis (acc, ntslices, tobs, freq
 	
 
     
-	if debug == 1
+	if deb == 1
     	[radecmap1, calmap, calvis, l, m] = fft_imager_sjw_radec(integ_acc (:),...
                     uloc(:), vloc(:), gparm, [], [], tobs, freq, 0);
 	    map = abs (calmap) .* mask;
