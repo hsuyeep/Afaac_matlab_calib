@@ -81,8 +81,8 @@ function [radecskymap, lmskymap, vispad, l, m] =  ...
 
 	  % Holding area for pixels converted from lm to RA/Dec. coords.
 	  % Regular sampling in lm coordinates leads to irregular sampling in RA/Dec
-      alpha = zeros (uvsize, 1);
-      delta = zeros (uvsize, 1);
+      alpha = zeros (gparm.uvpad, 1);
+      delta = zeros (gparm.uvpad, 1);
       % t_obs  = t_obs/86400 + 2400000.5; % Convert to MJD day units
 
 	  % Convert image coordinates to RA/Dec. coordinates.
@@ -94,8 +94,8 @@ function [radecskymap, lmskymap, vispad, l, m] =  ...
 										real(skymap (sel)));
 
       % Create the regularly sampled RA/dec plane
-      [ragrid, decgrid] = meshgrid (linspace (0,2*pi, uvsize), ...
-									linspace (-pi/2,pi/2, uvsize));
+      [ragrid, decgrid] = meshgrid (linspace (0,2*pi, gparm.uvpad), ...
+									linspace (-pi/2,pi/2, gparm.uvpad));
           
       % generate samples from the interpolated model skyimage
       radecskymap = radecimage (ragrid, decgrid);

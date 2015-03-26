@@ -18,6 +18,8 @@
 %   elbeam  :   Bool controlling applying an element beam pattern correction.
 %               NOTE: Currently only for X-dipole.
 %   pol     :   Polarization to choose: 0 => X, 1 => Y, 2 => I(?)
+%  radec    :   Flag to control if RA/DEC plane projected images are to be created.
+%  accum    :   Flag controlling the generation of accumulated images.
 %  Returns:
 %	img_l   :   The l-axis of the generated image.
 %	img_m   :   The m-axis of the generated image.
@@ -28,9 +30,8 @@
 
 function [img_l, img_m, img] =  ... 
     genfftimage (fname, ntslices, offset, skip, posfilename, mosaic, caxisrng,...
-				 wr2file, elbeam, pol)
+				 wr2file, elbeam, pol, radec, accum)
     % genfftimage (fname,ntslices, offset, posfilename, weight, uvcellsize, mosaic, caxisrng, wr2file)
-	radec = 0;
 	% Gridding parameters
 	gparm.type = 'pillbox';
     gparm.lim  = 0;
@@ -52,6 +53,12 @@ function [img_l, img_m, img] =  ...
 		hdl = figure;
 		if (radec == 1)
 			projimg = figure;
+			ra_grid = linspace (0,2*pi, gparm.uvpad)*12/pi; % Convert to hours
+			de_grid = linspace (-pi/2,pi/2,gparm.uvpad)*180/pi; % Convert to deg.
+			if (accum == 1)
+				acc_radecmap = zeros (gparm.uvpad);
+				acc_localmap = zeros (gparm.uvpad);
+			end;
 		end;
 	else
 		k = strfind (fname, '.bin');
@@ -178,6 +185,12 @@ function [img_l, img_m, img] =  ...
 		   		[radecmap, img.map, calvis, img.l, img.m] = ... 
 				  fft_imager_sjw_radec (acc_weighted(:), uloc(:), vloc(:), ... 
 							gparm, [], [], img.tobs, img.freq, radec);
+				if (accum == 1)
+					acc_localmap = acc_localmap + img.map;
+					if (radec == 1)
+						acc_radecmap = acc_radecmap + radecmap;
+					end;
+				end;
 			else
 				% Image current timeslice. Generate a mosaic image.
 		   		[img.map, img.l, img.m] = ... 
@@ -192,8 +205,12 @@ function [img_l, img_m, img] =  ...
 			
 			if (wr2file == 0)
 				figure (hdl);
-	   	     	imagesc(img.l, img.m, (real(img.map)));
-	   	     	% imagesc((real(img.map))); % Uncomment for pixel axis.
+				if (accum == 1)
+	   	     		imagesc(img.l, img.m, (real(acc_localmap)));
+				else
+	   	     		imagesc(img.l, img.m, (real(img.map)));
+				end;
+
 				if isempty (caxisrng) == 0
 					caxis (caxisrng);
 				end;
@@ -201,7 +218,7 @@ function [img_l, img_m, img] =  ...
 				% 									 10, hdl, true);
 	        	set(gca, 'FontSize', 16);
 			
-		        title(sprintf('Rec: %d, Time:%.2f, Freq:%f',offset+ts,img.tobs, ...
+		        title(sprintf('Rec: %d, Time:%s, Freq:%.2f',offset+ts, datestr(mjdsec2datenum(img.tobs)), ...
 						img.freq));
 		        axis equal
 		        axis tight
@@ -214,7 +231,16 @@ function [img_l, img_m, img] =  ...
 		        set(colorbar, 'FontSize', 16);
 				if (radec == 1)
 					figure (projimg);
-					imagesc (radecmap); colorbar;
+					if (accum == 1)
+						imagesc (ra_grid, de_grid, acc_radecmap); colorbar;
+					else
+						imagesc (ra_grid, de_grid, radecmap); colorbar;
+					end;
+					xlabel ('RA(Hr)'); ylabel ('Dec(deg)');
+		        	title(sprintf('Rec: %d, Time:%s, Freq:%.2f',offset+ts, datestr(mjdsec2datenum(img.tobs)), ...
+							img.freq));
+		        	% axis equal
+		        	axis tight
 				end;
 			else
 				% Write image to output file.
