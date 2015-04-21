@@ -17,8 +17,10 @@
 %    skymap: Combined map;
 %     alpha: RA coordinates of combined map.
 %    delta : DEC coordinates of combined map.
+%   the_res: The chosen resolution in elevation, for gridding the RADEC space.
+%   phi_res: The chosen resolution in azimuth, for gridding the RADEC space.
 
-function [im0, nmap2pix, alpha, delta, the_res, phi_res] = allskymap(fname, skip, offset, nrec, deb)
+function [im0, alpha, delta, the_res, phi_res] = allskymap(fname, skip, offset, nrec, deb)
 
 	% Open visibility binary file.
 	fid = fopen (fname, 'rb');
@@ -65,7 +67,7 @@ function [im0, nmap2pix, alpha, delta, the_res, phi_res] = allskymap(fname, skip
     cs002_lat = 52.915122495; % latitude of CS002 in deg
 		
 
-	Rpos = [posITRF(:,1), posITRF(:,2), zeros(size(posITRF(:,1)))];
+    Rpos = [poslocal(:,1), poslocal(:,2), zeros(size(poslocal(:,1)))];
 
 	% define a grid with resolution proportional with minimum projection
 	limp = [];
@@ -105,11 +107,12 @@ function [im0, nmap2pix, alpha, delta, the_res, phi_res] = allskymap(fname, skip
 	fprintf (1,'<-- Dec pixels: %d.\n', count);
     fprintf (1,'<-- Pixel dimensions of full map (l/m/n): %d %d %d\n', length(limp), length(mimp), length(nimp));
 	Lgrid = [limp, mimp, nimp];
-	alpha = atan2(limp, mimp);
+	alpha = atan2(limp, mimp) + pi;
 	delta = asin(nimp);
 
 	if (deb > 0)
-		[al_lin, de_lin] = meshgrid (linspace (-pi, pi, 1024), linspace (-pi/2, pi/2, 512));
+		% [al_lin, de_lin] = meshgrid (linspace (-pi, pi, 1024), linspace (-pi/2, pi/2, 512));
+   		[al_lin, de_lin] = meshgrid (linspace (0, 2*pi, 1024), linspace (-pi/2, pi/2, 512));        
 	end;
 	
 	% The dirty image
@@ -175,8 +178,13 @@ function [im0, nmap2pix, alpha, delta, the_res, phi_res] = allskymap(fname, skip
 	
 			% Display the dirty map, if debugging is required.
 			if (deb > 0)
-				radecmap = griddata (alpha, delta, im0, al_lin, de_lin, 'cubic');
-				imagesc (al_lin, de_lin, radecmap);
+				% radecmap = griddata (alpha, delta, im0, al_lin, de_lin, 'cubic');
+                radecobj= TriScatteredInterp (alpha, delta, im0);
+                radecmap = radecobj(al_lin, de_lin);
+				imagesc (al_lin(1,:)*12/pi, de_lin(:,1)*180/pi, abs(radecmap)); colorbar;
+                xlabel ('RA(Hr)'); ylabel ('Dec(deg)');
+                title (sprintf ('Time: %s, Freq: %.2f\n', datestr(mjdsec2datenum(tobs)), fobs));
+                drawnow();
 			end;
 	
 	        % Carry out DFT imaging for each of the selected l,m. Accumulate
@@ -193,3 +201,4 @@ function [im0, nmap2pix, alpha, delta, the_res, phi_res] = allskymap(fname, skip
 	end;
 
 	im0 = im0 ./ nmap2pix;
+    fclose(fid);

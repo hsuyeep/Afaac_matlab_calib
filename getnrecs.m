@@ -1,5 +1,14 @@
 % Script to return the number of records in a binary ACM file.
 % pep/18Oct12
+% 
+% Arguments:
+%  fname : Filename to operate on.
+% 
+% Returns: 
+%   ntimes : Total number of timeslices found.
+%   tmin   : The MJDsec timestamp of the first record.
+%   tmax   : The MJDsec timestamp of the last record.
+%      dt  : The time resolution of the records.
 
 function [ntimes, tmin, tmax, dt] = getnrecs (fname)
 	D = dir (fname);
