@@ -213,7 +213,7 @@ function wrcalvis2bin (fname, offset, ntslices, wrcalsol, trackcal, array)
 		% Check for bad timeslices.
 		accnorm = norm (acc - diag(diag(acc)), 'fro'); % NOTE: Ignoring autocorr
 		fprintf (1, 'Movmed: %f, accnorm: %f\n', movmed, accnorm);
-		if (accnorm > medianthresh*movmed)
+		if ((accnorm > medianthresh*movmed) | (cond (acc) > 1e10))
 			fprintf (2, '<--Discarding rec: %03d, Time: %.2f. Excess: %.2f\n', ...
 				  ts, t_obs, accnorm/(medianthresh*movmed));
 			badtimes = badtimes + 1;
