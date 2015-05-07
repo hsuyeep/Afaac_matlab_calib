@@ -1,8 +1,27 @@
 % Script to simulate visibilities from a specific array configuration, and source locations.
 % pep/28Apr15
 
-arraysampling = [-5:0.5:5]; % Array extent = -5:5m, elements of array placed every 0.5m (=lambda/2 for 1m lambda).
+array_rad = 5; % meters
+Nelem2rad = 100;
+array_spacing = array_rad/Nelem2rad;
+arraysampling = [-array_rad:array_spacing:array_rad]; % Array extent = -5:5m, elements of array placed every 0.5m (=lambda/2 for 1m lambda).
+
+% Create a rectangular grid of antenna, equi-spaced
 [xpos, ypos] = meshgrid (arraysampling);
+
+% Create a disk of antennas, with radius being the extent of array sampling.
+discsel = (sqrt(xpos.^2 + ypos.^2) < array_rad);
+xpos_disc = xpos (discsel);
+ypos_disc = ypos(discsel);
+
+% Create a ring of antenna, with inner rad = inner_rad
+inner_rad = 3; % meters
+innerdiscsel = (sqrt(xpos.^2 + ypos.^2) < inner_rad);
+ringsel = discsel - innerdiscsel;
+xpos_ring = xpos(ringsel==1);
+ypos_ring = ypos(ringsel==1);
+
+
 Nelem = length (xpos(:));
 
 % Show the array layout. A different colored dot for each row of elements in the array.

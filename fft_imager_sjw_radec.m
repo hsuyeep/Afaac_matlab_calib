@@ -71,7 +71,8 @@ function [radecskymap, lmskymap, vispad, l, m] =  ...
     mask(meshgrid(l).^2 + meshgrid(l).'.^2 < 1) = 1;
     % lmskymap = single (real(skymap) .* mask);
 	% Transpose added on 03Mar15, such that images with axis match the real sky.
-    lmskymap = single ((skymap) .* mask)';
+	% Rescaling required due to the unnormalized FFT carried out by fft2.
+    lmskymap = single ((skymap) .* mask)'./sqrt(length(acc));
     % disp (['-->Max/min from lm skymap: ' num2str(max(max(lmskymap))) ' ' ... 
     % 		num2str(min(min(lmskymap)))]);
     

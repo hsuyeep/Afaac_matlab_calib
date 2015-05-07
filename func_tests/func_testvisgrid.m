@@ -32,7 +32,7 @@ function func_testvisgrid ()
 
 
 	% Generate gridded visibilities with different 
-	gridvis = genvisgrid (sampfn(:), uloc_flag(:), vloc_flag(:), parm, freq, 1);
+	[grvis, grind, grrng] = genvisgrid (sampfn(:), uloc_flag(:), vloc_flag(:), parm, freq, 1);
 
 	% Generate an image with GCF.
 	% [rdsky, map, vispad, l, m] = fft_imager_sjw_radec (acc, uloc_flag, ...

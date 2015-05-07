@@ -12,6 +12,7 @@
 %  weight  : The weight associated with each visibility.
 function [weight] = genvisweight (posITRF, wparm, plt)
 	
+	Nelem = size (posITRF, 1);
 	% Convert antenna positions into visibility values
 	u = meshgrid (posITRF(:, 1)) - meshgrid (posITRF(:, 1)).';
    	v = meshgrid (posITRF(:, 2)) - meshgrid (posITRF(:, 2)).';
@@ -43,7 +44,7 @@ function [weight] = genvisweight (posITRF, wparm, plt)
 	end;
 
 	if (~plt)
-		imagesc (reshape (weight, [288 288])); colorbar;		
+		imagesc (reshape (weight, [Nelem Nelem])); colorbar;		
 		title (sprintf ('%s weighting, cellrad: %d', wparm.type, wparm.cellrad));
 
 		plot (uvdist, weight);

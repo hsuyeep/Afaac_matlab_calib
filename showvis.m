@@ -2,10 +2,10 @@
 % pep/02Apr15
 % Arguments:
 %	fname  : visibility binary file name
-%	colrng : caxis color range.
 %	offset : The record offset from which to start showing images.
 %	skip   : Skip some number of records.
 %	nrecs  : Number of images to show. -1 => show all images.
+%	colrng : caxis color range.
 %
 % Returns:
 %         void
