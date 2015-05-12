@@ -1,5 +1,3 @@
-% Script to generate FFT images from calibrated visibilities available in a 
-% .bin file.
 % pep/18Oct12
 % Arguments:
 %	fname   :   Name of file containing calibrated or uncalibrated visibilities.
@@ -28,7 +26,7 @@
 %				timeseries!
 
 
-function [img_l, img_m, img] =  ... 
+function [img_l, img_m, img, acc_radecmap, acc_localmap] =  ... 
     genfftimage (fname, ntslices, offset, skip, posfilename, mosaic, caxisrng,...
 				 wr2file, elbeam, pol, radec, accum)
     % genfftimage (fname,ntslices, offset, posfilename, weight, uvcellsize, mosaic, caxisrng, wr2file)
@@ -49,18 +47,36 @@ function [img_l, img_m, img] =  ...
 		elstr = 'el';
 	end;
 
-	if (wr2file == 0)
-		hdl = figure;
-		if (radec == 1)
-			projimg = figure;
-			ra_grid = linspace (0,2*pi, gparm.uvpad)*12/pi; % Convert to hours
-			de_grid = linspace (-pi/2,pi/2,gparm.uvpad)*180/pi; % Convert to deg.
-			if (accum == 1)
-				acc_radecmap = zeros (gparm.uvpad);
-				acc_localmap = zeros (gparm.uvpad);
-			end;
+	if (radec == 1)
+		projimg = figure;
+		ra_grid = linspace (0,2*pi, gparm.uvpad)*12/pi; % Convert to hours
+		de_grid = linspace (-pi/2,pi/2,gparm.uvpad)*180/pi; % Convert to deg.
+		if (accum == 1)
+			acc_radecmap = zeros (gparm.uvpad);
+			acc_localmap = zeros (gparm.uvpad);
+		else
+			acc_radecmap = [];
+			acc_localmap = [];
 		end;
-	else
+	end;
+
+	% Note: we write out the accumulated image even if wr2file == 0
+	hdl = figure;
+	if (accum == 1)
+		k = strfind (fname, '.bin');
+		if (mosaic == 1)
+			accimgfname = sprintf ('%s_%d_%s%s', fname(1:k-1), offset, elstr, '_mosimg_radec.fig');
+		else
+			accimgfname = sprintf ('%s_%d_%s%s', fname(1:k-1), offset, elstr, '_fftimg_radec.fig');
+		end;
+		if (exist (accimgfname, 'file') == 2)
+			fprintf (2, 'Overwriting existing file: %s. Continue? (Ctrl-C to kill)\n', accimgfname);
+			pause;   % To prevent overwriting already written files!
+		end;
+	end;
+
+	if (wr2file == 1)
+		% NOTE:  Writing either accumulated image, or individual ones, not both at the same time.
 		k = strfind (fname, '.bin');
 		if (mosaic == 1)
 			imgfname = sprintf ('%s_%d_%s%s', fname(1:k-1), offset, elstr, '_mosimg.bin');
@@ -203,6 +219,21 @@ function [img_l, img_m, img] =  ...
 			% NOTE: Multiply with elembeam pulls up the image edges.
 			img.map = img.map .* (elembeam.*mask); 
 			
+			% Accumulated image is shown regardless of wr2file status
+			if (radec == 1)
+				figure (projimg);
+				if (accum == 1)
+					imagesc (ra_grid, de_grid, acc_radecmap); colorbar;
+				else
+					imagesc (ra_grid, de_grid, radecmap); colorbar;
+				end;
+				xlabel ('RA(Hr)'); ylabel ('Dec(deg)');
+		    	title(sprintf('Rec: %d, Time:%s, Freq:%.2f',offset+ts, datestr(mjdsec2datenum(img.tobs)), ...
+						img.freq));
+		    	% axis equal
+		    	axis tight
+			end;
+
 			if (wr2file == 0)
 				figure (hdl);
 				if (accum == 1)
@@ -229,20 +260,10 @@ function [img_l, img_m, img] =  ...
 		        ylabel('South $\leftarrow$ m $\rightarrow$ North', 'interpreter', 'latex');
 		        xlabel('East $\leftarrow$ l $\rightarrow$ West', 'interpreter', 'latex');
 		        set(colorbar, 'FontSize', 16);
-				if (radec == 1)
-					figure (projimg);
-					if (accum == 1)
-						imagesc (ra_grid, de_grid, acc_radecmap); colorbar;
-					else
-						imagesc (ra_grid, de_grid, radecmap); colorbar;
-					end;
-					xlabel ('RA(Hr)'); ylabel ('Dec(deg)');
-		        	title(sprintf('Rec: %d, Time:%s, Freq:%.2f',offset+ts, datestr(mjdsec2datenum(img.tobs)), ...
-							img.freq));
-		        	% axis equal
-		        	axis tight
-				end;
 			else
+				if (accum == 1)
+					saveas (projimg, accimgfname);
+				end;
 				% Write image to output file.
 				img.pix2laxis = length (img.l);
 				img.pix2maxis = length (img.m);

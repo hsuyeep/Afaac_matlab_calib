@@ -3,9 +3,12 @@
 % pep/28Apr15
 
 close all; clear all;
+array = 'inner';
 
+basedir = '~/WORK/AARTFAAC/Afaac_matlab_calib/func_tests/';
 % For imaging
 load ('poslocal_inner.mat', 'poslocal', 'posITRF');
+% load ('poslocal_outer.mat', 'poslocal', 'posITRF');
 
 % Data locations:
 fid_inner = fopen ('~/WORK/AARTFAAC/Reobs/11Jul12/LBA_INNER_BAND60/SB000_LBA_INNER_BAND60_1ch.bin', 'rb');  
@@ -30,6 +33,18 @@ for ind = 1:length(flagant)
 end
 acc_fl = reshape (acc(antmask ~= 1), [rem_ants, rem_ants]);
 poslocal_fl = reshape(poslocal(posmask ~=1), [rem_ants, 3]); 
+posITRF_fl = reshape(posITRF(posmask ~=1), [rem_ants, 3]); 
+
+% Generate UV coverage for selected antennas.
+uloc_fl = meshgrid (poslocal_fl(:,1)) - meshgrid (poslocal_fl(:,1)).';
+vloc_fl = meshgrid (poslocal_fl(:,2)) - meshgrid (poslocal_fl(:,2)).';
+
+plot (uloc_fl(:), vloc_fl(:), '.');
+h = gca;
+set (h, 'FontWeight', 'bold');
+xlabel ('\bf U(m)'); ylabel ('\bf V(m)');
+title ('\bf UV coverage for LBA\_INNER array configuration');
+print ([basedir 'LBA_INNER_uvcov.eps'], '-depsc');
 
 %%%%%%%%%%% Setup weighting, taper and GCF
 % Generate visibility taper with different parameters.
@@ -38,6 +53,14 @@ tparm.minlambda = 0;
 tparm.maxmeters = 350;
 tparm.pa = [-1, -1, 25, 25];
 [intap, outtap, den, mask, uvdist] = taper (posITRF_fl, tparm, -1, fobs, 4);
+
+% Generate bline histogram distribution
+hist (uvdist, 50);
+xlabel ('\bf UVdist'); ylabel ('\bf Baselines');
+xlim ([0 300]); ylim ([0 5000]);
+h = gca;
+set (h, 'FontWeight', 'bold');
+print ([basedir 'LBA_INNER_bline_distr.eps'], '-depsc');
 
 % Generate visibility weights with different parameters
 wparm.type = 'Uniform';

@@ -181,7 +181,7 @@ function [im0, alpha, delta, the_res, phi_res] = allskymap(fname, skip, offset, 
 				% radecmap = griddata (alpha, delta, im0, al_lin, de_lin, 'cubic');
                 radecobj= TriScatteredInterp (alpha, delta, im0);
                 radecmap = radecobj(al_lin, de_lin);
-				imagesc (al_lin(1,:)*12/pi, de_lin(:,1)*180/pi, abs(radecmap)); colorbar;
+				imagesc (al_lin(1,:)*12/pi, de_lin(:,1)*180/pi, real (radecmap)); colorbar;
                 xlabel ('RA(Hr)'); ylabel ('Dec(deg)');
                 title (sprintf ('Time: %s, Freq: %.2f\n', datestr(mjdsec2datenum(tobs)), fobs));
                 drawnow();
