@@ -16,9 +16,11 @@
 
 %  Returns:
 %  gridvis: The padded gridded visibility values of dim parm.uvpad x parm.uvpad
+%  gridviscnt: The count of visibilities contributing to a single grid point.
 %  padgridrng: The coordinates of the padded gridded visibilities, assumed symmetrical.
+%  kern   : The applied FFT kernel.
 
-function [gridvis, gridviscnt, padgridrng] = genvisgrid (acc, u, v, parm, freq, deb)
+function [gridvis, gridviscnt, padgridrng, kern] = genvisgrid (acc, u, v, parm, freq, deb)
 % function [gridvis] = genvisgrid (acc, u, v, parm, freq, deb)
 	
 	if (isempty (acc) || isempty (parm))
@@ -66,8 +68,8 @@ function [gridvis, gridviscnt, padgridrng] = genvisgrid (acc, u, v, parm, freq, 
 
 		% Generate gcf (for illustration purposes only)
 		kern = 1./(2*pi*parm.pa(1)*parm.pa(2)) * exp (-((uk.^2 / (2*parm.pa(1)^2)) + (vk.^2 / (2*parm.pa(2)^2))));
-		kern_scale_fact = sum(sum(kern));
-		kern = kern./kern_scale_fact; % Make sure kernel integral is 1
+		% kern_scale_fact = sum(sum(kern));
+		% kern = kern./kern_scale_fact; % Make sure kernel integral is 1
 		fprintf (1, '<-- Convolutional kernel integral: %f\n', sum(sum(kern)));
 	
 		% Convolve visibilities with GCF 
@@ -81,12 +83,12 @@ function [gridvis, gridviscnt, padgridrng] = genvisgrid (acc, u, v, parm, freq, 
 			% GCF theoretical kernel.
 			for sel = 1:length(vislist)
 				weight(vislist(sel)) ...
-				 = (1./(kern_scale_fact*2*pi*parm.pa(1)*parm.pa(2)))*exp (-(((u(vislist(sel)) - uc (grvis)).^2 / (2*parm.pa(1)^2)) +...
+				 = (1./(2*pi*parm.pa(1)*parm.pa(2)))*exp (-(((u(vislist(sel)) - uc (grvis)).^2 / (2*parm.pa(1)^2)) +...
 					      (v(vislist(sel)) - vc (grvis)).^2 / (2*parm.pa(2)^2)));
 			end;
 	
 			% Store the weighted sum of these visibilities at the chosen grid point
-			gridvis (grvis) = sum (acc (vislist) .* weight(vislist))/kern_scale_fact;
+			gridvis (grvis) = sum (acc (vislist) .* weight(vislist));
 			weight (vislist) = 0;
 	
 			% Generate statistics

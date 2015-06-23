@@ -8,7 +8,6 @@ array = 'inner';
 basedir = '~/WORK/AARTFAAC/Afaac_matlab_calib/func_tests/';
 % For imaging
 load ('poslocal_inner.mat', 'poslocal', 'posITRF');
-% load ('poslocal_outer.mat', 'poslocal', 'posITRF');
 
 % Data locations:
 fid_inner = fopen ('~/WORK/AARTFAAC/Reobs/11Jul12/LBA_INNER_BAND60/SB000_LBA_INNER_BAND60_1ch.bin', 'rb');  

@@ -285,6 +285,14 @@ function [img_l, img_m, img, acc_radecmap, acc_localmap] =  ...
 		end;
 		ts = ts + skip;
 	end;
+
+	% Normalize the accumulated images
+	if (accum == 1)
+		naccum = floor((ts - offset)/skip);
+		acc_localmap = acc_localmap/naccum;
+		acc_radecmap = acc_radecmap/naccum;
+	end;
+
 	% Return out only the last image
 	img_l = img.l; img_m = img.m; img = img.map;
 	fclose (fin);

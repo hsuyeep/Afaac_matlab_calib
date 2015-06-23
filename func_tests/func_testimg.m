@@ -99,11 +99,11 @@ fprintf (1, 'uncalib corr.coef(whiten)FFT:  pixel range: %d-%d\n', max(max(real(
 
 %%%%%%%%%%%%%%%% Calibrate %%%%%%%%%%%%%%%%%%%
 sol = pelican_sunAteamsub (acc, tobs, fobs, eye(288), flagant, 0, 1, [], [], 'poslocal_outer.mat', [], []);
-acccal = (sol.gainsol*sol.gainsol') .* acc;
+acccal = (sol.gainsol'*sol.gainsol) .* acc_wh;
 [ra, fft_cal, calvis, l, m] = fft_imager_sjw_radec (acccal(:), uloc(:), vloc(:), gparm, [], [], tobs, fobs, 0);
 imagesc(l,m,real(fft_cal)); colorbar;
 set(gca, 'FontSize', 16);
-title (sprintf ('Calib. FFT Time: %s, Freq: %.2f', datestr(mjdsec2datenum(tobs)), fobs));
+title (sprintf ('Calib. FFT, whitened ACM, Time: %s, Freq: %.2f', datestr(mjdsec2datenum(tobs)), fobs));
 axis equal
 axis tight
 set (gca, 'YDir', 'Normal'); % To match orientation with station images
@@ -113,8 +113,9 @@ xlabel('East $\leftarrow$ l $\rightarrow$ West', 'interpreter', 'latex');
 print ([mfilename '_cal_fft.png'], '-dpng', '-r300');
 fprintf (1, 'Calib covariance FFT:  pixel range: %d-%d\n', max(max(real(fft_cal))), min(min(real(fft_cal))));
 
+%% %% 
 [uloc_fl, vloc_fl] = gen_flagged_uvloc (uloc, vloc, flagant); 
-acccalsign = (sol.gainsol(rem_ants)*sol.gainsol(rem_ants)') .* acfl_wh - sol.sigman;
+acccalsign = (sol.gainsol(rem_ants)'*sol.gainsol(rem_ants)) .* acfl_wh - sol.sigman + eye(length(rem_ants));
 [ra, fft_calsign, calvis, l, m] = fft_imager_sjw_radec (acccalsign(:), uloc_fl(:), vloc_fl(:), gparm, [], [], tobs, fobs, 0);
 imagesc(l,m,real(fft_calsign)); colorbar;
 set(gca, 'FontSize', 16);

@@ -20,7 +20,7 @@
 %   the_res: The chosen resolution in elevation, for gridding the RADEC space.
 %   phi_res: The chosen resolution in azimuth, for gridding the RADEC space.
 
-function [im0, alpha, delta, the_res, phi_res] = allskymap(fname, skip, offset, nrec, deb)
+function [im0,imcl, M, alpha, delta, the_res, phi_res] = allskymap(fname, skip, offset, nrec, flagant, deb)
 
 	% Open visibility binary file.
 	fid = fopen (fname, 'rb');
@@ -29,8 +29,19 @@ function [im0, alpha, delta, the_res, phi_res] = allskymap(fname, skip, offset, 
 		return;
 	end;
 
+	% Move by required offset
+	for ind = 1:offset
+    	try
+			[acc, tobs, fobs] = readms2float(fid, -1, -1, 288);
+
+		catch err
+			fprintf (2, 'allskymap: EoF for visibility file reached!\n');
+			return;
+		end;
+	end;
+
     try
-		[acc, tobs, fobs] = readms2float(fid, offset, -1, 288);
+		[acc, tobs, fobs] = readms2float(fid, -1, -1, 288);
 	catch err
 		fprintf (2, 'allskymap: EoF for visibility file reached!\n');
 		return;
@@ -117,18 +128,19 @@ function [im0, alpha, delta, the_res, phi_res] = allskymap(fname, skip, offset, 
 	
 	% The dirty image
 	im0 = zeros (size (alpha));
+	imcl = im0;
 
 	% The count of the number of maps being accumulated in each pixel.
 	nmap2pix = zeros (size (alpha));
 
 % 	l = zeros(nrecs, size(Lgrid, 1));
 % 	m = zeros(nrecs, size(Lgrid, 1));
-% 	M = 0;
+ 	M = 0;
 	
 	try
 		for idx = offset:skip:offset+nrec
 	        try
-				[acc, tobs, fobs] = readms2float(fid, offset, -1, 288);
+				[acc, tobs, fobs] = readms2float(fid, -1, -1, 288);
 	        catch err
 	             fprintf (2, 'EoF reached!');
 	             rethrow(err);
@@ -136,18 +148,19 @@ function [im0, alpha, delta, the_res, phi_res] = allskymap(fname, skip, offset, 
 	        end;
 	
 			% Find flagged antennas
-			flagant = find (isnan (diag(acc)) | diag(acc) == 0);
-			[uloc_flag, vloc_flag] = gen_flagged_uvloc (uloc, vloc, flagant); 
+			badant = find (isnan (diag(acc)) | diag(acc) == 0);
+			currflagant = union (badant, flagant);
+			[uloc_flag, vloc_flag] = gen_flagged_uvloc (uloc, vloc, currflagant); 
 	    	antmask = zeros (size (acc));
 	    	posmask = zeros (size (Rpos,1), 1);
-	    	rem_ants = length(acc) - length(flagant);
-	    	for ind = 1:length(flagant)
-	    		antmask (flagant(ind), :) = 1; antmask (:,flagant(ind)) = 1;
-	    	 	posmask (flagant(ind), :) = 1;
+	    	rem_ants = length(acc) - length(currflagant);
+	    	for ind = 1:length(currflagant)
+	    		antmask (currflagant(ind), :) = 1; antmask (:,currflagant(ind)) = 1;
+	    	 	posmask (currflagant(ind), :) = 1;
 	    	end
 	    	acc = reshape (acc(antmask ~= 1), [rem_ants, rem_ants]);
 			
-	        fprintf (1, '<-- rec %04d, %s, flagant: %s ', idx, datestr(mjdsec2datenum(tobs)), num2str(flagant'));
+	        fprintf (1, '<-- rec %04d, %s, flagant: %s ', idx, datestr(mjdsec2datenum(tobs)), num2str(currflagant'));
 	        tobs_jd = tobs/86400 + 2400000.5; % Convert MJDsec to JD.
 			% determine the RA/dec grid points which fall within this obsevation.
 			[l, m] = radectolm(alpha, delta, tobs_jd, cs002_lon, cs002_lat, 0);
@@ -167,21 +180,26 @@ function [im0, alpha, delta, the_res, phi_res] = allskymap(fname, skip, offset, 
 	        A(:, ~insnapshot) = 0;
 	        condR = cond(abs(invR).^2);
 	        if condR > 1e10 || isnan(condR)
-	            break
+				fprintf (2, '<-- Condition number > 1e10!\n');
+	            continue;
 	        end
 	        imdirty = (conj(A)' * conj(invR) .* A') * ones(sum(rem_ants), 1) - abs(A' * invR).^2 * inv(abs(invR).^2) * diag(invR);
 			fprintf (1, 'Dirty pixels: %d.\n', length(imdirty));
-	        % Msnapshot = abs(A' * invR * A).^2 - abs(A' * invR).^2 * abs(invR).^2 * (invR * A).^2;
+	        Msnapshot = abs(A' * invR * A).^2 - abs(A' * invR).^2 * abs(invR).^2 * (invR * A).^2;
+			% imclean = imdirty \ Msnapshot;
+			imclean = Msnapshot \ imdirty;
 	        im0(up == 1) = im0 (up == 1) + imdirty;
+			imcl(up==1) = imcl(up == 1) + imclean';
+	        % im0(up == 1) = im0 (up == 1) + imclean;
 			nmap2pix (up == 1) = nmap2pix (up == 1) + 1;
-	        % M = M + Msnapshot;
+	        % M(up == 1)  = M (up == 1) + Msnapshot;
 	
 			% Display the dirty map, if debugging is required.
 			if (deb > 0)
 				% radecmap = griddata (alpha, delta, im0, al_lin, de_lin, 'cubic');
                 radecobj= TriScatteredInterp (alpha, delta, im0);
                 radecmap = radecobj(al_lin, de_lin);
-				imagesc (al_lin(1,:)*12/pi, de_lin(:,1)*180/pi, real (radecmap)); colorbar;
+				imagesc (al_lin(1,:)*12/pi, de_lin(:,1)*180/pi, abs(radecmap)); colorbar;
                 xlabel ('RA(Hr)'); ylabel ('Dec(deg)');
                 title (sprintf ('Time: %s, Freq: %.2f\n', datestr(mjdsec2datenum(tobs)), fobs));
                 drawnow();
