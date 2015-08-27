@@ -185,11 +185,11 @@ function [im0,imcl, M, alpha, delta, the_res, phi_res] = allskymap(fname, skip, 
 	        end
 	        imdirty = (conj(A)' * conj(invR) .* A') * ones(sum(rem_ants), 1) - abs(A' * invR).^2 * inv(abs(invR).^2) * diag(invR);
 			fprintf (1, 'Dirty pixels: %d.\n', length(imdirty));
-	        Msnapshot = abs(A' * invR * A).^2 - abs(A' * invR).^2 * abs(invR).^2 * (invR * A).^2;
-			% imclean = imdirty \ Msnapshot;
-			imclean = Msnapshot \ imdirty;
+%	        Msnapshot = abs(A' * invR * A).^2 - abs(A' * invR).^2 * abs(invR).^2 * (invR * A).^2;
+%			% imclean = imdirty \ Msnapshot;
+%			imclean = Msnapshot \ imdirty;
 	        im0(up == 1) = im0 (up == 1) + imdirty;
-			imcl(up==1) = imcl(up == 1) + imclean';
+%			imcl(up==1) = imcl(up == 1) + imclean';
 	        % im0(up == 1) = im0 (up == 1) + imclean;
 			nmap2pix (up == 1) = nmap2pix (up == 1) + 1;
 	        % M(up == 1)  = M (up == 1) + Msnapshot;

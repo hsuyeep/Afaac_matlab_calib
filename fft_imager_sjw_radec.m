@@ -69,7 +69,7 @@ function [radecskymap, lmskymap, vispad, l, m] =  ...
 	% the horizon.)
     mask = NaN (length(l));
     mask(meshgrid(l).^2 + meshgrid(l).'.^2 < 1) = 1;
-    lmskymap = single (real(skymap) .* mask);
+    lmskymap = single (real(skymap) .* mask)';
 	% Transpose added on 03Mar15, such that images with axis match the real sky.
 	% Rescaling required due to the unnormalized FFT carried out by fft2.
     % lmskymap = single ((skymap) .* mask)'./sqrt(length(acc));
