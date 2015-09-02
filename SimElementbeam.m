@@ -40,6 +40,7 @@ classdef SimElementbeam < handle
         pointing = []; % Pointing direction for HBA analog beamforming, azi/el, rad        
         l = [];
         m = [];
+        fhdl = [];
     end
     
     methods
@@ -55,7 +56,7 @@ classdef SimElementbeam < handle
             addpath ('~/WORK/Matlab');
             object.lba = lba;
             object.arrayconfig = arrayconfig;
-            assert (strcmpi(arrayconfig, 'LBA_OUTER') || strcmpi(arrayconfig,'LBA_INNER') || strcmpi(arrayconfig,'HBA_0') || strcmpi(arrayconfig, 'HBA_1'));
+            assert (strcmpi(arrayconfig, 'LBAOUTER') || strcmpi(arrayconfig,'LBAINNER') || strcmpi(arrayconfig,'HBA0') || strcmpi(arrayconfig, 'HBA1'));
             
             if (object.lba == 1)
                 object.simul_file = '/home/prasad/WORK/AARTFAAC/Afaac_matlab_calib/LBA_beam/arts_sim/LBA_core.mat';                
@@ -75,9 +76,9 @@ classdef SimElementbeam < handle
             object.fsaveprefix = fsaveprefix;
             
             
-            if  (object.lba == 1 && strcmpi(object.arrayconfig,'LBA_INNER'))
+            if  (object.lba == 1 && strcmpi(object.arrayconfig,'LBAINNER'))
                 object.dipsel = 1:576;            % 288 dual pol antennas
-            elseif (object.lba == 1 && strcmpi(object.arrayconfig,'LBA_OUTER'))
+            elseif (object.lba == 1 && strcmpi(object.arrayconfig,'LBAOUTER'))
                 object.dipsel = 577:1152;         % 288 dual pol antennas
             elseif (object.lba == 0 && strcmpi(object.arrayconfig, 'HBA'))
                 object.dipsel= 1:768;             % 16 dual pol ants/tilex24tiles
@@ -117,13 +118,13 @@ classdef SimElementbeam < handle
                 object.vout    = zeros(int32(object.nelem/2), 2, length(object.Theta), length(object.Phi), object.nfreq);
             end;
             for NF=1:object.nfreq
-                if (strcmpi(object.arrayconfig,'LBA_OUTER') || strcmpi(object.arrayconfig,'LBA_INNER'));
+                if (strcmpi(object.arrayconfig,'LBAOUTER') || strcmpi(object.arrayconfig,'LBAINNER'));
                     % Zlna taken from the Master's thesis of Maria Krause, pg. 27
                     % (Schematic) and pg. 47 for estimated values of R and
                     % C.
                     object.zlna = (700./(1+1i*2*pi*object.Freq(NF)*700*15e-12))*eye (object.nelem); % Define impedances of the LNAs.		                                    
-                    % object.zlna = 36 + (1./1i*2*pi*object.Freq(NF)*4.1e-12) * eye (object.nelem); % R & C in series, values from LBA amplifier schematics.
-                    object.zlna = 0 + (1./1i*2*pi*object.Freq(NF)*4.1e-12) * eye (object.nelem); % R & C in series, values from LBA amplifier schematics.
+                    % object.zlna =(36+1./(1i.*2.*pi.*object.Freq(NF).*4.1e-12)).*eye(object.nelem);% 36 + (1./(1i*2*pi*object.Freq(NF)*4.1e-12)) * eye (object.nelem); % R & C in series, values from LBA amplifier schematics.
+                    % object.zlna = 0 + (1./1i*2*pi*object.Freq(NF)*4.1e-12) * eye (object.nelem); % R & C in series, values from LBA amplifier schematics.
                 end;
                 B = (object.glna*object.zlna(object.dipsel,object.dipsel)/(object.Zant(object.dipsel,object.dipsel, NF)+object.zlna(object.dipsel,object.dipsel))); % Is it correct to ignore the other cross terms?                
                 for NT=1:length(object.Theta)
@@ -152,9 +153,11 @@ classdef SimElementbeam < handle
             for NF=1:object.nfreq
                 for NT=1:length(object.Theta)
                     for NP=1:length(object.Phi)
-                        for ant=1:2:object.nelem/2 % Because we use up both pols of the ant.
-                            object.gain(NT, NP, NF, (ant+1)/2, :, :) = [squeeze(object.vout(ant  ,1,NT,NP,NF)) squeeze(object.vout(ant  ,2,NT,NP,NF));
-                                                                        squeeze(object.vout(ant+1,1,NT,NP,NF)) squeeze(object.vout(ant+1,2,NT,NP,NF))];                            
+                        % Because we use up both pols of the ant, and only half the antennas are 
+                        % used in any LBA_INNER/OUTER configuration.
+                        for ant=1:2:object.nelem/2 
+                            object.gain(NT, NP, NF, (ant+1)/2, :, :) = [squeeze(object.vout(ant  ,1,NT,NP,NF)) squeeze(object.vout(ant  ,2,NT,NP,NF));  % [g_xth g_xph;
+                                                                        squeeze(object.vout(ant+1,1,NT,NP,NF)) squeeze(object.vout(ant+1,2,NT,NP,NF))]; %  g_yth g_yph];                           
                         end;
                     end;
                 end;
@@ -194,7 +197,8 @@ classdef SimElementbeam < handle
                 for NT=1:length(object.Theta)
                     for NP=1:length(object.Phi)
                         for ant = 1:object.nelem/4
-                            tmp = squeeze(object.gain(NT,NP,NF,ant,:,:)); % 2x2 Jones matrix
+                            % tmp = squeeze(object.gain(NT,NP,NF,ant,:,:)); % 2x2 Jones matrix
+                            tmp = squeeze (object.vout(ant:ant+1,:,NT,NP,NF));
                             for st = 1:length(stokes)
                                 cohmat = tmp*squeeze(stokesmap(upper(stokes(st))))*tmp';
                                 % below is already a power due to adding up xx and yy
@@ -248,7 +252,8 @@ classdef SimElementbeam < handle
             assert (min(l) >= -1 & max(l) <= 1);
             assert (min(m) >= -1 & max(m) <= 1);
             if (isempty (freq) == 1)
-                freq = object.Freq(1:3:length(object.Freq)); % Complains when using end;
+                % freq = object.Freq(1:3:length(object.Freq)); % Complains when using end;
+                freq = object.Freq;
             end;
             
             object.l = l; object.m = m; % Store user specified l/m positions where the beam is sampled.
@@ -310,20 +315,24 @@ classdef SimElementbeam < handle
         %   None, output is internally stored.
         function genAARTFAACLMBeam (object, stn)
             assert (isempty (object.lmstnavgbeam) == 0);
+            if (isempty (stn) == 1)
+                stn = 1:6;
+            end;
             if (isempty(object.lmaartfaacbeam) == 1)
                 object.lmaartfaacbeam = zeros (length (object.l), length (object.m), length(object.usrfreq), length (object.stokes));
             end;
             
-            object.lmaartfaacbeam = mean (object.lmstnavgbeam(stn,:,:,:,:), 1);            
+            object.lmaartfaacbeam = squeeze(mean (object.lmstnavgbeam(stn,:,:,:,:), 1));
         end;
         
 %%%%%%%%%%% Plotting Related %%%%%%%%%%%%%
         % Setup the plotting surface as necessary
         function fhdl = setupPlot (object, fhdl)
             if (isempty (fhdl))
-                fhdl = figure;
+                object.fhdl = figure ();
             end;
-           
+           set (object.fhdl, 'Position', [0, 0, 900, 1100]);
+           fhdl = object.fhdl;
         end;
         
         
@@ -370,12 +379,13 @@ classdef SimElementbeam < handle
             if (isempty(freqid))
                 freqid = 1;
             end;
-            imagesc (object.l, object.l, object.lmstokesbeambeam(ant,:,:,freqid,1));
+            norm_fact = max(max(object.lmstokesbeam(ant,:,:,freqid, 1)));
+            imagesc (object.l, object.l, object.lmstokesbeam(ant,:,:,freqid,1)./norm_fact);
             colorbar;
             set (gca, 'YDir', 'Normal'); % To match orientation with station images
             set (gca, 'XDir', 'Reverse'); % To match orientation with station images
             text (-0.70, -0.75, sprintf ('%s', object.station_names{station}), 'Color', [1,1,1]);
-            
+            title (sprintf ('%s: %f MHz', object.arrayconfig, object.usrfreq(freqid)));
         end;
         
         % Plot the mean primary beam per station over frequency
@@ -383,7 +393,7 @@ classdef SimElementbeam < handle
         %   fhdl : Figure handle on which to plot
         %   fnameprefix: Filename prefix with which to store the generated
         %   image.       
-        function fhdl = imgMeanBeam (object, fhdl, fnameprefix)
+        function fhdl = imgStnMeanBeam (object, fhdl, fnameprefix)
             if (isempty(fhdl) == 1)
                 fhdl = figure();
             end;
@@ -408,36 +418,18 @@ classdef SimElementbeam < handle
                     c = contourc (object.l, object.m, b1, [0.75, 0.5, 0.25]);
                     hold on;
                     c1 = c(2,1); c2 = c(2,c1+2);
-                    plot (c(1,2:c1+1), c(2,2:c1+1), '-w');
+                    plot (c(1,2:c1+1), c(2,2:c1+1), '-r');
                     plot (c(1, c1+3:c1+c2+2), c(2,c1+3:c1+c2+2), '-k');
-                    plot (c(1, c1+c2+4:end), c(2,c1+c2+4:end), '-c');
+                    plot (c(1, c1+c2+4:end-2), c(2,c1+c2+4:end-2), '-c');
                     %axis equal
                     % axis tight
                     set (gca, 'YDir', 'Normal'); % To match orientation with station images
                     set (gca, 'XDir', 'Reverse'); % To match orientation with station images
-                    text (-0.70, -0.75, sprintf ('%s', object.station_names{station}), 'Color', [1,1,1]);            
-                    hold off;
-
-
-
-%                     subplot (6,2,2*station);
-%                     b2 = abs(squeeze(beam_inner(station, :,:,idx)));
-%                     imagesc (l,l,b2); colorbar;
-%                     c = contourc (l, l, b2, [0.75 0.5, 0.25]);
-%                     hold on;
-%                     c1 = c(2,1); c2 = c(2,c1+2);
-%                     plot (c(1,2:c1+1), c(2,2:c1+1), '-w');
-%                     plot (c(1, c1+3:c1+c2+2), c(2,c1+3:c1+c2+2), '-k');
-%                     plot (c(1, c1+c2+4:end), c(2,c1+c2+4:end), '-c');
-%                     % axis equal
-%                     % axis tight
-%                     set (gca, 'YDir', 'Normal'); % To match orientation with station images
-%                     set (gca, 'XDir', 'Reverse'); % To match orientation with station images
-%                     text (-0.70, -0.75, sprintf ('%s', station_names{station}), 'Color', [1,1,1]);            
-%                     hold off;
+                    text (-0.67, -0.75, sprintf ('%s', object.station_names{station}), 'Color', [1,1,1]);            
+                    hold off;                   
                 end;               
                 mtit (sprintf ('Stokes-I power patterns, %0.2f MHz, %s', object.usrfreq(idx)/1e6, object.arrayconfig), 'xoff', -0.1, 'yoff', 0.025);
-                print ('-depsc', '-r200', sprintf ('%s_%0.2fMHz.png', fnameprefix, object.usrfreq(idx)/1e6));
+                print ('-depsc', '-r200', sprintf ('%s_%s_%2.0fMHz.eps', fnameprefix, object.arrayconfig, object.usrfreq(idx)/1e6));
                 % saveas (gcf, sprintf ('sterp_stations_stokesI_%0.2fMHz.png', object.Freq(idx)/1e6));
                 pause;     
                 clf;
@@ -448,37 +440,95 @@ classdef SimElementbeam < handle
         % Plot the aartfaac full beam response over frequency
         % Arguments:
         %   None
-        function fhdl = imgAARTFAACbeam(object, fhdl)
+        function fhdl = imgAARTFAACBeam(object, fhdl, fnameprefix)
             if (isempty (fhdl) == 1)
                 fhdl = figure();
             end;
             assert (isempty (object.lmaartfaacbeam) == 0);
             
-            for ind = length (object.usrfreq)
-                imagesc (object.l, object.m, squeeze (object.lmaartfaacbeam (:,:,ind,1)));
+            if (isempty(fnameprefix) == 1)
+                fnameprefix = 'AARTFAAC_stI';
+            end;
+            
+            for ind = 1:9:length (object.usrfreq)
+                for pl = 1:9
+                    if ((ind-1)+pl > length(object.usrfreq))
+                        break;
+                    end;
+                    subplot (3,3,pl);
+                    norm_fact = max(max(real(object.lmaartfaacbeam(:,:,(ind-1)+pl))));
+                    b1 = real(object.lmaartfaacbeam (:,:,(ind-1)+pl))./norm_fact;
+                    imagesc (object.l, object.m, squeeze (b1));
+                    c = contourc (object.l, object.m, b1, [0.5, 0.25]);
+                    hold on;
+                    c1 = c(2,1); c2 = c(2,c1+2);
+                    plot (c(1,2:c1+1), c(2,2:c1+1), '-r');
+                    plot (c(1, c1+3:c1+c2+2), c(2,c1+3:c1+c2+2), '-k');
+                    
+                    set (gca, 'YDir', 'Normal'); % To match orientation with station images
+                    set (gca, 'XDir', 'Reverse'); % To match orientation with station images
+                    colorbar;
+                    title (sprintf ('%.2f MHz', object.usrfreq((ind-1)+pl)/1e6));
+                end;
+                mtit (sprintf ('%s Stokes-I average beam over %s.\n', object.arrayconfig, char(object.station_names))); 
+                print ('-depsc', '-r200', sprintf ('%s_%s_%2.0fMHz.eps', fnameprefix, object.arrayconfig, object.usrfreq(ind)/1e6));                
+                input ('Enter a key to move to the next set of plots');
+                clf;
             end;
         end;
         
-        % Image the spectral response of the beam per station
+        % Image the spectral response of the beam per station,
+        % unnormalized.
         % Arguments: 
         %  
         % Returns:
         %   Nonezeros (object.nelem/4, length(l), length(m), length(freq), length(stokes));
         
-        function imgSpectralEleResp(object)
+        function imgSpectralEleResp(object, fhdl, fnameprefix)
+            if (isempty(fnameprefix) == 1)
+                fnameprefix = 'AARTFAAC_spectral_ele';
+            end;
             for ind = 1:length(object.station_names)
                 subplot (3, 2, ind);
-                plot (object.Freq/1e6, squeeze(object.lmstokesbeam(ind, :, :)), '.-')
+                plot (object.usrfreq /1e6, squeeze(object.lmstokesbeam(ind, :, :)), '.-')
                 xlabel ('Freq(MHz)'); ylabel ('Normalized linear gain');
                 title (sprintf('%s', object.arrayconfig, object.station_names{ind}));
-
-%                 subplot (6, 2, 2*ind)
-%                 plot (object.Freq/1e6, squeeze(beam_outer_freq(ind, :, :)), '.-')
-%                 xlabel ('Freq(MHz)'); ylabel ('Normalized linear gain');
-%                 title (sprintf('%s', object.arrayconfig, object.station_names{ind}));        
             end;
-            mtit (sprintf ('Beam pattern spectral response: %s FoV', num2str(sample_beam))); 
+            mtit (sprintf ('Beam pattern spectral response: %s FoV', num2str(sample_beam)));             
+            print ('-depsc', '-r200', sprintf ('%s_%s_%2.0fMHz.eps', fnameprefix, object.arrayconfig, object.usrfreq(ind)/1e6)); 
         end;
+        
+        
+        % Generate the spectral response per station at the zenith and various elevations.
+        % Arguments:
+        %  ele: The elevations at which to sample the beam, as a fraction
+        %  of the Field of view.
+        
+%         function plotSpectralEle (object, ele)            
+%             % The l/m coordinates of the supplied elevation,
+%             % converted to pixel coordinates.
+%             if (isempty (ele) == 1)
+%                 ele = [0.01, 0.5, 0.7, 0.9];
+%             end;
+%             sample_pix = int32 (length(object.l)/2) + int32(ele*length(object.l)/2);
+% 
+%             beam_freq = zeros (6, length (object.usrfreq), length(sample_pix));            
+%             for station = 1:length(object.station_names)
+%                 for ind = 1:length(object.usrfreq)
+%                     beam_freq (station, ind, :) = diag(squeeze(abs(object.lmstnavgbeam(station, sample_pix, sample_pix, ind))));                    
+%                 end;
+%             end;
+% 
+%             clf;
+%             for ind = 1:length(station_names)
+%                 subplot (3, 2, ind);
+%                 plot (object.usrfreq/1e6, squeeze(beam_freq(ind, :, :)), '.-')
+%                 xlabel ('Freq(MHz)'); ylabel ('Normalized linear gain');
+%                 title (sprintf('%s, %s', object.station_names{ind}, object.arrayconfig));                
+%             end;
+%             mtit (sprintf ('Beam pattern spectral response: %s FoV', num2str(sample_beam))); 
+%             % saveas (gcf, 'beam_spectral_arrayconfig_response.png');
+%         end
         
         % Generate a movie of the generated embedded element responses,
         % with the movie axis over elements for a fixed frequency.
@@ -493,9 +543,13 @@ classdef SimElementbeam < handle
         % Returns:
         %   None
         
-        function imgMovieEmbeddedResp(object, fhdl, savefname, freqind, freq, stokes, l)
-            % Generate a movie of the stokes-I beam for each antenna, LBA_INNER            
-            freqind = 4;
+        function imgMovieEmbeddedResp(object, fhdl, savefname, freqind, stokes)
+            % Generate a movie of the stokes-I beam for each antenna's polarized response within a station, for the specified frequency.            
+            if (isempty(freqind) == 1)
+                freqind = 1;
+            end;
+                
+            assert (freqind <= max(object.usrfreq));
             if (isempty(savefname) == 1)
                 savefname = strcat (sprintf ('%s_%s_%s_beam_pattern_%fMHz', datestr(now, 30), object.arrayconfig, object.usrfreq(freqind)), '.avi');
             end;
@@ -529,11 +583,11 @@ classdef SimElementbeam < handle
             close(vidObj);
         end;
         
-        % plot the spectral variation of the power contours
+        % plot the spectral variation of the full AARTFAAC beam power contours
         % Arguments:
         %  pwrlev: vector of gain levels at which to plot the spectral
         %          response
-        function pltSpectralPowerResponse(object, fhdl, pwrlev)
+        function pltSpectralPowerResponse(object, fhdl, pwrlev, fnameprefix)
             col = {'b', 'g',' r','c', 'm', 'y', 'k', 'w'};
             leginfo = {};
             
@@ -541,20 +595,30 @@ classdef SimElementbeam < handle
                 pwrlev = [0.75, 0.5, 0.25];
             end;
             
-            for pind = [0.75, 0.5, 0.25]               
+            if (isempty(fnameprefix) == 1)
+                fnameprefix = 'AARTFAAC_spectral_resp';
+            end;
+            
+            for pind = 1:length(pwrlev)
+                clf;
+                hold on;
                 for ind = 1: length(object.usrfreq)/2
-                    b1 = abs(aartfaac6_outer_beam (:,:,2*ind));
-                    c = contourc(l, l, b1, [pind, pind]);
-                    fprintf (1, '%d ', c(2,1));
-                    plot (c(1,2:end), c(2,2:end), char (col{ind}));
-                    hold on;            
-                    leginfo{ind} = [num2str(object.Freq(ind)/1e6) 'MHz']; %sprintf ('%.1MHz', object.Freq(ind)/1e6) ];           
-                end;
-                legend (leginfo);
-                title (sprintf ('%s, Gain level %f.\n', object.arrayconfig, pind));
-                grid on;
-                % legend (sprintf ('%.1fMHz,', object.Freq(1:2:end)/1e6));
-                fprintf (1, '\n');
+                    b1 = abs(object.lmaartfaacbeam (:,:,2*ind))./max(max(abs(object.lmaartfaacbeam(:,:,2*ind))));
+                    c = contourc(object.l, object.l, b1, [pwrlev(pind), pwrlev(pind)]);
+                    plot (c(1,2:end), c(2,2:end), char(col(ind)));
+%                     c1 = c(2,1); c2 = c(2,c1+2);
+%                     plot (c(1,2:c1+1), c(2,2:c1+1), '-r');
+%                     plot (c(1, c1+3:c1+c2+2), c(2,c1+3:c1+c2+2), '-k');
+%                     plot (c(1, c1+c2+4:end-2), c(2,c1+c2+4:end-2), '-c');
+%                     hold off;            
+                    leginfo{ind} = [num2str(object.usrfreq(ind)/1e6) 'MHz'];           
+                 end;
+                 legend (leginfo);
+                 title (sprintf ('%s, Gain level %f.\n', object.arrayconfig, pwrlev(pind)));
+                 grid on;                                                  
+                 hold off;
+                 print ('-depsc', '-r200', sprintf ('%s_%s_%2.0flev.eps', fnameprefix, object.arrayconfig, pwrlev(pind)*100));
+                 input ('Enter a key to move to next power level');
             end;
         end;
 
@@ -611,15 +675,15 @@ classdef SimElementbeam < handle
             fprintf (2, '# Stokes currently ignored, only stokes-I beam is generated.\n');
             assert (object.simloaded == 1);
             if (isempty(freq) == 1)
-                freq = min(object.Freq);
+                freq = object.Freq; % object.Freq(1:3:length(object.Freq));
             end;
             assert (min(freq) >= min(object.Freq));
             assert (max(freq) <= max(object.Freq));
             fprintf (1, '<-- Generating output voltage into vout member...\n');
             object.genOutputVoltage();
             
-            fprintf (1, '<-- Generating Jones matrices into gains member...\n');
-            object.genJonesMat ();
+            % fprintf (1, '<-- Generating Jones matrices into gains member...\n');
+            % object.genJonesMat ();
             
             fprintf (1, '<-- Generating Stokes beams in RA/Dec into radecstokesbeam member...\n');
             object.genRaDecStokesBeam([]);
@@ -630,10 +694,27 @@ classdef SimElementbeam < handle
             fprintf (1, '<-- Generating station average Stokes beams in l,m into lmstnavgbeam member...\n');
             object.genAvgStationLMBeams ({[],[],[],[],[],[]});
             
-%             fprintf (1, '<-- Generating AARTFAAC average Stokes beams in l,m into lmaartfaacbeam member...\n');
-%             object.genAARTFAACLMBeam ([]);
+            fprintf (1, '<-- Generating AARTFAAC average Stokes beams in l,m into lmaartfaacbeam member...\n');
+            object.genAARTFAACLMBeam ([]);
             
         end;
+        
+        function genPlots (object)
+            % Setup plot window
+            fhdl = object.setupPlot(object.fhdl);
+
+            % -- Beam patterns averaged over all 6 AARTFAAC stations, as a func. of
+            % freq.
+            object.imgAARTFAACBeam(object.fhdl, []);
+
+            % -- Per station average stokes-I power patterns over frequency
+            object.imgStnMeanBeam (object.fhdl, []);
+
+            % -- Spectral response (contour plot) of average stokes-I power pattern at 
+            %    fixed gains.
+            object.pltSpectralPowerResponse (object.fhdl, [], []);
+        end;
+            
 
     end; % End of methods
     
