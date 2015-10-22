@@ -8,7 +8,10 @@ classdef SimElementbeam < handle
     % - Generates the tile beam response for the chosen direction
     % - Allows generation of the tile response while tracking the chosen sky direction. 
     % pep/06Aug15
-    
+    % Usage:
+    %  obj = SimElementbeam (1, 'lbainner', './', []);
+    %  obj.createAvgBeam(1, [-1:0.01:1], [-1:0.01:1], []);                         
+    %  obj.genPlots ();
     properties
         lba         = 0;  % Bool to indicate whether an LBA or HBA simulation
         simul_file  = []; % File name of file containing the sim. products.
@@ -74,6 +77,9 @@ classdef SimElementbeam < handle
             object.nelem = length (object.g_z);
             object.simloaded = 1;
             object.fsaveprefix = fsaveprefix;
+            if (object.fsaveprefix(end) ~= '/')
+                object.fsaveprefix = [object.fsaveprefix '/'];
+            end;
             
             
             if  (object.lba == 1 && strcmpi(object.arrayconfig,'LBAINNER'))
@@ -256,14 +262,14 @@ classdef SimElementbeam < handle
                 freq = object.Freq;
             end;
             
-            object.l = l; object.m = m; % Store user specified l/m positions where the beam is sampled.
+            object.l = single(l); object.m = single(m); % Store user specified l/m positions where the beam is sampled.
             object.usrfreq = freq;
             if (isempty (object.lmstokesbeam) == 1)
-                object.lmstokesbeam = zeros (object.nelem/4, length(l), length(m), length(freq), length(object.stokes));
+                object.lmstokesbeam = single (zeros (object.nelem/4, length(l), length(m), length(freq), length(object.stokes)));
             else
                 if (size (object.lmstokesbeam, 2) ~= length (l) || size (object.lmstokesbeam, 4) ~= length(freq))
                     clear object.lmstokesbeam;
-                    object.lmstokesbeam = zeros (object.nelem/4, length(l), length(m), length(freq), length(object.stokes));                    
+                    object.lmstokesbeam = single (zeros (object.nelem/4, length(l), length(m), length(freq), length(object.stokes)));                    
                 end;
             end;
             
@@ -279,7 +285,7 @@ classdef SimElementbeam < handle
             for idx = 1:length(freq)
                 for dip = 1:object.nelem/4
                     for st = 1:length(object.stokes)
-                        object.lmstokesbeam(dip,:, :, idx, st) = interp3 (object.Phi, object.Theta, object.Freq, squeeze(object.radecstokesbeam(dip,:,:,:,st)), phii, thetai, freq(idx) * ones(size(phii))) .* (dist < 1);
+                        object.lmstokesbeam(dip,:, :, idx, st) = single (interp3 (object.Phi, object.Theta, object.Freq, squeeze(object.radecstokesbeam(dip,:,:,:,st)), phii, thetai, freq(idx) * ones(size(phii))) .* (dist < 1));
                     end;
                 end;
             end
@@ -323,6 +329,45 @@ classdef SimElementbeam < handle
             end;
             
             object.lmaartfaacbeam = squeeze(mean (object.lmstnavgbeam(stn,:,:,:,:), 1));
+        end;
+
+        % Save the generated beams as .mat files, for e.g., beam model generation.
+        % Arguments:
+        %    fname : Name of output file. Generated if not provided.
+        %    ftype : Type of file. Allowed options:
+        %             'mat' : Matlab .mat file (Default)
+        %             'fits': FITS file via fitswrite()
+        %             'hdf5': HDF5 file via H5write()
+        % Returns :
+        %    None.
+        function saveAARTFAACLMbeam (object, fname, ftype )
+            assert (isempty (object.lmaartfaacbeam) == 0);
+            if (isempty (ftype) == 1)
+                fprintf (2,'saveAARTFAACLMbeam: File type not found, defaulting to .mat');
+                ftype = 'mat';
+            end;
+            if (isempty (fname) == 1)
+                fname = sprintf ('%s%s_AARTFAAC_beamshape_%s.%s', object.fsaveprefix, object.arrayconfig, datestr(now(), 30), ftype);
+            end;
+            switch upper (ftype)
+                case 'MAT'
+                    save (fname, object.lmaartfaacbeam, object.usrfreq, object.l, object.m);
+                case 'HDF5'
+                    h5create (fname, '/lmbeamintensity_norm', size (object.lmaartfaacbeam));
+                    h5create (fname, '/freq_hz', size (object.usrfreq));
+                    h5create (fname, '/l', size (object.l));
+                    h5create (fname, '/m', size (object.m));
+                    h5info (fname);
+                    h5write (fname, '/lmbeamintensity_norm', object.lmaartfaacbeam);
+                    h5write (fname, '/freq_hz', object.usrfreq);
+                    h5write (fname, '/l', object.l);
+                    h5write (fname, '/m', object.m);
+                    
+                otherwise
+                    fprintf (2, 'saveAARTFAACLMbeam: Unknown extension %s. Saving as .mat',ftype);
+                    return ;
+                
+            end;
         end;
         
 %%%%%%%%%%% Plotting Related %%%%%%%%%%%%%
