@@ -12,7 +12,7 @@
 %           freq, uvflag, flagant, debug, ptSun)
 function [currsol] = pelican_sunAteamsub (acc, t_obs, ...
           freq, uvflag, flagant, debug, ptSun, max_calext_iter, ...
-		  max_gainsolv_iter, posfilename)
+		  max_gainsolv_iter, posfilename, mod_ra, mod_de)
 
 % Arguments:
 %    acc    : Filled, square ACM of size NantxNant complex numbers, where 
@@ -28,6 +28,10 @@ function [currsol] = pelican_sunAteamsub (acc, t_obs, ...
 %             2 ==> Even more detail
 %    ptSun  : 0 ==> Carry out a Sparse reconstruction of the Solar model.
 %             1 ==> Model the Sun as a point source.
+%  max_calext_iter: Limit the number of major cycles
+%  max_gainsolv_iter: Limit the number of minor cycles
+%  posfilename: Antenna configuration filename
+%  mod_ra, mod_de: Additional skymodel components, specified in RA/Dec.
 % NOT USED.
 %   calim   : Structure of parameters to the calibration. If supplied as an 
 %			  empty variable, calim is internally generated.
@@ -77,7 +81,7 @@ function [currsol] = pelican_sunAteamsub (acc, t_obs, ...
 
         % A-team from 3CR catalog for defining the model sky
     	% Nsrc x 1 vector with source indices. -->NOTE<--: use 0 for the Sun
-        rodata.srcsel =  [324, 283, 88, 179, 0]; 
+       	rodata.srcsel =  [324, 283, 88, 179, 0]; 
 
     	% ---- Calibration and imaging parameters ---- 
 	    calim.restriction    = 10;    % Avoid vis. below 'restriction' 
@@ -211,7 +215,7 @@ function [currsol] = pelican_sunAteamsub (acc, t_obs, ...
 
     % Initial calibration
     [cal1, sigmas1, Sigman1] = statcal_stefcal (acc, t_obs, freq, ... 
-        rodata, calim, calim.uvflag, calim.intap_fl);
+        rodata, calim, calim.uvflag, calim.intap_fl, mod_ra, mod_de);
 
     % [cal1, sigmas1, Sigman1] = statcal_vlss(acc, t_obs, freq, posITRF, srcsel,
     %                          normal, 10, maxrestriction, eye(Nelem), catalog);
@@ -246,6 +250,20 @@ function [currsol] = pelican_sunAteamsub (acc, t_obs, ...
         epoch = true(length(rodata.srcsel), 1);
         % disp (['Sun NOT included, len of epoch ' num2str(length(epoch))]);
     end
+	if (~isempty (mod_ra))
+		if (~isempty(mod_de))
+			for modind = 1:length(mod_de)
+				fprintf (2, '<-- Additional model sky component at RA/Dec: %.2f, %.2f\n', mod_ra(modind), mod_de(modind));
+			end;
+			% rasrc = [rasrc mod_ra'];
+			% decsrc = [decsrc mod_de'];
+			% If model components are given, assume they are the brightest
+			% sources in the sky, and do not attempt to estimate 
+			% parameters for the Ateam sources.
+            rasrc = mod_ra';
+            decsrc = mod_de';
+		end;
+	end;
     % srcpos0 = radectoITRF(rasrc(sel), decsrc(sel), epoch(sel), t_obs);
 
     % srcpos0 holds the 3CR positions of ALL model sources, at the time of 
@@ -265,7 +283,7 @@ function [currsol] = pelican_sunAteamsub (acc, t_obs, ...
        disp (['WSF: Working with ' num2str(nsrc) ...
              ' selected sources, t_obs(MJD): ' num2str(t_obs)]);
     end
-    disp(['pelican_sunAteasub.m: Srcs from srclist above horizon: ' num2str(rodata.srcsel(up))]);
+    disp(['pelican_sunAteasub.m: Srcs from srclist above horizon: ' num2str(rodata.srcsel(up(1:length(rodata.srcsel))))]);
 
 
     % Convert coordinates of selected sources from ITRF to elevation/azimuth.
@@ -336,7 +354,12 @@ function [currsol] = pelican_sunAteamsub (acc, t_obs, ...
     % tic
 
     % Actual source indices into srclist3CR, don't use directly!
-    visibleAteamsun = rodata.srcsel(sel); 
+    if (~isempty (mod_ra))
+        allsrc = [rodata.srcsel, ones(1, length(mod_ra))];
+        visibleAteamsun = allsrc (sel); 
+    else
+        visibleAteamsun = rodata.srcsel(sel); 
+    end;
 
     % construct model visibilities for A-team sources, choosing Point source 
     % model of the Sun, if required.

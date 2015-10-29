@@ -191,7 +191,7 @@ function wrcalvis2bin (fname, offset, ntslices, wrcalsol, trackcal, array)
 										visamplothresh);
 	currflagant = unique ([flagant missant]); % Not reshaping
 	prevsol = pelican_sunAteamsub (acc, t_obs, freq, uvflag, ... 
-						currflagant, debuglev, ptSun, [], [], posfilename);
+						currflagant, debuglev, ptSun, [], [], posfilename, [], []);
     clear pelican_sunAteamsub;
 
 	% Main loop iterating over timeslices. Functional parts:
@@ -213,7 +213,7 @@ function wrcalvis2bin (fname, offset, ntslices, wrcalsol, trackcal, array)
 		% Check for bad timeslices.
 		accnorm = norm (acc - diag(diag(acc)), 'fro'); % NOTE: Ignoring autocorr
 		fprintf (1, 'Movmed: %f, accnorm: %f\n', movmed, accnorm);
-		if (accnorm > medianthresh*movmed)
+		if ((accnorm > medianthresh*movmed) | (cond (acc) > 1e10))
 			fprintf (2, '<--Discarding rec: %03d, Time: %.2f. Excess: %.2f\n', ...
 				  ts, t_obs, accnorm/(medianthresh*movmed));
 			badtimes = badtimes + 1;
@@ -245,7 +245,7 @@ function wrcalvis2bin (fname, offset, ntslices, wrcalsol, trackcal, array)
 		currsol.freq = freq;
 		if (trackcal == 0)
 	   	    currsol = pelican_sunAteamsub (acc, t_obs, freq, uvflag, ... 
-				currflagant, debuglev, ptSun, [], [], posfilename);
+				currflagant, debuglev, ptSun, [], [], posfilename, [], []);
 		else %% Carry out a local, tracking calibration.
 		%%% NOTE: Both cal_ext and gainsolv iterations are set to 1! NOTE!%%%
 		%%% NOTE: gainsolv iters need to be set to 2 for averaging! NOTE%%% 
@@ -274,7 +274,7 @@ function wrcalvis2bin (fname, offset, ntslices, wrcalsol, trackcal, array)
 					% If no gains are available, recalibrate from scratch.
 					fprintf (2,'--> No prev gains. Calib. to convergence.\n');
 	   	    		prevsol = pelican_sunAteamsub (acc, t_obs, freq, uvflag, ...
-									currflagant, debuglev, ptSun, [], [], posfilename);
+									currflagant, debuglev, ptSun, [], [], posfilename, [], []);
 					nconvcals = nconvcals + 1;
 				end;
 			end;
@@ -348,7 +348,7 @@ function wrcalvis2bin (fname, offset, ntslices, wrcalsol, trackcal, array)
 				if (trackcal == 1) % Do so only for tracking calibration.
 					fprintf (2, '   --> Calibrating to convergence\n');
 					currsol = pelican_sunAteamsub (acc, t_obs, freq, uvflag, ...
-									currflagant, debuglev, ptSun, [], [], posfilename);
+									currflagant, debuglev, ptSun, [], [], posfilename, [], []);
 					solstat = goodcalsol (solwindow, solwinsize, currsol, gainmask, ...
 											solparm, debuglev);	
 

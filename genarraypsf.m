@@ -21,8 +21,9 @@
 %  intap : The applied inner taper for this psf.
 %  outtap: The applied outer taper for this psf.
 % uvdist : The uvdistance of each visibility from the UV plane center.
+%    vis : The gridded and weighted visibility.
 
-function [l, m, psf, weight, intap, outtap,uvdist] = ...
+function [l, m, psf, weight, intap, outtap,uvdist, vispad] = ...
 	genarraypsf (posfilename, flagant, freq,  tparm, wparm, gparm, deb)
 	% Default values are for 60MHz, and image just the full Fov (-1<l<1). 
 	if (isempty (gparm) == 1)

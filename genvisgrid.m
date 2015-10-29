@@ -16,10 +16,12 @@
 
 %  Returns:
 %  gridvis: The padded gridded visibility values of dim parm.uvpad x parm.uvpad
+%  gridviscnt: The count of visibilities contributing to a single grid point.
 %  padgridrng: The coordinates of the padded gridded visibilities, assumed symmetrical.
+%  kern   : The applied FFT kernel.
 
-% function [gridvis, padgridrng] = genvisgrid (acc, u, v, parm, freq, deb)
-function [gridvis] = genvisgrid (acc, u, v, parm, freq, deb)
+function [gridvis, gridviscnt, padgridrng, kern] = genvisgrid (acc, u, v, parm, freq, deb)
+% function [gridvis] = genvisgrid (acc, u, v, parm, freq, deb)
 	
 	if (isempty (acc) || isempty (parm))
 		error ('genvisgrid: Cannot grid with no acc OR no parameters specified!');
@@ -65,7 +67,10 @@ function [gridvis] = genvisgrid (acc, u, v, parm, freq, deb)
 		weight = zeros (size (acc));
 
 		% Generate gcf (for illustration purposes only)
-		kern = exp (-((uk.^2 / (2*parm.pa(1)^2)) + (vk.^2 / (2*parm.pa(2)^2))));
+		kern = 1./(2*pi*parm.pa(1)*parm.pa(2)) * exp (-((uk.^2 / (2*parm.pa(1)^2)) + (vk.^2 / (2*parm.pa(2)^2))));
+		% kern_scale_fact = sum(sum(kern));
+		% kern = kern./kern_scale_fact; % Make sure kernel integral is 1
+		fprintf (1, '<-- Convolutional kernel integral: %f\n', sum(sum(kern)));
 	
 		% Convolve visibilities with GCF 
 		% For each grid point:
@@ -78,8 +83,8 @@ function [gridvis] = genvisgrid (acc, u, v, parm, freq, deb)
 			% GCF theoretical kernel.
 			for sel = 1:length(vislist)
 				weight(vislist(sel)) ...
-				 = exp (-((u(vislist(sel)) - uc (grvis)).^2 / (2*parm.pa(1)^2)) +...
-					     ((v(vislist(sel)) - vc (grvis)).^2 / (2*parm.pa(2)^2)));
+				 = (1./(2*pi*parm.pa(1)*parm.pa(2)))*exp (-(((u(vislist(sel)) - uc (grvis)).^2 / (2*parm.pa(1)^2)) +...
+					      (v(vislist(sel)) - vc (grvis)).^2 / (2*parm.pa(2)^2)));
 			end;
 	
 			% Store the weighted sum of these visibilities at the chosen grid point
@@ -111,6 +116,7 @@ function [gridvis] = genvisgrid (acc, u, v, parm, freq, deb)
 
 	case 'pillbox'
 		fprintf (1, 'Pillbox GCF requested.\n');
+		parm.pa(1) = 0; parm.pa(2) = 0; 
 		if (deb > 0)
 			fprintf (1, 'parm.duv=%.2f, parm.Nuv=%d, parm.uvpad=%d, parm.lim=%.2f, parm.pa(1)=%.2f\n',...
 					 parm.duv, parm.Nuv, parm.uvpad, parm.lim, parm.pa(1));
@@ -184,6 +190,12 @@ function [gridvis] = genvisgrid (acc, u, v, parm, freq, deb)
 				continue;
 			end;
 	
+			% Deal with the autocorrelations explicitly, else they are set to 0 and lost.
+			if (u(idx) == 0 && v(idx) == 0)
+				gridvis(uidx, vidx) = gridvis(uidx, vidx) + ampl;
+				continue;
+			end;
+				
 	        gridvis(uidxl, vidxl) = gridvis(uidxl, vidxl) + sull * phasor;
 	        gridvis(uidxl, vidxh) = gridvis(uidxl, vidxh) + sulh * phasor;
 	        gridvis(uidxh, vidxl) = gridvis(uidxh, vidxl) + suhl * phasor;

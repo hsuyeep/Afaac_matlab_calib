@@ -25,7 +25,7 @@
 % modified on 18 May 2011 by SJW to use ITRF coordinates
 
 function [cal, sigmas, Sigman] = statcal_stefcal(acc, t_obs, freq, ...
-					 rodata, calim, uvflag, intap)
+					 rodata, calim, uvflag, intap, mod_ra, mod_de)
 % parameter section
 	Nsb = length(freq);
 	srcsel = rodata.srcsel;
@@ -57,6 +57,22 @@ function [cal, sigmas, Sigman] = statcal_stefcal(acc, t_obs, freq, ...
 	        epoch = true(length(srcsel), 1);
 	    end
 	    % disp (['t_obs: ' num2str(t_obs)]);
+        if (~isempty (mod_ra))
+            if (~isempty(mod_de))
+                for modind = 1:length(mod_de)
+                    fprintf (2, '<-- Additional model sky component at RA/Dec: %.2f, %.2f\n', mod_ra(modind), mod_de(modind));
+                end;
+				
+                % rasrc = [rasrc mod_ra'];
+                % decsrc = [decsrc mod_de'];
+				% If model components are given, assume they are the brightest
+				% sources in the sky, and do not attempt to estimate 
+				% parameters for the Ateam sources.
+                rasrc = mod_ra';
+                decsrc = mod_de';
+            end;
+        end;
+        
 	    srcpos = radectoITRF(rasrc, decsrc, epoch, t_obs);
 	    
 	    up = srcpos * rodata.normal > 0;

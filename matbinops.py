@@ -212,7 +212,29 @@ class matBinVis:
 
 	""" Read data written by wracm2bin.m, equivalent of readms2float.m """
 	def readms2float (fid):
+		print 'Unimplemented!';
 		return False;
+
+	""" Write a binary stream of data to the format accepted by readms2float.m 
+		in_rec: Binary array with the record layout of the gpu correlator raw output.
+		out_rec: Binary array with the record layout of the ms2float.m function.	
+			[Format: double tobs, double fobs, float vis_re[0] float vis_im[0] float vis_re[1] ...]
+		fobs  : Frequency of a particular channel
+		chan  : Selection of channels to write out, currently fixed to one.
+		pol   : Selected polarization.
+	"""
+	def gpu2ms2float (in_arr, out_arr, fobs, chan, pol):
+		print 'Untested!'
+		nbline = 288*287/2;
+		nchan = 63;
+		npol = 4;
+		assert (len (chan) < 2);
+		(magic, pad0, tcurr, endTime) = struct.unpack ("<IIdd", in_rec[0:24]);
+		tmp = numpy.reshape (numpy.asarray (struct.unpack ("ff"*nbline*nchan*npol, in_rec[512:])),[nbline, nchan, npol, 2]);
+
+		struct.pack_into ("dd", 0, out_arr, tcurr, fobs);
+		struct.pack_into ("ff"*nbline*2, 16, out_arr,tmp[:,chan,pol,:]);
+		
 
 # Test jig
 if __name__ == '__main__':

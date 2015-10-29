@@ -2,16 +2,19 @@
 % pep/28Jan13
 % Arguments:
 %	fname  : image binary file name
-%   colrng : caxis color range.
-%   figarea: The area of the image to display, between 0 or 1.
-%   offset : The record offset from which to start showing images.
-%   skip   : Skip some number of images.
+%	colrng : caxis color range.
+%	figarea: The area of the image to display, between 0 or 1.
+%	offset : The record offset from which to start showing images.
+%	skip   : Skip some number of images.
 %	nrecs  : Number of images to show. -1 => show all images.
-%   strail : Generate a star trail by accumulating images.
-%   movie  : Flag to control creation of a .avi movie.
+%	strail : Generate a star trail by accumulating images.
+%	movie  : Flag to control creation of a .avi movie.
 %			 -1 => Write out frames as png.
 %			  0 => Just display on screen.
 %			  1 => Write out frames as a single .avi
+%
+% Returns :
+%          void
 
 function showbinimages (fname, colrng, figarea, offset, skip, nrecs, strail, movie)
 	fid = fopen (fname, 'rb');
