@@ -2,8 +2,8 @@
 % pep/21Jan13
 
 % Arguments:
-%	fid: File id of the binary file to which calibrated visibilities should be
-%		 written.
+%	fid: File id of the binary file from which image data is 
+%		 to be read
 %  skip: Number of records to skip from the current file offset.
 
 % Returns:
