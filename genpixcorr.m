@@ -12,7 +12,7 @@
 %	region	 : [center, radius], region of the image on which to operate, in l,m units.
 %      deb   : Debug flag, set to 1 for intermediate results.
 
-function [acf_pix] = genpixcorr (fimg, start_rec, skip, nrecs, thresh, region, deb)
+function [acf_pix, timg] = genpixcorr (fimg, start_rec, skip, nrecs, thresh, region, deb)
 	% Check if parameters are valid
 	assert (isempty (fimg) == 0);
 	if (isempty (start_rec)) start_rec = 1; end;
@@ -40,7 +40,7 @@ function [acf_pix] = genpixcorr (fimg, start_rec, skip, nrecs, thresh, region, d
 
 
 	for imgind = 1:nrecs
-        fprintf (1, '<-- Collecting image %04d\n', imgind);
+        fprintf (1, '<-- Collecting image %04d, %s\n', imgind, datestr(mjdsec2datenum(img.tobs)));
 		
 		% Apply sigma clipping on the masked region, eliminate bright pixels.
 		valpix = img.map (mask == 1);
@@ -56,6 +56,9 @@ function [acf_pix] = genpixcorr (fimg, start_rec, skip, nrecs, thresh, region, d
         % Read in the next image
     	img = readimg2bin (fid, 0); 
 	end;
+
+    % Carry out a mean subtraction to make each timeseries 0-mean.
+    pixtseries = pixtseries - repmat (mean (pixtseries), [nrecs, 1]);
 
     if (deb == 1)
         % Show the contents of the valid pixels
@@ -76,4 +79,6 @@ function [acf_pix] = genpixcorr (fimg, start_rec, skip, nrecs, thresh, region, d
     fprintf (1, '<-- Calculating temporal correlation...\n');
 	Pix = fft(pixtseries,2*nrecs-1); % FFT carried out independently per column
 	acf_pix = fftshift (ifft(Pix.*conj(Pix)),1);
-	acf_pix = acf_pix ./ repmat (max(acf_pix), 2*nrecs-1, 1); % Normalize corr. coef. to 1.
+    scale_fact = sum(pixtseries.^2);
+    acf_pix = acf_pix ./ repmat (scale_fact, [2*nrecs-1, 1]);
+	% acf_pix = acf_pix ./ repmat (max(acf_pix), 2*nrecs-1, 1); % Normalize corr. coef. to 1.
