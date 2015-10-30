@@ -5,6 +5,8 @@
 %	offset  :   Initial offset in visibility file from which to start imaging.
 %               Set to 0 for no offset.
 %   skip    :   Number of records to skip, in the interest of faster imaging.
+%   integ   :   Number of records over which to integrate (after rephasing
+%               to the center of the integration period).
 %	posfilename:Name of file containing the local positions of the array 
 %               configuration corresponding to the data in fname.
 %	mosaic  :   Bool controlling generation of mosaic images. If false,  zenith
@@ -27,9 +29,9 @@
 
 
 function [img_l, img_m, img, acc_radecmap, acc_localmap] =  ... 
-    genfftimage (fname, ntslices, offset, skip, posfilename, mosaic, caxisrng,...
+    genfftimage (fname, ntslices, offset, skip, integ, posfilename, mosaic, caxisrng,...
 				 wr2file, elbeam, pol, radec, accum)
-    % genfftimage (fname,ntslices, offset, posfilename, weight, uvcellsize, mosaic, caxisrng, wr2file)
+
 	% Gridding parameters
 	gparm.type = 'pillbox';
     gparm.lim  = 0;
@@ -41,12 +43,14 @@ function [img_l, img_m, img, acc_radecmap, acc_localmap] =  ...
 	nfacet = 3;
 	facetsize = 256;
 
+    % To generate a filename indicating whether PBCORR is applied or not.
 	if (elbeam == 0)
 		elstr = 'noel';
 	else
 		elstr = 'el';
 	end;
 
+    % For projecting l,m images to RA/DEC space.
 	if (radec == 1)
 		projimg = figure;
 		ra_grid = linspace (0,2*pi, gparm.uvpad)*12/pi; % Convert to hours
@@ -54,10 +58,10 @@ function [img_l, img_m, img, acc_radecmap, acc_localmap] =  ...
 		if (accum == 1)
 			acc_radecmap = zeros (gparm.uvpad);
 			acc_localmap = zeros (gparm.uvpad);
-		else
-			acc_radecmap = [];
-			acc_localmap = [];
 		end;
+    else
+		acc_radecmap = [];
+		acc_localmap = [];
 	end;
 
 	% Note: we write out the accumulated image even if wr2file == 0
@@ -131,8 +135,6 @@ function [img_l, img_m, img, acc_radecmap, acc_localmap] =  ...
     uloc = meshgrid (poslocal(:,1)) - meshgrid (poslocal (:,1)).';
     vloc = meshgrid (poslocal(:,2)) - meshgrid (poslocal (:,2)).';
 	
-	% Generate primary beam for given frequency from full EM station level 
-	% simulations.
 	if (mosaic == 0)
 		% Image current timeslice. Generate a zenith image.
    		[radecmap, img.map, calvis, img.l, img.m] = ... 
@@ -147,6 +149,8 @@ function [img_l, img_m, img, acc_radecmap, acc_localmap] =  ...
 	mask = zeros (size (img.map));
 	mask (meshgrid (img.l).^2 + meshgrid(img.m).'.^2 < 0.9) = 1;
 
+	% Generate primary beam for given frequency from full EM station level 
+	% simulations.
 	if (elbeam == 1)
 		addpath '~/WORK/AARTFAAC/Afaac_matlab_calib/LBA_beam/CS1/';
 		if (pol == 1) % Ypol beam.
@@ -185,11 +189,33 @@ function [img_l, img_m, img, acc_radecmap, acc_localmap] =  ...
 % figure;
 % mesh (weightmask);
 
-	if (skip == 0 || isempty (skip)) skip = 1; end;
+	if (isempty (skip)) skip = 0; end;
 	fprintf (1, 'Skipping %d recs.\n', skip);
 	ts = 1;
+
+    % Figure out if visibility integration is required.
+    if (isempty (integ) == 1) integ = 1; end;
+
+    % Generate the datastructure to hold visibilities before integration.
+    acm = zeros (size (acc,1), size(acc,2), integ);
+    tobs_win = zeros (1, integ);
+
+    % Initialize the integrated visibility window.
+    for ind = 1:integ
+	    [acc, tobs_tmp, img.freq] = readms2float (fin, offset, -1, 288);
+        acm(:,:,ind) = acc;
+        tobs_win(ind) = tobs_tmp;
+    end;
+    ts = ts + integ;
+
 	while (ts < ntslices)
 	% for ts = 1:ntslices % Can't accomodate skips within a for loop.
+        if (integ > 1)
+            [~, acc, img.tobs] = integvis (acm, integ, tobs_win, img.freq, posITRF, 0);
+        else
+            acc = acm(:,:,1);
+            img.tobs = tobs_tmp;
+        end;
 
 		if (isempty (acc) == false)
 			fprintf (1, 'Slice: %3d, Time:%.2f, Freq:%.2f.\n', ... 
@@ -270,10 +296,20 @@ function [img_l, img_m, img, acc_radecmap, acc_localmap] =  ...
 				wrimg2bin (fimg, img);
 			end;
 	
-			% Read in next visibility set.
+			% Skip visibilities
 			for ind = 1:skip
 				[acc, img.tobs, img.freq] = readms2float (fin, -1, -1, 288);
 			end;
+		    ts = ts + skip;
+
+			% Read in next visibility set.
+		    for ind = 1:integ
+			    [acc, tobs_tmp, img.freq] = readms2float (fin, offset, -1, 288);
+		        acm(:,:,ind) = acc;
+		        tobs_integ(ind) = tobs_tmp;
+		    end;
+		    ts = ts + integ;
+            % 
 			if (isempty (acc))
 				disp ('End of file reached!');
 				break;
@@ -283,7 +319,6 @@ function [img_l, img_m, img, acc_radecmap, acc_localmap] =  ...
 		else
 			disp ('File end reached!');
 		end;
-		ts = ts + skip;
 	end;
 
 	% Normalize the accumulated images
