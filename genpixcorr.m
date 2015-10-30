@@ -12,7 +12,7 @@
 %	region	 : [center, radius], region of the image on which to operate, in l,m units.
 %      deb   : Debug flag, set to 1 for intermediate results.
 
-function [acf_pix, timg] = genpixcorr (fimg, start_rec, skip, nrecs, thresh, region, deb)
+function [acf_pix, spatial_corr, timg] = genpixcorr (fimg, start_rec, skip, nrecs, thresh, region, deb)
 	% Check if parameters are valid
 	assert (isempty (fimg) == 0);
 	if (isempty (start_rec)) start_rec = 1; end;
@@ -65,12 +65,13 @@ function [acf_pix, timg] = genpixcorr (fimg, start_rec, skip, nrecs, thresh, reg
         tmpimg = zeros (size(img.map));
         for ind = 1:nrecs
             tmpimg (mask == 1) = pixtseries(ind, :);
+            clf ();
             subplot (211);
             imagesc (img.l, img.m, tmpimg); colorbar();
             title (sprintf ('Time: %s', datestr(mjdsec2datenum(timg(ind)))));
             subplot (212);
             hist (pixtseries(ind,:), 50);
-            pause();
+            pause(0.1);
         end;
     end;
 
@@ -82,3 +83,12 @@ function [acf_pix, timg] = genpixcorr (fimg, start_rec, skip, nrecs, thresh, reg
     scale_fact = sum(pixtseries.^2);
     acf_pix = acf_pix ./ repmat (scale_fact, [2*nrecs-1, 1]);
 	% acf_pix = acf_pix ./ repmat (max(acf_pix), 2*nrecs-1, 1); % Normalize corr. coef. to 1.
+
+    % 2. Spatial correlation over all pixels in chosen field of view, assuming the
+    % noise is uniform over the field of view.
+    % Transpose because corrcoef requires the random variables in each col, with
+    % its observations in each row. Here, each row of pixtseries contains all 
+    % pixels from a file (timestamp), so is counted as multiple instances of the
+    % noise variable.
+    fprintf (1, '<-- Calculating spatial correlation...\n');
+    spatial_corr = corrcoef (pixtseries');
