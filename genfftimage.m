@@ -12,14 +12,18 @@
 %	mosaic  :   Bool controlling generation of mosaic images. If false,  zenith
 %               pointing images (less computation) are generated.
 %	caxisrng:   2-element vector with the coloraxis range for display.
-%	wr2file :   Bool controlling writing of generated images to file. If true,
-%               the input filename with 'img' appended is created and written
-%               out using floats. NOTE: If writing to file,images are not shown.
+%	wr2file :   Variable controlling writing of generated images to file. 
+%               0 = Don't write to file.
+%               1 = the input filename with 'img' appended is created and written
+%                   out using floats. NOTE: If writing to file,images are not shown.
+%               2 = A separate fits file per timeslice is created. WCS has a 
+%                   a SIN projection.
 %   elbeam  :   Bool controlling applying an element beam pattern correction.
 %               NOTE: Currently only for X-dipole.
 %   pol     :   Polarization to choose: 0 => X, 1 => Y, 2 => I(?)
 %  radec    :   Flag to control if RA/DEC plane projected images are to be created.
 %  accum    :   Flag controlling the generation of accumulated images.
+%               One Accumulated image over the full run.
 %  Returns:
 %	img_l   :   The l-axis of the generated image.
 %	img_m   :   The m-axis of the generated image.
@@ -79,6 +83,13 @@ function [img_l, img_m, img, acc_radecmap, acc_localmap] =  ...
 		end;
 	end;
 
+	% Obtain image parameters from visibility file.
+	fin = fopen (fname, 'rb');
+	[acc, img.tobs, img.freq] = readms2float (fin, offset, -1, 288);
+	Nelem = size (acc, 1);
+	lambda = 299792458/img.freq; 		% in m.
+	% duv = lambda/2;
+
 	if (wr2file == 1)
 		% NOTE:  Writing either accumulated image, or individual ones, not both at the same time.
 		k = strfind (fname, '.bin');
@@ -97,18 +108,16 @@ function [img_l, img_m, img, acc_radecmap, acc_localmap] =  ...
 			return ;
 		end;
 		disp (['Writing generated images to file :' imgfname]);
+
+    elseif (wr2file == 2)
+       fimg = -1;
+       fits_postfix = sprintf ('_%d_.fits', img.freq);
 	end;
 
 	if (ntslices == -1) 			% Get number of records from the file
 		[ntslices, tmin, tmax, dt] = getnrecs (fname); 
 	end;
 
-	% Obtain image parameters from visibility file.
-	fin = fopen (fname, 'rb');
-	[acc, img.tobs, img.freq] = readms2float (fin, offset, -1, 288);
-	Nelem = size (acc, 1);
-	lambda = 299792458/img.freq; 		% in m.
-	% duv = lambda/2;
 	
 	station = 0;
 	% For imaging from a single station
@@ -286,7 +295,7 @@ function [img_l, img_m, img, acc_radecmap, acc_localmap] =  ...
 		        ylabel('South $\leftarrow$ m $\rightarrow$ North', 'interpreter', 'latex');
 		        xlabel('East $\leftarrow$ l $\rightarrow$ West', 'interpreter', 'latex');
 		        set(colorbar, 'FontSize', 16);
-			else
+			elseif (wr2file == 1)
 				if (accum == 1)
 					saveas (projimg, accimgfname);
 				end;
@@ -294,6 +303,11 @@ function [img_l, img_m, img, acc_radecmap, acc_localmap] =  ...
 				img.pix2laxis = length (img.l);
 				img.pix2maxis = length (img.m);
 				wrimg2bin (fimg, img);
+            else
+                fitsfname = sprintf ('%d_%s', img.tobs, fits_postfix);
+                fimg = fopen (fitsfname, 'wb');
+                wrimg2fits (fimg, img);
+                fclose (fimg);
 			end;
 	
 			% Skip visibilities
