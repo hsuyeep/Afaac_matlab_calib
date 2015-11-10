@@ -67,7 +67,7 @@ function [currsol] = pelican_sunAteamsub (acc, t_obs, ...
     	rodata.C       = 299792458;         % speed of light, m/s
         rodata.lon     = 6.869837540;       % longitude of CS002 in degrees
         rodata.lat     = 52.915122495;      % latitude of CS002 in degrees
-        rodata.Nelem   = 288;               % Max. number of elements
+        rodata.Nelem   = 576;               % Max. number of elements
     	% 3 x 1 normal vector to the station field
         rodata.normal  = [0.598753, 0.072099, 0.797682].'; % Normal to CS002
 

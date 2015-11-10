@@ -1,7 +1,10 @@
 % pep/18Oct12
 % Arguments:
-%	fname   :   Name of file containing calibrated or uncalibrated visibilities.
-%	ntslices:   Number of timeslices to image. -1 => all timeslices.
+%	fname   :   Name of file or matrix containing calibrated or uncalibrated visibilities.
+%               NOTE: If fname is a matrix of visibilities, time of observation goes on the
+%               end;
+%	ntslices:   Number of timeslices to image. -1 => all timeslices. If fname is a matrix,
+%               the number of timeslices is the last dimension of the matrix.
 %	offset  :   Initial offset in visibility file from which to start imaging.
 %               Set to 0 for no offset.
 %   skip    :   Number of records to skip, in the interest of faster imaging.
@@ -34,7 +37,10 @@
 
 function [img_l, img_m, img, acc_radecmap, acc_localmap] =  ... 
     genfftimage (fname, ntslices, offset, skip, integ, posfilename, mosaic, caxisrng,...
-				 wr2file, elbeam, pol, radec, accum)
+				 wr2file, elbeam, pol, radec, accum, varargin)
+
+    % Default assumption is that fname is a binary file of visibilities
+    acc_is_matrix = 0;
 
 	% Gridding parameters
 	gparm.type = 'pillbox';
@@ -68,15 +74,36 @@ function [img_l, img_m, img, acc_radecmap, acc_localmap] =  ...
 		acc_localmap = [];
 	end;
 
+    % Figure out if the passed fname is a filename of visibilities, or an actual
+    % Matrix.
+    % Anonymous function to generate char name of variable in workspace.
+    % Needed as exist () takes only charstrings.
+    namefromvar = @(x) inputname(1);
+    if (exist (namefromvar(fname)) == 1) % If fname is a variable in the current workspace.
+        acc_is_matrix = 1;
+        acm_tseries = fname;
+        tobs = varargin{1};
+        freq = varargin{2};
+    end;
+
 	% Note: we write out the accumulated image even if wr2file == 0
 	hdl = figure;
 	if (accum == 1)
-		k = strfind (fname, '.bin');
-		if (mosaic == 1)
-			accimgfname = sprintf ('%s_%d_%s%s', fname(1:k-1), offset, elstr, '_mosimg_radec.fig');
-		else
-			accimgfname = sprintf ('%s_%d_%s%s', fname(1:k-1), offset, elstr, '_fftimg_radec.fig');
-		end;
+        if (acc_is_matrix == 0)
+		    k = strfind (fname, '.bin');
+		    if (mosaic == 1)
+	    		accimgfname = sprintf ('%s_%d_%s%s', fname(1:k-1), offset, elstr, '_mosimg_radec.fig');
+	    	else
+	    		accimgfname = sprintf ('%s_%d_%s%s', fname(1:k-1), offset, elstr, '_fftimg_radec.fig');
+	    	end;
+        else % Case of fname being a workspace variable
+		    if (mosaic == 1)
+	    		accimgfname = sprintf ('%d_%d_%s%s', tobs(1), offset, elstr, '_mosimg_radec.fig');
+	    	else
+	    		accimgfname = sprintf ('%s_%d_%s%s', tobs(1), offset, elstr, '_fftimg_radec.fig');
+            end;
+        end;
+
 		if (exist (accimgfname, 'file') == 2)
 			fprintf (2, 'Overwriting existing file: %s. Continue? (Ctrl-C to kill)\n', accimgfname);
 			pause;   % To prevent overwriting already written files!
@@ -84,20 +111,36 @@ function [img_l, img_m, img, acc_radecmap, acc_localmap] =  ...
 	end;
 
 	% Obtain image parameters from visibility file.
-	fin = fopen (fname, 'rb');
-	[acc, img.tobs, img.freq] = readms2float (fin, offset, -1, 288);
+    if (acc_is_matrix == 0)
+		fin = fopen (fname, 'rb');
+		[acc, img.tobs, img.freq] = readms2float (fin, offset, -1, 288);
+    else
+        acc =  acm_tseries(1,:,:);
+        img.tobs = tobs(1);
+        img.freq = freq(1);
+    end;
+
 	Nelem = size (acc, 1);
 	lambda = 299792458/img.freq; 		% in m.
 	% duv = lambda/2;
 
 	if (wr2file == 1)
-		% NOTE:  Writing either accumulated image, or individual ones, not both at the same time.
-		k = strfind (fname, '.bin');
-		if (mosaic == 1)
-			imgfname = sprintf ('%s_%d_%s%s', fname(1:k-1), offset, elstr, '_mosimg.bin');
-		else
-			imgfname = sprintf ('%s_%d_%s%s', fname(1:k-1), offset, elstr, '_fftimg.bin');
-		end;
+        if (acc_is_matrix == 0)
+			% NOTE:  Writing either accumulated image, or individual ones, not both at the same time.
+			k = strfind (fname, '.bin');
+			if (mosaic == 1)
+				imgfname = sprintf ('%s_%d_%s%s', fname(1:k-1), offset, elstr, '_mosimg.bin');
+			else
+				imgfname = sprintf ('%s_%d_%s%s', fname(1:k-1), offset, elstr, '_fftimg.bin');
+			end;
+        else
+			if (mosaic == 1)
+				imgfname = sprintf ('%s_%d_%s%s', tobs(1), offset, elstr, '_mosimg.bin');
+			else
+				imgfname = sprintf ('%s_%d_%s%s', tobs(1), offset, elstr, '_fftimg.bin');
+			end;
+        end; 
+
 		if (exist (imgfname, 'file') == 2)
 			fprintf (2, 'Overwriting existing file: %s. Continue? (Ctrl-C to kill)\n', imgfname);
 			pause;   % To prevent overwriting already written files!
@@ -111,11 +154,18 @@ function [img_l, img_m, img, acc_radecmap, acc_localmap] =  ...
 
     elseif (wr2file == 2)
        fimg = -1;
-       fits_postfix = sprintf ('_%d_.fits', img.freq);
+       fits_postfix = sprintf ('_%d_.fits', img.freq); % TODO: TO BE TESTED
 	end;
 
 	if (ntslices == -1) 			% Get number of records from the file
-		[ntslices, tmin, tmax, dt] = getnrecs (fname); 
+        if (acc_is_matrix == 0)
+		    [ntslices, tmin, tmax, dt] = getnrecs (fname); 
+        else
+            ntslices = size (acc,1);
+            tmin = tobs(1);
+            tmax = tobs(length(tobs));
+            dt = tobs(2) - tobs(1);
+        end;
 	end;
 
 	
@@ -210,12 +260,17 @@ function [img_l, img_m, img, acc_radecmap, acc_localmap] =  ...
     tobs_win = zeros (1, integ);
 
     % Initialize the integrated visibility window.
-    for ind = 1:integ
-	    [acc, tobs_tmp, img.freq] = readms2float (fin, offset, -1, 288);
-        acm(:,:,ind) = acc;
-        tobs_win(ind) = tobs_tmp;
+    if (acc_is_matrix == 0)
+	    for ind = 1:integ
+		    [acc, tobs_tmp, img.freq] = readms2float (fin, offset, -1, 288);
+	        acm(:,:,ind) = acc;
+	        tobs_win(ind) = tobs_tmp;
+	    end;
+	    ts = ts + integ;
+    else
+        acm = acm_tseries (:,:,1:integ);
+        tobs_win = tobs(1:integ);
     end;
-    ts = ts + integ;
 
 	while (ts < ntslices)
 	% for ts = 1:ntslices % Can't accomodate skips within a for loop.
@@ -311,18 +366,23 @@ function [img_l, img_m, img, acc_radecmap, acc_localmap] =  ...
 			end;
 	
 			% Skip visibilities
-			for ind = 1:skip
-				[acc, img.tobs, img.freq] = readms2float (fin, -1, -1, 288);
-			end;
-		    ts = ts + skip;
+            if (acm_is_matrix == 0)
+				for ind = 1:skip
+					[acc, img.tobs, img.freq] = readms2float (fin, -1, -1, 288);
+				end;
+			    ts = ts + skip;
 
-			% Read in next visibility set.
-		    for ind = 1:integ
-			    [acc, tobs_tmp, img.freq] = readms2float (fin, offset, -1, 288);
-		        acm(:,:,ind) = acc;
-		        tobs_integ(ind) = tobs_tmp;
-		    end;
-		    ts = ts + integ;
+				% Read in next visibility set.
+			    for ind = 1:integ
+				    [acc, tobs_tmp, img.freq] = readms2float (fin, offset, -1, 288);
+			        acm(:,:,ind) = acc;
+			        tobs_integ(ind) = tobs_tmp;
+			    end;
+			    ts = ts + integ;
+            else
+                acm = acm_tseries(:,:,ts:ts+integ);
+			    ts = ts + integ;
+            end;
             % 
 			if (isempty (acc))
 				disp ('End of file reached!');
@@ -344,7 +404,9 @@ function [img_l, img_m, img, acc_radecmap, acc_localmap] =  ...
 
 	% Return out only the last image
 	img_l = img.l; img_m = img.m; img = img.map;
-	fclose (fin);
+    if (acc_is_matrix == 0)
+    	fclose (fin);
+    end;
 	if (wr2file == 1)		
 		fclose (fimg);
 	end;
