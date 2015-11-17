@@ -10,6 +10,7 @@
 %   skip    :   Number of records to skip, in the interest of faster imaging.
 %   integ   :   Number of records over which to integrate (after rephasing
 %               to the center of the integration period).
+%   flagant :   List of antennas to flag before imaging.
 %	posfilename:Name of file containing the local positions of the array 
 %               configuration corresponding to the data in fname.
 %	mosaic  :   Bool controlling generation of mosaic images. If false,  zenith
@@ -36,7 +37,7 @@
 
 
 function [img_l, img_m, img, acc_radecmap, acc_localmap] =  ... 
-    genfftimage (fname, ntslices, offset, skip, integ, posfilename, mosaic, caxisrng,...
+    genfftimage (fname, ntslices, offset, skip, integ, flagant, posfilename, mosaic, caxisrng,...
 				 wr2file, elbeam, pol, radec, accum, varargin)
 
     % Default assumption is that fname is a binary file of visibilities
@@ -47,8 +48,8 @@ function [img_l, img_m, img, acc_radecmap, acc_localmap] =  ...
     gparm.lim  = 0;
     gparm.duv = 0.5;				% Default, reassigned from freq. of obs. to
 									% image just the full Fov (-1<l<1)
-    gparm.Nuv = 500;				% size of gridded visibility matrix
-    gparm.uvpad = 512;				% specifies if any padding needs to be added
+    gparm.Nuv = 1500;				% size of gridded visibility matrix
+    gparm.uvpad = 1536;				% specifies if any padding needs to be added
     gparm.fft  = 1;
 	nfacet = 3;
 	facetsize = 256;
@@ -115,7 +116,7 @@ function [img_l, img_m, img, acc_radecmap, acc_localmap] =  ...
 		fin = fopen (fname, 'rb');
 		[acc, img.tobs, img.freq] = readms2float (fin, offset, -1, 288);
     else
-        acc =  acm_tseries(1,:,:);
+        acc =  squeeze(acm_tseries(1,:,:));
         img.tobs = tobs(1);
         img.freq = freq(1);
     end;
@@ -193,6 +194,17 @@ function [img_l, img_m, img, acc_radecmap, acc_localmap] =  ...
     % Generate uv coordinates in local horizon coord. system, needed for imaging
     uloc = meshgrid (poslocal(:,1)) - meshgrid (poslocal (:,1)).';
     vloc = meshgrid (poslocal(:,2)) - meshgrid (poslocal (:,2)).';
+
+    [uloc, vloc] = gen_flagged_uvloc (uloc, vloc, flagant);
+    antmask = zeros (size (acc));
+    posmask = zeros (size (posITRF));
+    rem_ants = length(acc) - length(flagant);
+    for ind = 1:length(flagant)
+    	antmask (flagant(ind), :) = 1; antmask (:,flagant(ind)) = 1;
+    	posmask (flagant(ind), :) = 1;
+    end
+    acc = reshape (acc(antmask ~= 1), [rem_ants, rem_ants]);
+   
 	
 	if (mosaic == 0)
 		% Image current timeslice. Generate a zenith image.

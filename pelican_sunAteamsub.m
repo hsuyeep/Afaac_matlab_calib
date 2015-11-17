@@ -67,7 +67,7 @@ function [currsol] = pelican_sunAteamsub (acc, t_obs, ...
     	rodata.C       = 299792458;         % speed of light, m/s
         rodata.lon     = 6.869837540;       % longitude of CS002 in degrees
         rodata.lat     = 52.915122495;      % latitude of CS002 in degrees
-        rodata.Nelem   = 576;               % Max. number of elements
+        rodata.Nelem   = size (acc, 1);   % Max. number of elements
     	% 3 x 1 normal vector to the station field
         rodata.normal  = [0.598753, 0.072099, 0.797682].'; % Normal to CS002
 
@@ -98,12 +98,14 @@ function [currsol] = pelican_sunAteamsub (acc, t_obs, ...
 		calim.parm.pa(4) = calim.parm.pa(3); % Outer taper sigx/sigy
 		[calim.intap, calim.outtap, calim.den, calim.mask, uvdist] =  ...
 				taper (rodata.posITRF, calim.parm, -1, freq, 0);
-		calim.intap_fl = calim.intap; calim.outtap_fl = calim.outtap;
+		calim.intap_fl = reshape (calim.intap, [rodata.Nelem rodata.Nelem]); 
+        calim.outtap_fl = reshape (calim.outtap, [rodata.Nelem rodata.Nelem]);
 		calim.den_fl   = calim.den; calim.mask_fl = calim.mask;
 	    calim.debug    = debug;      	  % Set debug level.
 	    calim.rem_ants = rodata.Nelem;
 	    calim.flagant  = flagant;
 		calim.opt      = optimset ();     % Note: Using all default values!
+        calim.uvflag = uvflag;
  	
  	    % Calibration stopping conditions
    	    calim.diffstop = 1e-3;         % difference bet. calib. solutions

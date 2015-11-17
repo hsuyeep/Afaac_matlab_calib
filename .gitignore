@@ -1,0 +1,20 @@
+# Backup files
+*.m~
+
+# .mat
+*.mat
+
+# .hdf5
+*.hdf5
+
+# Image files
+*.eps
+*.fits
+*.png
+*.fig
+*.avi
+*.hpx
+*.ps
+
+# log files
+*.log
