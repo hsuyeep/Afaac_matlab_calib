@@ -12,9 +12,9 @@ addpath '~/Documents/AARTFAAC_Project_SW_system_plan/afaac_GPU_interface/src/'
 load ('~/WORK/AARTFAAC/Afaac_matlab_calib/REFDATA_A6_LBA_OUTER_1419000369_SB296_1419000369-1419000378.mat');
 
 nant = 288;
-freq = 195312.5*296 - 195312.5/2;
+freq = 195312.5*296; % - 195312.5/2;
 flagant = [140,149,260];
-[acm_t, tmjdsec,fobs,map,l] = gengpuimg (acm, nant,tobs,57714843.750,[1:15],[],[],[],0,0);
+[acm_t, tmjdsec,fobs,map,l] = gengpuimg (acm, nant,tobs,57714843.750,[1:63],[],[],[],0,0);
 
 acm_uncal= zeros (1, nant, nant);
 acm_uncal(1, :, :) = acm_t(1,:,:,1);
@@ -36,8 +36,8 @@ antmask = zeros (nant);
 antmask (flagant,:) = 1; antmask(:,flagant) = 1;
 acm_cal = zeros (1, nant, nant);
 acm_tmp = zeros (nant);
-acm_tmp (antmask == 0) = sola6.calvis + eye(288); % To make all pixels positive.
-acm_cal (1, :, :) =  acm_tmp;
+acm_tmp (antmask == 0) = sola6.calvis; 
+acm_cal (1, :, :) =  acm_tmp+ eye(288); % To make all pixels positive.;
 [l,m,calimga6,rdacc,locacc] = genfftimage(acm_cal, 1, 0,0,1, flagant, 'poslocal_outer.mat',0,[],0,0,0,0,0,tmjdsec(1), freq);
 imagesc (real(calimga6)); title ('Calibrated A6');
 

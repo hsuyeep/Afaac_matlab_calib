@@ -40,6 +40,7 @@ function [img_l, img_m, img, acc_radecmap, acc_localmap] =  ...
     genfftimage (fname, ntslices, offset, skip, integ, flagant, posfilename, mosaic, caxisrng,...
 				 wr2file, elbeam, pol, radec, accum, varargin)
 
+    polmap = containers.Map ({0,1,2,3,4}, {'XX','YY','XY','YX','I'});
     % Default assumption is that fname is a binary file of visibilities
     acc_is_matrix = 0;
 
@@ -48,8 +49,8 @@ function [img_l, img_m, img, acc_radecmap, acc_localmap] =  ...
     gparm.lim  = 0;
     gparm.duv = 0.5;				% Default, reassigned from freq. of obs. to
 									% image just the full Fov (-1<l<1)
-    gparm.Nuv = 1500;				% size of gridded visibility matrix
-    gparm.uvpad = 1536;				% specifies if any padding needs to be added
+    gparm.Nuv = 700;				% size of gridded visibility matrix
+    gparm.uvpad = 768;				% specifies if any padding needs to be added
     gparm.fft  = 1;
 	nfacet = 3;
 	facetsize = 256;
@@ -79,12 +80,13 @@ function [img_l, img_m, img, acc_radecmap, acc_localmap] =  ...
     % Matrix.
     % Anonymous function to generate char name of variable in workspace.
     % Needed as exist () takes only charstrings.
-    namefromvar = @(x) inputname(1);
-    if (exist (namefromvar(fname)) == 1) % If fname is a variable in the current workspace.
+    % namefromvar = @(x) inputname(1);
+    if (exist (eval('fname')) == 1) % If fname is a variable in the current workspace.
         acc_is_matrix = 1;
         acm_tseries = fname;
         tobs = varargin{1};
         freq = varargin{2};
+        fprintf (2, '<-- Found ACM as a variable.\n');
     end;
 
 	% Note: we write out the accumulated image even if wr2file == 0
@@ -114,9 +116,10 @@ function [img_l, img_m, img, acc_radecmap, acc_localmap] =  ...
 	% Obtain image parameters from visibility file.
     if (acc_is_matrix == 0)
 		fin = fopen (fname, 'rb');
-		[acc, img.tobs, img.freq] = readms2float (fin, offset, -1, 288);
+        % NOTE: We absorb the initial offset desired by the user, over here.
+		[acc, img.tobs, img.freq] = readms2float (fin, offset, -1, 288); 
     else
-        acc =  squeeze(acm_tseries(1,:,:));
+        acc =  squeeze(acm_tseries(offset,:,:));
         img.tobs = tobs(1);
         img.freq = freq(1);
     end;
@@ -134,7 +137,7 @@ function [img_l, img_m, img, acc_radecmap, acc_localmap] =  ...
 			else
 				imgfname = sprintf ('%s_%d_%s%s', fname(1:k-1), offset, elstr, '_fftimg.bin');
 			end;
-        else
+        else % When a matrix of visibilities is passed, instead of a .bin
 			if (mosaic == 1)
 				imgfname = sprintf ('%s_%d_%s%s', tobs(1), offset, elstr, '_mosimg.bin');
 			else
@@ -153,9 +156,15 @@ function [img_l, img_m, img, acc_radecmap, acc_localmap] =  ...
 		end;
 		disp (['Writing generated images to file :' imgfname]);
 
-    elseif (wr2file == 2)
+    elseif (wr2file == 2) % For the case of writing out .fits files
+        if (acc_is_matrix == 0)
+            fprintf (2, '<-- NOTE: Writing out FITS images to %s.\n', pwd);
+            fits_prefix = './';
+        else
+            [fits_prefix, ~, ~] = fileparts (fname);
+            fprintf (2, '<-- NOTE: Writing out FITS images to directory %s.\n',fits_prefix);
+        end;
        fimg = -1;
-       fits_postfix = sprintf ('_%d_.fits', img.freq); % TODO: TO BE TESTED
 	end;
 
 	if (ntslices == -1) 			% Get number of records from the file
@@ -203,7 +212,9 @@ function [img_l, img_m, img, acc_radecmap, acc_localmap] =  ...
     	antmask (flagant(ind), :) = 1; antmask (:,flagant(ind)) = 1;
     	posmask (flagant(ind), :) = 1;
     end
-    acc = reshape (acc(antmask ~= 1), [rem_ants, rem_ants]);
+    weightmask = ones (rem_ants);
+    % Moving this closer to reading ACCs from file/variable. 
+    % acc = reshape (acc(antmask ~= 1), [rem_ants, rem_ants]);
    
 	
 	if (mosaic == 0)
@@ -239,7 +250,6 @@ function [img_l, img_m, img, acc_radecmap, acc_localmap] =  ...
 	% UNTESTED! Works well only with cellsizes of <10meters.
 	% Generate weighting mask on sampled visibilities. Those in a higher density
 	% uvcell are weighted down (divided by a larger number).
-	weightmask = ones (size (acc));
 %	if (weight == 1)
 %		uvec = uloc (:); vvec = vloc (:);
 %		weightvec = weightmask (:);
@@ -265,16 +275,16 @@ function [img_l, img_m, img, acc_radecmap, acc_localmap] =  ...
 	ts = 1;
 
     % Figure out if visibility integration is required.
-    if (isempty (integ) == 1) integ = 1; end;
+    if (isempty (integ) == 1 || integ == 0) integ = 1; end;
 
     % Generate the datastructure to hold visibilities before integration.
     acm = zeros (size (acc,1), size(acc,2), integ);
     tobs_win = zeros (1, integ);
 
     % Initialize the integrated visibility window.
-    if (acc_is_matrix == 0)
+        if (acc_is_matrix == 0)
 	    for ind = 1:integ
-		    [acc, tobs_tmp, img.freq] = readms2float (fin, offset, -1, 288);
+		    [acc, tobs_tmp, img.freq] = readms2float (fin, -1, -1, 288);
 	        acm(:,:,ind) = acc;
 	        tobs_win(ind) = tobs_tmp;
 	    end;
@@ -292,6 +302,7 @@ function [img_l, img_m, img, acc_radecmap, acc_localmap] =  ...
             acc = acm(:,:,1);
             img.tobs = tobs_tmp;
         end;
+        acc = reshape (acc(antmask ~= 1), [rem_ants, rem_ants]);
 
 		if (isempty (acc) == false)
 			fprintf (1, 'Slice: %3d, Time:%.2f, Freq:%.2f.\n', ... 
@@ -371,14 +382,14 @@ function [img_l, img_m, img, acc_radecmap, acc_localmap] =  ...
 				img.pix2maxis = length (img.m);
 				wrimg2bin (fimg, img);
             else
-                fitsfname = sprintf ('%d_%s', img.tobs, fits_postfix);
-                fimg = fopen (fitsfname, 'wb');
-                wrimg2fits (fimg, img);
-                fclose (fimg);
+                fitsfname = sprintf ('%s/%.0f_%.2f_%s.fits',fits_prefix, img.tobs, img.freq, polmap (pol));
+				img.pix2laxis = length (img.l);
+				img.pix2maxis = length (img.m);
+                wrimg2fits (img, fitsfname);
 			end;
 	
 			% Skip visibilities
-            if (acm_is_matrix == 0)
+            if (acc_is_matrix == 0)
 				for ind = 1:skip
 					[acc, img.tobs, img.freq] = readms2float (fin, -1, -1, 288);
 				end;
@@ -386,7 +397,7 @@ function [img_l, img_m, img, acc_radecmap, acc_localmap] =  ...
 
 				% Read in next visibility set.
 			    for ind = 1:integ
-				    [acc, tobs_tmp, img.freq] = readms2float (fin, offset, -1, 288);
+				    [acc, tobs_tmp, img.freq] = readms2float (fin, -1, -1, 288);
 			        acm(:,:,ind) = acc;
 			        tobs_integ(ind) = tobs_tmp;
 			    end;
