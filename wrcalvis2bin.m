@@ -121,7 +121,7 @@ function wrcalvis2bin (fname, offset, ntslices, wrcalsol, trackcal, array)
 
 	% Flagging section: Define antennas to flag.
 	% For day-time observations over 3hr (2011 data)
-    % flagant = [6, 103];  
+    flagant = [6, 103];  
 
 	% For LBA_INNER_BAND60 data
     % flagant = [1:12, 47, 48, 95,96, 143, 144, 191, 192, 239, 240, 287, 288 ];   
@@ -141,7 +141,7 @@ function wrcalvis2bin (fname, offset, ntslices, wrcalsol, trackcal, array)
     % flagant = [51, 239, 240, 241:288]; 
 
 	% For 24 Hr run on 20Nov13, r02
-	flagant = [129, 140, 149];
+	% flagant = [129, 140, 149];
 
 	% [uvflag, missant] = flagdeadcorr (acc, t_obs, freq, visamphithresh, ...
 	%									visamplothresh);
