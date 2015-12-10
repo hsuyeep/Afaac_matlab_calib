@@ -2,7 +2,8 @@
 % Arguments:
 %	fname   :   Name of file or matrix containing calibrated or uncalibrated visibilities.
 %               NOTE: If fname is a matrix of visibilities, time of observation goes on the
-%               end;
+%               end of the function call as a varargin; The ACM should be
+%               [ntslices x nants x nants].
 %	ntslices:   Number of timeslices to image. -1 => all timeslices. If fname is a matrix,
 %               the number of timeslices is the last dimension of the matrix.
 %	offset  :   Initial offset in visibility file from which to start imaging.
@@ -43,14 +44,15 @@ function [img_l, img_m, img, acc_radecmap, acc_localmap] =  ...
     polmap = containers.Map ({0,1,2,3,4}, {'XX','YY','XY','YX','I'});
     % Default assumption is that fname is a binary file of visibilities
     acc_is_matrix = 0;
+    if (offset == 0 || isempty (offset)) offset = 1; end;
 
 	% Gridding parameters
 	gparm.type = 'pillbox';
     gparm.lim  = 0;
     gparm.duv = 0.5;				% Default, reassigned from freq. of obs. to
 									% image just the full Fov (-1<l<1)
-    gparm.Nuv = 700;				% size of gridded visibility matrix
-    gparm.uvpad = 768;				% specifies if any padding needs to be added
+    gparm.Nuv = 1500;				% size of gridded visibility matrix
+    gparm.uvpad = 1536;				% specifies if any padding needs to be added
     gparm.fft  = 1;
 	nfacet = 3;
 	facetsize = 256;
@@ -81,12 +83,13 @@ function [img_l, img_m, img, acc_radecmap, acc_localmap] =  ...
     % Anonymous function to generate char name of variable in workspace.
     % Needed as exist () takes only charstrings.
     % namefromvar = @(x) inputname(1);
-    if (exist (eval('fname')) == 1) % If fname is a variable in the current workspace.
+    if (exist (('fname')) == 1) % If fname is a variable in the current workspace.
         acc_is_matrix = 1;
         acm_tseries = fname;
         tobs = varargin{1};
         freq = varargin{2};
-        fprintf (2, '<-- Found ACM as a variable.\n');
+        nant = size (acm_tseries, 2);
+        fprintf (2, '<-- Found ACM as a variable. %d timeslices, %d ant.\n', size (acm_tseries, 1), size (acm_tseries, 2));
     end;
 
 	% Note: we write out the accumulated image even if wr2file == 0
@@ -214,7 +217,7 @@ function [img_l, img_m, img, acc_radecmap, acc_localmap] =  ...
     end
     weightmask = ones (rem_ants);
     % Moving this closer to reading ACCs from file/variable. 
-    % acc = reshape (acc(antmask ~= 1), [rem_ants, rem_ants]);
+    acc = reshape (acc(antmask ~= 1), [rem_ants, rem_ants]);
    
 	
 	if (mosaic == 0)
@@ -278,11 +281,11 @@ function [img_l, img_m, img, acc_radecmap, acc_localmap] =  ...
     if (isempty (integ) == 1 || integ == 0) integ = 1; end;
 
     % Generate the datastructure to hold visibilities before integration.
-    acm = zeros (size (acc,1), size(acc,2), integ);
+    acm = zeros (nant, nant, integ);
     tobs_win = zeros (1, integ);
 
     % Initialize the integrated visibility window.
-        if (acc_is_matrix == 0)
+    if (acc_is_matrix == 0)
 	    for ind = 1:integ
 		    [acc, tobs_tmp, img.freq] = readms2float (fin, -1, -1, 288);
 	        acm(:,:,ind) = acc;

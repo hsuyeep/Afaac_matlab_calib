@@ -17,7 +17,7 @@ function [integ_acc, integ_tobs] = func_integ(tint)
 	[ntimes, tmin, tmax, dt] = getnrecs (fname);
 	disp (sprintf ('Found %d recs at %f resolution.', ntimes, dt));
 	fid = fopen (fname, 'rb');
-	[acct0, tobs, freq] = readms2float (fid, -1, -1);
+	[acct0, tobs, freq] = readms2float (fid, -1, -1, 288);
 	acc = zeros ([size(acct0), tint]);
 	tobs = zeros (1, tint);
 
@@ -31,7 +31,7 @@ function [integ_acc, integ_tobs] = func_integ(tint)
 	nfacet = 3, facetsize = 256;
 
 	for ind = 1:tint
-		[acct0, t, freq] = readms2float (fid, -1, -1);
+		[acct0, t, freq] = readms2float (fid, -1, -1, 288);
 		acc(:,:,ind) = acct0;
 		tobs(ind) = t;
 		disp (['Time: ' num2str(tobs(ind))]);
@@ -108,7 +108,7 @@ for nrec = 1:ntslices:ntimes
 	map_nonan (isnan(map_nonan)) = 0;
 	figure (mosimg);
 	imagesc(l,m,map);
-	[sel, sel_l, sel_m] = overplot3cr (integ_tobs, srclist3CR, 50, mosimg);
+	[sel, sel_l, sel_m] = overplotcat (integ_tobs, srclist3CR, 50, mosimg, true);
 	colorbar;
     [zen_dr, zen_sig] = getimagedr (map, 64, 3);
     imgmax = max(max(map));
@@ -125,7 +125,7 @@ for nrec = 1:ntslices:ntimes
 	hist (map_nonan(:), 100);
 
 	for ind = 1:tint
-		[acct0, t, freq] = readms2float (fid, -1, -1);
+		[acct0, t, freq] = readms2float (fid, -1, -1, 288);
 		if (isempty (t) == 1)
 			break;
 		end;

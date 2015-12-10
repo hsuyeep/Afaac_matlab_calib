@@ -18,3 +18,14 @@ fid = fopen ([prefix, srcnames{1}, '.txt']);
 dat = textscan (fid, fmt, 'Delimiter', ',', 'HeaderLines', 1);
 
 % Determine the elevation of the source from the source coordinates.
+
+% Plot rms flux vs. elevation, to see if higher elevation has lower noise.
+% NOTE that after beam model correction, the noise is expected to be higher...
+
+
+% Plot scatter plot of correlations of one source with another (scatter matrix)
+% This is to check if source variations are correlated, which can point to a 
+% calibration issue.
+
+% Plot source trace against beam model (Do this only on data without beam
+% correction?) 
