@@ -12,7 +12,7 @@ addpath '~/Documents/AARTFAAC_Project_SW_system_plan/afaac_GPU_interface/src/'
 load ('~/WORK/AARTFAAC/Afaac_matlab_calib/REFDATA_A6_LBA_OUTER_1419000369_SB296_1419000369-1419000378.mat');
 
 nant = 288;
-freq = 195312.5*296 - 195312.5/2;
+freq = 195312.5*296; % - 195312.5/2;
 flagant = [140,149,260];
 [acm_t, tmjdsec,fobs,map,l] = gengpuimg (acm, nant,tobs,freq,[1:63],[],[],[],0,0);
 
@@ -31,7 +31,7 @@ xlabel('East \leftarrow l \rightarrow West'); % , 'interpreter', 'latex');
 
 
 % Calibrate A6 dipoles alone
-tic; sola6 = pelican_sunAteamsub(conj(squeeze(acm_t(1,:, :,1))), tmjdsec(1), fobs, eye(nant), flagant, 0, 1,[], [], 'poslocal_outer.mat', [], []);toc;
+tic; sola6 = pelican_sunAteamsub(conj(squeeze(acm_t(8,:, :,1))), tmjdsec(8), fobs, eye(nant), flagant, 0, 1,[], [], 'poslocal_outer.mat', [], []);toc;
 antmask = zeros (nant);
 antmask (flagant,:) = 1; antmask(:,flagant) = 1;
 acm_cal = zeros (1, nant, nant);
