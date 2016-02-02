@@ -39,7 +39,7 @@ function [out, parm] = simvis (parm)
         % Check if all required parameters are available, else put in defaults,
         % even if unsed.
         if (isfield (parm, 'arrayrad') == 0)
-            parm.arrayrad = 50;
+            parm.arrayrad = 25;
         end;
 
         if (isfield (parm, 'elemspace') == 0)
@@ -104,7 +104,7 @@ function [out, parm] = simvis (parm)
 
 			% Create a rectangular grid of antenna, equi-spaced
 			[xpos, ypos] = meshgrid (arraysampling_x, arraysampling_y);
-            zpos = zeros (1, length (xpos));
+            zpos = zeros (1, size (xpos));
 
 		case 'disk'
             % Example parameter structure:
@@ -177,10 +177,12 @@ function [out, parm] = simvis (parm)
     uloc = (meshgrid (xpos) - meshgrid (xpos).'); % U in m 
     vloc = (meshgrid (ypos) - meshgrid (ypos).'); % V in m
     wloc = (meshgrid (zpos) - meshgrid (zpos).'); % W in m
+    uvdist = sqrt (uloc(:).^2 + vloc(:).^2 + wloc(:).^2);
     % V = exp (-(2*pi*1i*parm.freq/299792458)*(uloc*l0 + vloc*m0));
     
     % Generate phasor due to location of each element
     we = exp (-(2*pi*1i*parm.freq/299792458) *(xpos(:)*l0 + ypos(:)*m0)); 
+    % we = exp (-(2*pi*1i*parm.freq/299792458) *(xpos(:)*l0 + ypos(:)*m0 + zpos(:)*sqrt (1-l0^2 -m0*2))); 
 	V = we * we'; % Generate the visibilities for the system at hand.
 
 	out.tobs = now();
@@ -213,10 +215,10 @@ function [out, parm] = simvis (parm)
 	if (deb > 0)
         figure();
         mask = meshgrid(out.img_l).^2 + meshgrid(out.img_m).'.^2 < 1;
-		%imagesc (out.img_l, out.img_m, 10*log10(real(out.map)).*mask); colorbar; axis tight;
-		imagesc (out.img_l, out.img_m, (real(out.map)).*mask); colorbar; axis tight;
+		imagesc (out.img_l, out.img_m, 10*log10(real(out.map)).*mask); colorbar; axis tight;
+		% imagesc (out.img_l, out.img_m, (real(out.map)).*mask); colorbar; axis tight;
 		xlabel ('l'); ylabel ('m');
-		title (sprintf ('Simulated map for %s array, max bline %d lambda, Ampl (dB)', parm.arrayconfig, parm.arrayrad/(299792458/parm.freq)));
+		title (sprintf ('Simulated map for %s array, max bline %.2f lambda, Ampl (dB)', parm.arrayconfig, max(uvdist(:))/(299792458/parm.freq)));
         
 %        figure();
 %        subplot (121);
