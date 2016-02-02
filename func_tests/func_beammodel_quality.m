@@ -1,10 +1,11 @@
 % Script to plot lightcurves obtained for flux calibration purposes
+% Based on the output of TraP runs on calibrator sources. Still TODO.
 % pep/20Nov15
 
 % Source files:
-calsrc = containers.Map();
-srcnames = {'3C11', '3C380', '3C415',  '3C430',  '3C48',  
-'3C147',  '3C409',  '3C426',  '3C433',  '4C55'};
+% Map between source names and offsets in 3CR catalog.
+calsrc = containers.Map({'3C11', '3C380', '3C415',  '3C430',  '3C48',  
+'3C147',  '3C409',  '3C426',  '3C433',  '4C55'}, {;
 
 cat = load ('srclist3CR.mat');
 srcra = containers.Map(srcnames,{cat
@@ -17,4 +18,7 @@ fmt = '%d %s %f %f %f %f %f %f %d %f %f';
 fid = fopen ([prefix, srcnames{1}, '.txt']);
 dat = textscan (fid, fmt, 'Delimiter', ',', 'HeaderLines', 1);
 
-% Determine the elevation of the source from the source coordinates.
+% Determine the elevation of the source from the source coordinates and the time
+% of observation.
+
+
