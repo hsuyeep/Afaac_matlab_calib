@@ -88,6 +88,10 @@ function [] = imgcorrvis (fname, obs, fout)
 	% Determine the number of records to be read, based on the skip parameter.
 
 	% Main loop handing the data.
+    acm_x = zeros (obs.nsub, obs.nelem, obs.nelem);
+    acm_y = zeros (obs.nsub, obs.nelem, obs.nelem);
+    acm_tmp = zeros (obs.nelem);
+    t1 = triu (ones (obs.nelem));
 	for rec = 1:nrec
 		for sb = 1:nsubs
 			% Read in a single record. Data stored internally.
@@ -96,12 +100,16 @@ function [] = imgcorrvis (fname, obs, fout)
 			% Calibrate XX and YY separately for each subband.
 			if (obs.stokes >= 2 || obs.stokes == 0)
 				% Average over selected channels, create nelem x nelem matrix.
-				acm_x(sb) = mean (sbrecobj(sb).recdat.xx, 2);
+                acm_tmp (t1 == 1) = mean (sbrecobj(sb).recdat.xx, 2);
+                acm_tmp = acm_tmp + acm_tmp';
+				acm_x(sb) = acm_tmp;
 				sol_x(sb) = pelican_sunAteamsub (acm_x(sb), sbrecobj(sb).trecstart, sbrecobj(sb).freq, obs.uvflag_x, obs.flagant_x, obs.deb, obs.ptSun, [], [], obs.posfilename, [], []);
 			end;
 
 			if (obs.stokes >= 2 || obs.stokes == 1)
-				acm_y(sb) = mean (sbrecobj(sb).recdat.yy, 2);
+                acm_tmp (t1 == 1) = mean (sbrecobj(sb).recdat.yy, 2);
+                acm_tmp = acm_tmp + acm_tmp';
+				acm_y(sb) = acm_tmp;
 				sol_y(sb) = pelican_sunAteamsub (acm_y(sb), sbrecobj(sb).trecstart, sbrecobj(sb).freq, obs.uvflag_y, obs.flagant_y, obs.deb, obs.ptSun, [], [], obs.posfilename, [], []);
 			end;
 
