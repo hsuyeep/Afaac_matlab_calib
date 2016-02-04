@@ -54,8 +54,10 @@ function [] = imgcorrvis (fname, obs, fout)
 	if (isempty (obs.gridparm))
 		obs.gridparm.type = 'pillbox';
 	    obs.gridparm.lim  = 0;
-	    obs.gridparm.duv  = 0.5;	% Default, reassigned from freq. of obs. to
-									% image just the full Fov (-1<l<1)
+
+		% Control imaged field of view, independently of frequency.
+	    obs.gridparm.duv  = (0.5/180)*obs.fov;
+
 	    obs.gridparm.Nuv  = 1500;	% size of gridded visibility matrix
 	    obs.gridparm.uvpad= 1536;	% specifies if any padding needs to be added
 	    obs.gridparm.fft  = 1;
@@ -117,19 +119,37 @@ function [] = imgcorrvis (fname, obs, fout)
 
 		% If requested, splat all visibilities on a common grid
 		if (imgspectint == 0)
-			% Splat all calibrated subbands on a common grid.
-			% TODO;
 
-			% Image the commonly gridded visibilities.
-   			[radecmap, integmap, calvis, l, m] = ... 
-			  fft_imager_sjw_radec (sol_x.calvis(:), uloc_x(:), vloc_x(:), ... 
-					obs.gridparm, [], [], sbrecobj(1).trecstart, sbrecobj(1).freq, 0);
+			% Splat all calibrated subbands on a common grid.
+			integvis_x = zeros (size (sol_x.calvis));
+			integvis_y = zeros (size (sol_y.calvis));
+			% NOTE: This is probably incorrect! DONT USE NOW!
+			for sb = 1:nsubs
+				[gridvis, gridviscnt, padgridrng, kern] = genvisgrid (sol_x.calvis, uloc_x, vloc_x, obs.gridparm, obs.freq(sb), 0);
+				integvis_x = integvis_x + gridvis;
+				[gridvis, gridviscnt, padgridrng, kern] = genvisgrid (sol_y.calvis, uloc_y, vloc_y, obs.gridparm, obs.freq(sb), 0);
+				integvis_y = integvis_y + gridvis;
+			end;
+
+			% Image the commonly gridded visibilities. (Maybe just do a 2dFFT
+			% right here)
+   			[radecmap, integmap_x, calvis, l, m] = ... 
+			    fft_imager_sjw_radec (integvis_x(:), uloc_x(:), vloc_x(:), ... 
+					obs.gridparm, [], [], sbrecobj(1).trecstart, mean (obs.freq), 0);
+
+   			[radecmap, integmap_y, calvis, l, m] = ... 
+			    fft_imager_sjw_radec (integvis_y(:), uloc_y(:), vloc_y(:), ... 
+					obs.gridparm, [], [], sbrecobj(1).trecstart, mean (obs.freq), 0);
 		else
 			% Image each subband separately
 			for sb = 1:nsubs
-   				[radecmap, map(sb), calvis(sb), l, m] = ... 
-			  fft_imager_sjw_radec (sol_x(sb).calvis(:), uloc_x(:), vloc_x(:), ... 
-					obs.gridparm, [], [], sbrecobj(sb).trecstart, sbrecobj(sb).freq, 0);
+   				[radecmap, map_x(sb), calvis(sb), l, m] = ... 
+				  fft_imager_sjw_radec (sol_x(sb).calvis(:), uloc_x(:), vloc_x(:), ... 
+					obs.gridparm, [], [], sbrecobj(sb).trecstart, mean (obs.freq), 0);
+
+   				[radecmap, map_y(sb), calvis(sb), l, m] = ... 
+				  fft_imager_sjw_radec (sol_y(sb).calvis(:), uloc_y(:), vloc_y(:), ... 
+					obs.gridparm, [], [], sbrecobj(sb).trecstart, mean (obs.freq), 0);
 			end;
 			
 			% Add up the subband images to obtain the final integrated image.
@@ -137,10 +157,18 @@ function [] = imgcorrvis (fname, obs, fout)
 		end;
 
 		% Generate FITS filename for this final image
+		img.tobs 	  = sbrecobj(1).trecstart;
+		img.pix2laxis = size (integmap, 1);
+		img.pix2maxis = size (integmap, 2);
+		img.freq 	  = mean (obs.freq);
+		img.map 	  = integmap;
+		
 		integmapname = sprintf ('Int%2d_R%02d-%02d_T%s.fits', nsubs, chan(1), chan(2), datestr (mjdsec2datenum (sbrecobj(1).trecstart), 'dd-mm-yyyy_HH-MM-SS'));
 
 		% Write out image as fits
-		wrimg2fits (integmap, integmapname);
+		wrimg2fits (img, integmapname);
+		fprintf (1, '<-- Writing out %s\n', integmapname);
+
 	end; % End of time dimension loop
 
 end;
