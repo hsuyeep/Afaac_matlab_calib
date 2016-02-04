@@ -41,6 +41,9 @@ uvflag = eye(576);
 tic; sola6  = pelican_sunAteamsub (conj(squeeze(acm_t(1,:,:,1))), tmjdsec(1), fobs, eye(576), union ([289:576], flagant), 0, 1,[], [], 'poslocal_afaac12_outer.mat', [], []);toc;
 tic; sola12 = pelican_sunAteamsub (conj(squeeze(acm_t(1,:,:,1))), tmjdsec(1), fobs, eye(576), union ([  1:288], flagant), 0, 1, [], [], 'poslocal_afaac12_outer.mat', [], []); toc;
 
+% Calibrate all antennas of A12 simultaneously
+tic; sola12 = pelican_sunAteamsub (conj(squeeze(acm_t(1,:,:,1))), tmjdsec(1), fobs, eye(576), flagant, 0, 1, [], [], 'poslocal_afaac12_outer.mat', [], []); toc;
+
 % Now plot the calibration solutions for the two sets of 6 stations.
 figure;
 subplot (2,1,1);

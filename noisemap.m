@@ -2,6 +2,11 @@
 % Returns a matrix of the same size as image, with each element containing 
 % the variance of a region defined by a rectangular region of size 'rad';
 % pep/08May12
+% Arguments:
+%   skymap : Pixel array containing the map
+%   rad    : Region with radius defined in pixels over which to generate the
+%            noise stats. 
+% NOTE: DEPRECATED. PLEASE USE genimgnoisemap.m
 
 function [map] = noisemap (skymap, rad)
     if (rad > length (skymap))

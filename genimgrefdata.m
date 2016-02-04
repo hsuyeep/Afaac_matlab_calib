@@ -14,13 +14,13 @@ load ('~/WORK/AARTFAAC/Afaac_matlab_calib/REFDATA_A6_LBA_OUTER_1419000369_SB296_
 nant = 288;
 freq = 195312.5*296; % - 195312.5/2;
 flagant = [140,149,260];
-[acm_t, tmjdsec,fobs,map,l] = gengpuimg (acm, nant,tobs,57714843.750,[1:63],[],[],[],0,0);
+[acm_t, tmjdsec,fobs,map,l] = gengpuimg (acm, nant,tobs,freq,[1:63],[],[],[],0,0);
 
 acm_uncal= zeros (1, nant, nant);
 acm_uncal(1, :, :) = acm_t(1,:,:,1);
 
 % Uncalibrated image:
-[l,m,uncalimg,rdacc,locacc] = genfftimage(acm_uncal, 1, 0,0,1,flagant, 'poslocal_outer.mat',0,[],0,0,0,0,0,tmjdsec(1), freq);
+[l,m,uncalimg,rdacc,locacc] = genfftimage(conj(acm_uncal), 1, 0,0,1,flagant, 'poslocal_outer.mat',0,[],0,0,0,0,0,tmjdsec(1), freq);
 imagesc (-l, -m, real(uncalimg)); colorbar; title (sprintf ('A6-uncal:%s', datestr(mjdsec2datenum(tmjdsec(1)))));
 axis equal
 axis tight
@@ -31,7 +31,7 @@ xlabel('East \leftarrow l \rightarrow West'); % , 'interpreter', 'latex');
 
 
 % Calibrate A6 dipoles alone
-tic; sola6 = pelican_sunAteamsub(conj(squeeze(acm_t(1,:, :,1))), tmjdsec(1), fobs, eye(nant), flagant, 0, 1,[], [], 'poslocal_outer.mat', [], []);toc;
+tic; sola6 = pelican_sunAteamsub(conj(squeeze(acm_t(8,:, :,1))), tmjdsec(8), fobs, eye(nant), flagant, 0, 1,[], [], 'poslocal_outer.mat', [], []);toc;
 antmask = zeros (nant);
 antmask (flagant,:) = 1; antmask(:,flagant) = 1;
 acm_cal = zeros (1, nant, nant);

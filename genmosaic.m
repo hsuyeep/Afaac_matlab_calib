@@ -24,6 +24,7 @@ function [mosaic, laxis, maxis] = genmosaic (acc, tobs, freq, nfacet, facetsize,
 
 	% imaging parameters
 	gparm.type = 'pillbox';
+    gparm.lim = 0;
 	gparm.duv = 2.5; 
 	gparm.Nuv = 700;
 	gparm.uvpad = facetsize *nfacet; % Each facet is 512x512 pixels
@@ -44,7 +45,7 @@ function [mosaic, laxis, maxis] = genmosaic (acc, tobs, freq, nfacet, facetsize,
 	
 	msize = nfacet*facetsize; % One side of the mosaic.
 	
-	lmtopix = 2/uvpad; % size in l,m units of each pixel in generated mosaic.
+	lmtopix = 2/gparm.uvpad; % size in l,m units of each pixel in generated mosaic.
 	moff = msize / nfacet; % Offset of center of facet.
 	
 	mosaic = zeros (msize);
@@ -92,8 +93,8 @@ function [mosaic, laxis, maxis] = genmosaic (acc, tobs, freq, nfacet, facetsize,
 					zenithmap = map;
 		    	end
 		    	mosaic (lind*moff+1:(lind+1)*moff, mind*moff+1:(mind+1)*moff) = ...
-		        	map (uvpad/2-facetsize/2+1:uvpad/2+facetsize/2, ... 
-						uvpad/2-facetsize/2+1:uvpad/2+facetsize/2);
+		        	map (gparm.uvpad/2-facetsize/2+1:gparm.uvpad/2+facetsize/2, ... 
+						gparm.uvpad/2-facetsize/2+1:gparm.uvpad/2+facetsize/2);
 		    	disp (['(l,m) range: (' num2str([l_reph-facetsize*lmtopix,l_reph+facetsize*lmtopix]) '), (' num2str([m_reph-facetsize*lmtopix,m_reph+facetsize*lmtopix]) ')']);
 		    
 		    

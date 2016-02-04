@@ -6,7 +6,8 @@
 % pep/22Oct15
 
 % Arguments:
-%   img : Image array to operate on
+%   img : Image array to operate on. Can contain NaNs, as the underlying
+%         robustmean() eliminates them.
 % thresh: Sigma threshold to clip on
 %  M,N  : Sections into which to grid the image.
 % Returns:
@@ -33,11 +34,17 @@ function [rms, mu, selpix, pix2grid] = genimgnoisefloor (img, thresh, M, N)
         for cind = 1:N
             ro = (rind-1)*rstride + 1;
             co = (cind-1)*cstride + 1;
+            if (ro+rstride-1 > size (img,1) || co+cstride-1 > size (img,2))
+                fprintf (2, '## Index exceeded for grid number (%d, %d)\n', rind, cind);
+                break;
+            end;
 
             % Extract out the valid pixels from each grid region
-            pix = img(ro:ro+rstride, co:co+cstride);
+            pix = img(ro:ro+rstride-1, co:co+cstride-1);
 
             % Carry out an iterative sigma clipping of each grid
+            % NOTE: robustmean () eliminates NaNs as well, so no need to worry
+            % about those NaN pixels in the corners.
             [m,v,sel] = robustmean (pix(:), thresh);
 
             rms(rind, cind) = v;

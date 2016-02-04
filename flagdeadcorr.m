@@ -4,7 +4,10 @@
 %	acc : ACM for this time instant
 %	tobs: Time of obs
 % 	freq: Freq. of obs.
-% thresh: Threshold of median cutoff. All vis>thresh*median are flagged.
+%hithresh: Threshold of median cutoff as percent of median. 
+%          All vis>hithresh*median are flagged.
+%lothresh: Threshold of median cutoff as percent of median. 
+%          All vis<lothresh*median are flagged.
 
 % Returns:
 %	uvflag: flag matrix with 1s indicating visibilities to flag.
@@ -16,6 +19,9 @@ function [uvflag, flagant] = flagdeadcorr (acc, tobs, freq, hithresh, lothresh)
 	ac = abs (acc - diag(diag(acc)));
 	uvflag = zeros (size (acc)); % 1 => bad visibility
 	flagant = [1:length(acc)];
+
+    if (isempty (hithresh)) hithresh =0.25; end; % default percent
+    if (isempty (lothresh)) lothresh =0.25; end; % default percent
 
 	% Find missing antennas. Row 20 is an arbit choice.
 %	missant = ac (20, :) == 0; 
