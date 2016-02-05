@@ -26,53 +26,50 @@ function [] = imgcorrvis (fname, obs, fout)
 
 	% Validate the presence of the .vis file
 	for i = 1:length (fname)
-		assert (exist (fname{i} == 0);
+		assert (exist (fname{i}) == 2);
 	end;
-	nsubs = length (fname);
+	nsub = length (fname);
+    fprintf (2, '<-- Working with %d subbands.\n', nsub);
 	
 	% Setup the remainder of the obs structure, if uninitialized.
-	if (isempty (obs.npol )) obs.npol  =   2; end;
-	if (isempty (obs.nchan)) obs.nchan =  63; end;
-	if (isempty (obs.nelem)) obs.nelem = 288; end;
-	if (isempty (obs.stokes))obs.stokes=   0; end;
-	if (isempty (obs.fov  )) obs.fov   = 180; end;
-	if (isempty (obs.skip )) obs.skip  =   1; end;
-	if (isempty (obs.deb  )) obs.deb   =   0; end;
-	if (isempty (obs.ptSun)) obs.ptSun =   1; end;
-	if (isempty (obs.uvflag_x)) obs.uvflag_x =   eye(obs.nelem); end;
-	if (isempty (obs.uvflag_y)) obs.uvflag_y =   eye(obs.nelem); end;
-	if (isempty (obs.imgspectint)) obs.imgspectint= 1; end;
-	if (isempty (obs.bwidth)) obs.bwidth= [1:nsubs]; end;
-	if (isempty (obs.flagant_x)) obs.flagant_x = []; end;
-	if (isempty (obs.flagant_y)) obs.flagant_y = []; end;
-	if (isempty (obs.posfile)) obs.posfile = 'poslocal_outer.mat'; end;
-	if (isempty (obs.freq)) 
-		for i = 1:length (fname)
-			obs.freq(i) = (295+i)*195312.5;
-		end;
-	end;	
-	if (isempty (obs.gridparm))
+	if (isfield (obs, 'npol'  ) == 0) obs.npol  =   2; end;
+	if (isfield (obs, 'nchan' ) == 0) obs.nchan =  63; end;
+	if (isfield (obs, 'nelem' ) == 0) obs.nelem = 288; end;
+	if (isfield (obs, 'nbline') == 0) obs.nbline= 41616; end;
+	if (isfield (obs, 'stokes') == 0) obs.stokes=   4; end; % [XX=0,YY=1,XY=2,YX=3,I=4,Q=5]
+	if (isfield (obs, 'fov'   ) == 0) obs.fov   = 180; end;
+	if (isfield (obs, 'cal'   ) == 0) obs.cal   =   1; end;
+	if (isfield (obs, 'skip'  ) == 0) obs.skip  =   1; end;
+	if (isfield (obs, 'deb'   ) == 0) obs.deb   =   0; end;
+	if (isfield (obs, 'ptSun' ) == 0) obs.ptSun =   1; end;
+	if (isfield (obs, 'uvflag_x') == 0) obs.uvflag_x =   eye(obs.nelem); end;
+	if (isfield (obs, 'uvflag_y') == 0) obs.uvflag_y =   eye(obs.nelem); end;
+	if (isfield (obs, 'imgspectint') == 0) obs.imgspectint= 1; end;
+	if (isfield (obs, 'bwidth') == 0) obs.bwidth= [1:nsub]; end;
+	if (isfield (obs, 'flagant_x') == 0) obs.flagant_x = [18, 84, 142, 168, 262]; end; % For 8sb observations
+	if (isfield (obs, 'flagant_y') == 0) obs.flagant_y = [18, 84, 142, 168, 262]; end;
+	if (isfield (obs, 'posfilename') == 0) obs.posfilename = 'poslocal_outer.mat'; end;
+	if (isfield (obs, 'sub') == 0) 
+        for i = 1:length (fname) obs.sub(i) = 294+i; end;
+    end;
+	for i = 1:length(obs.sub)
+			obs.freq(i) = (obs.sub(i)*195312.5);
+	end;
+	if (isfield (obs, 'gridparm') == 0)
 		obs.gridparm.type = 'pillbox';
 	    obs.gridparm.lim  = 0;
 
 		% Control imaged field of view, independently of frequency.
-	    obs.gridparm.duv  = (0.5/180)*obs.fov;
+	    % obs.gridparm.duv  = (0.5/180)*obs.fov;
+	    obs.gridparm.duv  = 0.5;
 
-	    obs.gridparm.Nuv  = 1500;	% size of gridded visibility matrix
-	    obs.gridparm.uvpad= 1536;	% specifies if any padding needs to be added
+	    obs.gridparm.Nuv  = 1024;	% size of gridded visibility matrix
+	    obs.gridparm.uvpad= 1024;	% specifies if any padding needs to be added
 	    obs.gridparm.fft  = 1;
 	end;
 
-	% Imaging related setup
-	lambda = 299792458/obs.freq;	% in m.
-    dl = (299792458/(obs.freq * obs.gridparm.uvpad * obs.gridparm.duv)); % dimensionless, in dir. cos. units
-    
-    % NOTE: Total imaged Field of View is determined by the visibility 
-	% grid-spacing, duv.
-    lmax = dl * obs.gridparm.uvpad / 2;
-
     % Local horizon based coordinates of array in ITRF
-    load (posfilename, 'posITRF', 'poslocal'); 
+    load (obs.posfilename, 'posITRF', 'poslocal'); 
 
     % Generate uv coordinates in local horizon coord. system, needed for imaging
     uloc = meshgrid (poslocal(:,1)) - meshgrid (poslocal (:,1)).';
@@ -81,50 +78,65 @@ function [] = imgcorrvis (fname, obs, fout)
     [uloc_x, vloc_x] = gen_flagged_uvloc (uloc, vloc, obs.flagant_x);
     [uloc_y, vloc_y] = gen_flagged_uvloc (uloc, vloc, obs.flagant_y);
 
-	% Validate the specified observational parameters with those specified in
-	% the obs. structure.
-	for i = [1:nsubs]
-		sbrecobj (i) = VisRec(fname{i}, obs.freq(i));
+    info.nelem = obs.nelem;
+    info.npol  = obs.npol;
+    info.nchan = obs.nchan;
+	for i = [1:nsub]
+        info.freq = obs.freq(i);
+        fprintf (1, '<-- Creating VisRec object for file %s.\n', fname{i});
+		sbrecobj (i) = VisRec(fname{i}, info); 
 	end;
 
 	% Determine the number of records to be read, based on the skip parameter.
-
+    % chan = [10, obs.nchan];
+    chan = [10, 15];
 	% Main loop handing the data.
-    acm_x = zeros (obs.nsub, obs.nelem, obs.nelem);
-    acm_y = zeros (obs.nsub, obs.nelem, obs.nelem);
+    acm_x = zeros (nsub, obs.nelem, obs.nelem);
+    acm_y = zeros (nsub, obs.nelem, obs.nelem);
     acm_tmp = zeros (obs.nelem);
     t1 = triu (ones (obs.nelem));
-	for rec = 1:nrec
-		for sb = 1:nsubs
+	for rec = 1:10
+		for sb = 1:nsub
 			% Read in a single record. Data stored internally.
-			sbrecobj(sb).readRec ([1,0,0,1], [1:obs.nchan]);
+			sbrecobj(sb).readRec ([1,0,0,1], [chan(1):chan(2)]);
 		
-			% Calibrate XX and YY separately for each subband.
+			% Calibrate XX if stokes I or XX image is required
 			if (obs.stokes >= 2 || obs.stokes == 0)
 				% Average over selected channels, create nelem x nelem matrix.
-                acm_tmp (t1 == 1) = mean (sbrecobj(sb).recdat.xx, 2);
+                acm_tmp (t1 == 1) = mean (sbrecobj(sb).xx, 1);
                 acm_tmp = acm_tmp + acm_tmp';
-				acm_x(sb) = acm_tmp;
-				sol_x(sb) = pelican_sunAteamsub (acm_x(sb), sbrecobj(sb).trecstart, sbrecobj(sb).freq, obs.uvflag_x, obs.flagant_x, obs.deb, obs.ptSun, [], [], obs.posfilename, [], []);
+				acm_x(sb,:,:) = acm_tmp;
+
+                if (obs.cal == 1)
+	                fprintf (2, '\n<-- Calibrating XX for subband %d.\n', sb);
+					sol_x(sb) = pelican_sunAteamsub (squeeze(acm_x(sb,:,:)), sbrecobj(sb).trecstart, sbrecobj(sb).freq, obs.uvflag_x, obs.flagant_x, obs.deb, obs.ptSun, [], [], obs.posfilename, [], []);
+                    fprintf (1, '<-- Sigmas : %.5f\n', sol_x(sb).sigmas);
+                end;
 			end;
 
+			% Calibrate YY if stokes I or YY image is required
 			if (obs.stokes >= 2 || obs.stokes == 1)
-                acm_tmp (t1 == 1) = mean (sbrecobj(sb).recdat.yy, 2);
+                acm_tmp (t1 == 1) = mean (sbrecobj(sb).yy, 1);
                 acm_tmp = acm_tmp + acm_tmp';
-				acm_y(sb) = acm_tmp;
-				sol_y(sb) = pelican_sunAteamsub (acm_y(sb), sbrecobj(sb).trecstart, sbrecobj(sb).freq, obs.uvflag_y, obs.flagant_y, obs.deb, obs.ptSun, [], [], obs.posfilename, [], []);
+				acm_y(sb,:,:) = acm_tmp;
+                
+                if (obs.cal == 1)
+                    fprintf (2, '\n<-- Calibrating YY for subband %d.\n', sb);
+				    sol_y(sb) = pelican_sunAteamsub (squeeze(acm_y(sb,:,:)), sbrecobj(sb).trecstart, sbrecobj(sb).freq, obs.uvflag_y, obs.flagant_y, obs.deb, obs.ptSun, [], [], obs.posfilename, [], []);
+                    fprintf (1, '<-- Sigmas : %.5f\n', sol_y(sb).sigmas);
+                end;
 			end;
 
 		end;
 
 		% If requested, splat all visibilities on a common grid
-		if (imgspectint == 0)
+		if (obs.imgspectint == 0)
 
 			% Splat all calibrated subbands on a common grid.
 			integvis_x = zeros (size (sol_x.calvis));
 			integvis_y = zeros (size (sol_y.calvis));
 			% NOTE: This is probably incorrect! DONT USE NOW!
-			for sb = 1:nsubs
+			for sb = 1:nsub
 				[gridvis, gridviscnt, padgridrng, kern] = genvisgrid (sol_x.calvis, uloc_x, vloc_x, obs.gridparm, obs.freq(sb), 0);
 				integvis_x = integvis_x + gridvis;
 				[gridvis, gridviscnt, padgridrng, kern] = genvisgrid (sol_y.calvis, uloc_y, vloc_y, obs.gridparm, obs.freq(sb), 0);
@@ -142,18 +154,38 @@ function [] = imgcorrvis (fname, obs, fout)
 					obs.gridparm, [], [], sbrecobj(1).trecstart, mean (obs.freq), 0);
 		else
 			% Image each subband separately
-			for sb = 1:nsubs
-   				[radecmap, map_x(sb), calvis(sb), l, m] = ... 
-				  fft_imager_sjw_radec (sol_x(sb).calvis(:), uloc_x(:), vloc_x(:), ... 
-					obs.gridparm, [], [], sbrecobj(sb).trecstart, mean (obs.freq), 0);
+			for sb = 1:nsub
 
-   				[radecmap, map_y(sb), calvis(sb), l, m] = ... 
-				  fft_imager_sjw_radec (sol_y(sb).calvis(:), uloc_y(:), vloc_y(:), ... 
-					obs.gridparm, [], [], sbrecobj(sb).trecstart, mean (obs.freq), 0);
-			end;
+                fprintf (1, '\n<-- Imaging subband %d...\n', obs.sub(sb));
+				if (obs.stokes >= 2 || obs.stokes == 0)
+                    if (obs.cal == 1)
+	   				    [radecmap, map_x(sb,:,:), calvis(sb,:,:), l, m] = ... 
+					      fft_imager_sjw_radec (sol_x(sb).calvis(:), uloc_x(:), vloc_x(:), ... 
+					    	obs.gridparm, [], [], sbrecobj(sb).trecstart, obs.freq(sb), 0);
+                    else 
+	   				    [radecmap, map_x(sb,:,:), calvis(sb,:,:), l, m] = ... 
+					      fft_imager_sjw_radec (squeeze(acm_x(sb, :, :)), uloc(:), vloc(:), ... 
+					    	obs.gridparm, [], [], sbrecobj(sb).trecstart, obs.freq(sb), 0);
+                    end;
+	            end;
+	
+				if (obs.stokes >= 2 || obs.stokes == 1)
+                    if (obs.cal == 1)
+	   				    [radecmap, map_y(sb,:,:), calvis(sb,:,:), l, m] = ... 
+					         fft_imager_sjw_radec (sol_y(sb).calvis(:), uloc_y(:), vloc_y(:), ... 
+						        obs.gridparm, [], [], sbrecobj(sb).trecstart, obs.freq(sb), 0);
+                    else
+	   				    [radecmap, map_y(sb,:,:), calvis(sb,:,:), l, m] = ... 
+					         fft_imager_sjw_radec (squeeze(acm_y(sb,:,:)), uloc(:), vloc(:), ... 
+						        obs.gridparm, [], [], sbrecobj(sb).trecstart, obs.freq(sb), 0);
+                    end;
+				end;
+            end;
 			
 			% Add up the subband images to obtain the final integrated image.
-			integmap = mean (map, 1);
+			integmap = (squeeze(mean (map_x, 1) + mean (map_y, 1)))/2;
+            % imagesc (squeeze(real(map_x(sb,:,:))));
+            imagesc (squeeze(real(integmap)));
 		end;
 
 		% Generate FITS filename for this final image
@@ -163,12 +195,13 @@ function [] = imgcorrvis (fname, obs, fout)
 		img.freq 	  = mean (obs.freq);
 		img.map 	  = integmap;
 		
-		integmapname = sprintf ('Int%2d_R%02d-%02d_T%s.fits', nsubs, chan(1), chan(2), datestr (mjdsec2datenum (sbrecobj(1).trecstart), 'dd-mm-yyyy_HH-MM-SS'));
+		integmapname = sprintf ('Sb%3d-%3d_R%02d-%02d_T%s.fits', obs.sub(1), obs.sub(end), chan(1), chan(2), datestr (mjdsec2datenum (sbrecobj(1).trecstart), 'dd-mm-yyyy_HH-MM-SS'));
 
 		% Write out image as fits
 		wrimg2fits (img, integmapname);
+		% wrimg2bin(img, integmapname);
 		fprintf (1, '<-- Writing out %s\n', integmapname);
 
-	end; % End of time dimension loop
+	end % End of time dimension loop
 
-end;
+end
