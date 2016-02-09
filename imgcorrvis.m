@@ -4,6 +4,8 @@
 % Argument:
 %	fname	: Array of filenames, one per subband, of binary .vis files.
 %	obs		: Structure with observation related parameters. 
+%             If parameters are not specified, the defaults present here are
+%             used.
 %		obs.npol	: Number of pols in input. [Default 2].
 %		obs.nchan	: Number of chans in input.[Default 63].
 %		obs.nelem	: Number of antenna elements in input.[Default 288].
@@ -12,12 +14,13 @@
 %		obs.stokes	: Stokes required (I, Q, XX, YY) [Default I].
 %		obs.bwidth	: Spectral integration needed on observation. Specify as a
 %		  			  range of subbands [start:skip:end] [Default all presented
-%		  			  subbands].
+%		  			  subbands].[UnImplemented]
 %		obs.imgspectint: Bool indicating whether spectral integration should occur
 %			   		  pre or post imaging [Default postimaging].
 %		obs.fov		: FoV to image, in deg[Default 180, all-sky].
 %		obs.skip	: Stride of time records to image. Set as a python range
-%					  [start:skip:end, -1 for end] [Default skip none].
+%					  [start:skip:end, -1 for end] [Default skip none]
+%					  [Unimplemented].
 %		obs.flagant : Preflagging of antennas;
 %	fout	: Output folder, which will contain the generated FITS image files
 %			  [Default same folder as that containing .vis files].
@@ -39,7 +42,7 @@ function [] = imgcorrvis (fname, obs, fout)
 	if (isfield (obs, 'stokes') == 0) obs.stokes=   4; end; % [XX=0,YY=1,XY=2,YX=3,I=4,Q=5]
 	if (isfield (obs, 'fov'   ) == 0) obs.fov   = 180; end;
 	if (isfield (obs, 'cal'   ) == 0) obs.cal   =   1; end;
-	if (isfield (obs, 'skip'  ) == 0) obs.skip  =   1; end;
+	if (isfield (obs, 'skip'  ) == 0) obs.skip  =   0; end;
 	if (isfield (obs, 'deb'   ) == 0) obs.deb   =   0; end;
 	if (isfield (obs, 'ptSun' ) == 0) obs.ptSun =   1; end;
 	if (isfield (obs, 'uvflag_x') == 0) obs.uvflag_x =   eye(obs.nelem); end;

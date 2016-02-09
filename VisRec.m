@@ -113,6 +113,37 @@ classdef VisRec < handle
 			meta.tend   = unixtime2mjdsec (hdr(3));
 		end;
 
+        % Function to carry out visibility based flagging along the freq.
+        % axis. Statistics are generated over the channel axis.
+        % Arguments:
+        %   chans   : The Channels over which to calculate statistics.
+        %   dat     : Reshaped float array of visibilities.
+        % Returns:
+        %   <void>  : Sets the internal visibility flag vector, used for
+        %             spectrally collapsing a visibility.
+        function flagdat = flagFreq (obj, chans, dat)
+            flagdat = zeros (2, obj.npol, obj.nbline);
+
+            % Doing it the inefficient way for now.
+            for v = 1:obj.nbline
+                for p = 1:obj.npol
+                    for r = 1:2 % re/im
+                        sel = ones (1, obs.nchan);
+                        seldat = dat (r, p, :, v);
+                        for i = 1:5
+			                mvis = mean (seldat(sel));
+			                svis = std  (seldat(sel));
+			                sel  = (seldat(sel) < mvis - 2.5*svis) && (seldat(sel) > mvis + 2.5*svis);
+                        end
+                        flagdat (r,p,v) = mean (seldat(sel));
+                    end;
+                end;
+            end;
+            
+        end;
+
+        % Function to read in a single binary visibility record, and return a
+        % subset of channels and pols. Also allows skipping time records.
 		% Arguments:
 		%	pol  : The pols to  be read in. Bool array, [XX, XY, YX, YY]	
 		%	chans: The channel subset to  be read in. Range [1:obj.nchans]	
@@ -121,6 +152,8 @@ classdef VisRec < handle
 		%		  metadata.
 		function dat = readRec(obj, pol, chans)
 			assert (obj.fid > 0);
+
+            fseek (obj.fid, obj.recbytesize*obj.skip);
 			hdr = fread (obj.fid, 64, 'double'); % Read in the first 512 bytes
 
 			% Interpret the header of this data record. Hdr is first 512 bytes.
@@ -129,24 +162,25 @@ classdef VisRec < handle
 			assert (length (chans) <= obj.nchan);
 
 			% Update internal state variables of this record
-%			obj.recdat.nchan  = obj.nchan;
-%			obj.recdat.npol   = obj.npol;
-%			obj.recdat.nelem  = obj.nelem;
-%			obj.recdat.freq   = obj.freq;
 			obj.trecstart = meta.tstart;
 			obj.trecend   = meta.tend;
-% 			obj.recdat.dt = meta.tend - meta.tstart;
 
 			% dat = fread (obj.fid, obj.datfloatsize, [obj.nbline, obj.nchan, obj.npol, 2], 'single');
 			dat = reshape (fread (obj.fid, obj.datfloatsize, 'single'), [2, obj.npol, obj.nchan, obj.nbline]);
+            if (length (chans) == 1)
+                flagdat = dat;
+            else
+                flagdat = obj.flagFreq (chans, dat);
+            end;
+
 			% Fill in the RecDat object with desired channels and pols.
 			% The fastest index in the linear float data array is nbline, nchan,
 			% npol, re/im
 			if (pol(1)) 
-				obj.xx = complex (squeeze(dat(1,1,chans,:)), squeeze(dat(2,1,chans,:)));
+				obj.xx = complex (squeeze(flagdat(1,1,chans,:)), squeeze(flagdat(2,1,chans,:)));
 			end;
 			if (pol(4)) 
-				obj.yy = complex (squeeze(dat(1,2,chans,:)), squeeze(dat(2,2,chans,:)));
+				obj.yy = complex (squeeze(flagdat(1,2,chans,:)), squeeze(flagdat(2,2,chans,:)));
 			end;
 			% NOTE: Ignoring XY and YX pols for now.
 		end;
