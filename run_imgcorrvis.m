@@ -6,7 +6,8 @@ fnames = {'ais006dat/4100.vis', 'ais006dat/4101.vis', 'ais006dat/4102.vis', 'ais
 
 % Generate uncalibrated images from every subband over entire timerange.
 obs.skip = 60;
-obs.cal = 0;
+obs.cal = 1;
+obs.freqflag = 1;
 for i = 1:length (fnames)
     try
         obs.sub = 294+i;

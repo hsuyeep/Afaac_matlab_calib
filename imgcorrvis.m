@@ -107,9 +107,10 @@ function [] = imgcorrvis (fname, obs, fout)
 
 			% Calibrate XX if stokes I or XX image is required
 			if (obs.stokes >= 2 || obs.stokes == 0)
-				% Average over selected channels, create nelem x nelem matrix.
-                acm_tmp (t1 == 1) = mean (sbrecobj(sb).xx, 1);
+				% NOTE: readRec() already creates an average over channels!
+                acm_tmp (t1 == 1) = sbrecobj(sb).xx;
                 acm_tmp = acm_tmp + acm_tmp';
+                acm_tmp (eye(obs.nelem) == 1) = real(diag(acm_tmp));
 				acm_x(sb,:,:) = acm_tmp;
 
                 if (obs.cal == 1)
@@ -121,8 +122,9 @@ function [] = imgcorrvis (fname, obs, fout)
 
 			% Calibrate YY if stokes I or YY image is required
 			if (obs.stokes >= 2 || obs.stokes == 1)
-                acm_tmp (t1 == 1) = mean (sbrecobj(sb).yy, 1);
+                acm_tmp (t1 == 1) = sbrecobj(sb).yy;
                 acm_tmp = acm_tmp + acm_tmp';
+                acm_tmp (eye(obs.nelem) == 1) = real(diag(acm_tmp));
 				acm_y(sb,:,:) = acm_tmp;
                 
                 if (obs.cal == 1)
@@ -188,8 +190,8 @@ function [] = imgcorrvis (fname, obs, fout)
             end;
 			
 			% Add up the subband images per polarization to obtain the final integrated image.
-			% integmap = (squeeze(mean (map_x, 1) + mean (map_y, 1)))/2;
-			integmap = (squeeze(median (map_x, 1) + median (map_y, 1)))/2;
+			integmap = (squeeze(mean (map_x, 1) + mean (map_y, 1)))/2;
+			% integmap = (squeeze(median (map_x, 1) + median (map_y, 1)))/2;
 		end;
 
 		% Generate FITS filename for this final image

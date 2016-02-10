@@ -156,12 +156,12 @@ classdef VisRec < handle
             for v = 1:obj.nbline
                 for p = 1:obj.npol
                     for r = 1:2 % re/im
-                        sel = ones (1, obj.nchan);
                         seldat = squeeze (dat (r, p, chans, v));
+                        sel = ones (obj.nchan, 1) & ~isnan (seldat);
                         for i = 1:5
-			                mvis = mean (seldat(sel));
-			                svis = std  (seldat(sel));
-			                sel  = (seldat(sel) < mvis - 2.5*svis) & (seldat(sel) > mvis + 2.5*svis);
+			                mvis = mean (seldat(sel == 1));
+			                svis = std  (seldat(sel == 1));
+			                sel  = (abs (seldat(sel) - mvis) < 2.5*svis);
                         end
                         flagdat (r,p,v) = mean (seldat(sel));
                     end;
@@ -213,9 +213,6 @@ classdef VisRec < handle
                 flagdat = obj.flagFreq (chans, dat);
             end;
 
-			% Fill in the RecDat object with desired channels and pols.
-			% The fastest index in the linear float data array is nbline, nchan,
-			% npol, re/im
 			if (pol(1)) 
 				obj.xx = complex (squeeze(flagdat(1,1,:)), squeeze(flagdat(2,1,:)));
 			end;
