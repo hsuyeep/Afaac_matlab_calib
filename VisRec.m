@@ -11,6 +11,7 @@ classdef VisRec < handle
 		nelem	    = 0;  % Number of antenna elements
 		nbline      = 0;  % Number of baselines
 		freq		= 0;  % Frequency of the subband of this visibility set.
+        freqflag    = 0;  % Bool to indicate whether channel axis flagging should be carried out.
 		fname		= {}; % Filename of file containing data
 		fid			= 0;  % fid of file.
 		currec		= 0;  % Current record number in the binary file.
@@ -41,11 +42,20 @@ classdef VisRec < handle
 		function  obj = VisRec (fname, info)
 			assert (exist (fname) == 2);
 			obj.fname = fname;
-			% try
-			obj.fid  = fopen (obj.fname, 'rb');	
-			% catch
-		    % 	fprintf (2, '### Error in opening file %s.\n', obj.fname);
-			% end;
+			try
+			    obj.fid  = fopen (obj.fname, 'rb');	
+			catch ME
+		     	fprintf (2, '### Error in opening file %s.\n', obj.fname);
+			end;
+
+			if (isfield (info, 'nchan' ) == 0) obj.nchan =  63; else obj.nchan = info.nchan; end;
+			if (isfield (info, 'npol'  ) == 0) obj.npol  =   2; else obj.npol = info.npol; end;
+			if (isfield (info, 'nelem' ) == 0) obj.nelem = 288; else obj.nelem = info.nelem; end;
+			if (isfield (info, 'nbline') == 0) obj.nbline= 41616; else obj.nbline = info.nbline; end;
+			if (isfield (info, 'freqflag') == 0) obj.freqflag= 0; else obj.freqflag = info.freqflag; end;
+			if (isfield (info, 'freq') == 0) obj.freq = 0; else obj.freq = info.freq; end;
+			if (isfield (info, 'skip'  ) == 0) obj.skip  =   0; else obj.skip = info.skip; end;
+			if (isfield (info, 'deb'   ) == 0) obj.deb   =   0; else obj.deb = info.deb; end;
 						
 			% obj.recdat = RecDat(); % Self contained data structure to hold a single records' data.
 			obj.getVisMeta (info); % Initialize internal data based on input data.
@@ -73,11 +83,11 @@ classdef VisRec < handle
 				fprintf (1, '<-- Found Magic number 0x%x in first record.\n',meta.magic);		
 				obj.tfilestart = meta.tstart;
 				fprintf (1, '<-- First record start time: %s.\n', datestr (mjdsec2datenum(obj.tfilestart)));
-				obj.nchan = info.nchan;
-				obj.nelem = info.nelem;
-				obj.npol  = info.npol;
-				obj.freq  = info.freq;
-                obj.nbline= info.nelem*(info.nelem+1)/2;
+                if (isfield (info, 'nchan')) obj.nchan = info.nchan; end;
+				if (isfield (info, 'nelem')) obj.nelem = info.nelem; end;
+				if (isfield (info, 'npol')) obj.npol  = info.npol; end;
+				if (isfield (info, 'freq')) obj.freq  = info.freq; end;
+                if (isfield (info, 'nbline')) obj.nbline= info.nelem*(info.nelem+1)/2; end;
 				% In units of floats, the native output datatype of the
 				% correlator.
 				obj.datfloatsize = 2*obj.npol*obj.nchan*obj.nelem*(obj.nelem+1)/2; 
@@ -113,14 +123,32 @@ classdef VisRec < handle
 			meta.tend   = unixtime2mjdsec (hdr(3));
 		end;
 
+
+        % Function to carry out visibility splatting on a common grid, but
+        % across frequencies.
+        % Arguments:
+        %   vis     : Visibilities over different subbands/pols.
+        %  freq     : Frequencies of the various subbands.
+        %   gparm   : Gridding parameter structure.
+        % poslocal  : Locational information on the antennas.
+        % Returns:
+        %   gvis    : Gridded visibilities.
+        function vis = gridFreq (obj, vis, freq, gparm)
+            % Determine highest spatial resolution grid, based on highest
+            % frequency.
+
+            % Create the grid
+
+            % Run through all visibilities, and splat them on the grid.
+        end;
+
         % Function to carry out visibility based flagging along the freq.
         % axis. Statistics are generated over the channel axis.
         % Arguments:
         %   chans   : The Channels over which to calculate statistics.
         %   dat     : Reshaped float array of visibilities.
         % Returns:
-        %   <void>  : Sets the internal visibility flag vector, used for
-        %             spectrally collapsing a visibility.
+        %   flagdat : visibilities mean after ignoring flagged channels.
         function flagdat = flagFreq (obj, chans, dat)
             flagdat = zeros (2, obj.npol, obj.nbline);
 
@@ -128,12 +156,12 @@ classdef VisRec < handle
             for v = 1:obj.nbline
                 for p = 1:obj.npol
                     for r = 1:2 % re/im
-                        sel = ones (1, obs.nchan);
-                        seldat = dat (r, p, :, v);
+                        sel = ones (1, obj.nchan);
+                        seldat = squeeze (dat (r, p, chans, v));
                         for i = 1:5
 			                mvis = mean (seldat(sel));
 			                svis = std  (seldat(sel));
-			                sel  = (seldat(sel) < mvis - 2.5*svis) && (seldat(sel) > mvis + 2.5*svis);
+			                sel  = (seldat(sel) < mvis - 2.5*svis) & (seldat(sel) > mvis + 2.5*svis);
                         end
                         flagdat (r,p,v) = mean (seldat(sel));
                     end;
@@ -148,16 +176,24 @@ classdef VisRec < handle
 		%	pol  : The pols to  be read in. Bool array, [XX, XY, YX, YY]	
 		%	chans: The channel subset to  be read in. Range [1:obj.nchans]	
 		% Returns:
-		%	dat : structure containg the actual data vectors for XX and YY pols, and
+		%   flagdat : structure containg the actual data vectors for XX and YY pols, and
 		%		  metadata.
-		function dat = readRec(obj, pol, chans)
+		function flagdat = readRec(obj, pol, chans)
 			assert (obj.fid > 0);
 
-            fseek (obj.fid, obj.recbytesize*obj.skip);
+            stat = fseek (obj.fid, obj.recbytesize*obj.skip, 0);
+            if (stat < 0)
+                throw (MException ('VisRec.m:readRec()', ferror (obj.fid)));
+            end;
+
 			hdr = fread (obj.fid, 64, 'double'); % Read in the first 512 bytes
+            if (feof (obj.fid) > 0)
+                throw (MException ('VisRec.m:readRec()', ferror (obj.fid)));
+            end;
 
 			% Interpret the header of this data record. Hdr is first 512 bytes.
 			meta = obj.interpretHdr (hdr);
+            fprintf (1, '<-- Rec time: %s\n', datestr (mjdsec2datenum (meta.tstart)));
 			
 			assert (length (chans) <= obj.nchan);
 
@@ -167,8 +203,12 @@ classdef VisRec < handle
 
 			% dat = fread (obj.fid, obj.datfloatsize, [obj.nbline, obj.nchan, obj.npol, 2], 'single');
 			dat = reshape (fread (obj.fid, obj.datfloatsize, 'single'), [2, obj.npol, obj.nchan, obj.nbline]);
-            if (length (chans) == 1)
-                flagdat = dat;
+            if (feof (obj.fid) > 0)
+                throw (MException ('VisRec.m:readRec():', ferror (obj.fid)));
+            end;
+
+            if (obj.freqflag == 0)
+                flagdat = mean (dat(:,:,chans,:), 3); % Carry out a blind averaging on the channel axis.
             else
                 flagdat = obj.flagFreq (chans, dat);
             end;
@@ -177,10 +217,10 @@ classdef VisRec < handle
 			% The fastest index in the linear float data array is nbline, nchan,
 			% npol, re/im
 			if (pol(1)) 
-				obj.xx = complex (squeeze(flagdat(1,1,chans,:)), squeeze(flagdat(2,1,chans,:)));
+				obj.xx = complex (squeeze(flagdat(1,1,:)), squeeze(flagdat(2,1,:)));
 			end;
 			if (pol(4)) 
-				obj.yy = complex (squeeze(flagdat(1,2,chans,:)), squeeze(flagdat(2,2,chans,:)));
+				obj.yy = complex (squeeze(flagdat(1,2,:)), squeeze(flagdat(2,2,:)));
 			end;
 			% NOTE: Ignoring XY and YX pols for now.
 		end;

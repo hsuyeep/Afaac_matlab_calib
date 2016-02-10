@@ -9,7 +9,7 @@
 %		obs.npol	: Number of pols in input. [Default 2].
 %		obs.nchan	: Number of chans in input.[Default 63].
 %		obs.nelem	: Number of antenna elements in input.[Default 288].
-%		obs.subband : Subband number of each file.
+%		obs.sub     : Subband number of each file.
 %		obs.freq	: Freq of each subband, in Hz.
 %		obs.stokes	: Stokes required (I, Q, XX, YY) [Default I].
 %		obs.bwidth	: Spectral integration needed on observation. Specify as a
@@ -35,15 +35,16 @@ function [] = imgcorrvis (fname, obs, fout)
     fprintf (2, '<-- Working with %d subbands.\n', nsub);
 	
 	% Setup the remainder of the obs structure, if uninitialized.
-	if (isfield (obs, 'npol'  ) == 0) obs.npol  =   2; end;
 	if (isfield (obs, 'nchan' ) == 0) obs.nchan =  63; end;
+	if (isfield (obs, 'npol'  ) == 0) obs.npol  =   2; end;
 	if (isfield (obs, 'nelem' ) == 0) obs.nelem = 288; end;
 	if (isfield (obs, 'nbline') == 0) obs.nbline= 41616; end;
+	if (isfield (obs, 'freqflag') == 0) obs.freqflag= 0; end;
+	if (isfield (obs, 'skip'  ) == 0) obs.skip  =   0; end;
+	if (isfield (obs, 'deb'   ) == 0) obs.deb   =   0; end;
 	if (isfield (obs, 'stokes') == 0) obs.stokes=   4; end; % [XX=0,YY=1,XY=2,YX=3,I=4,Q=5]
 	if (isfield (obs, 'fov'   ) == 0) obs.fov   = 180; end;
 	if (isfield (obs, 'cal'   ) == 0) obs.cal   =   1; end;
-	if (isfield (obs, 'skip'  ) == 0) obs.skip  =   0; end;
-	if (isfield (obs, 'deb'   ) == 0) obs.deb   =   0; end;
 	if (isfield (obs, 'ptSun' ) == 0) obs.ptSun =   1; end;
 	if (isfield (obs, 'uvflag_x') == 0) obs.uvflag_x =   eye(obs.nelem); end;
 	if (isfield (obs, 'uvflag_y') == 0) obs.uvflag_y =   eye(obs.nelem); end;
@@ -81,28 +82,29 @@ function [] = imgcorrvis (fname, obs, fout)
     [uloc_x, vloc_x] = gen_flagged_uvloc (uloc, vloc, obs.flagant_x);
     [uloc_y, vloc_y] = gen_flagged_uvloc (uloc, vloc, obs.flagant_y);
 
-    info.nelem = obs.nelem;
-    info.npol  = obs.npol;
-    info.nchan = obs.nchan;
 	for i = [1:nsub]
-        info.freq = obs.freq(i);
         fprintf (1, '<-- Creating VisRec object for file %s.\n', fname{i});
-		sbrecobj (i) = VisRec(fname{i}, info); 
+		sbrecobj (i) = VisRec(fname{i}, obs); 
 	end;
 
 	% Determine the number of records to be read, based on the skip parameter.
     % chan = [10, obs.nchan];
-    chan = [10, 15];
+    chan = [1, 63];
 	% Main loop handing the data.
     acm_x = zeros (nsub, obs.nelem, obs.nelem);
     acm_y = zeros (nsub, obs.nelem, obs.nelem);
     acm_tmp = zeros (obs.nelem);
     t1 = triu (ones (obs.nelem));
-	for rec = 1:10
+    while 1
 		for sb = 1:nsub
-			% Read in a single record. Data stored internally.
-			sbrecobj(sb).readRec ([1,0,0,1], [chan(1):chan(2)]);
-		
+            try
+			    % Read in a single record. Data stored internally.
+			    sbrecobj(sb).readRec ([1,0,0,1], [chan(1):chan(2)]);
+            catch ME
+	            fprintf (2, 'Exception in reading record: %s', ME.message);
+                break;
+            end;        	
+
 			% Calibrate XX if stokes I or XX image is required
 			if (obs.stokes >= 2 || obs.stokes == 0)
 				% Average over selected channels, create nelem x nelem matrix.
@@ -185,10 +187,9 @@ function [] = imgcorrvis (fname, obs, fout)
 				end;
             end;
 			
-			% Add up the subband images to obtain the final integrated image.
-			integmap = (squeeze(mean (map_x, 1) + mean (map_y, 1)))/2;
-            % imagesc (squeeze(real(map_x(sb,:,:))));
-            imagesc (squeeze(real(integmap)));
+			% Add up the subband images per polarization to obtain the final integrated image.
+			% integmap = (squeeze(mean (map_x, 1) + mean (map_y, 1)))/2;
+			integmap = (squeeze(median (map_x, 1) + median (map_y, 1)))/2;
 		end;
 
 		% Generate FITS filename for this final image
@@ -201,9 +202,13 @@ function [] = imgcorrvis (fname, obs, fout)
 		integmapname = sprintf ('Sb%3d-%3d_R%02d-%02d_T%s.fits', obs.sub(1), obs.sub(end), chan(1), chan(2), datestr (mjdsec2datenum (sbrecobj(1).trecstart), 'dd-mm-yyyy_HH-MM-SS'));
 
 		% Write out image as fits
-		wrimg2fits (img, integmapname);
-		% wrimg2bin(img, integmapname);
 		fprintf (1, '<-- Writing out %s\n', integmapname);
+        try
+		    wrimg2fits (img, integmapname);
+        catch ME
+            throw ME;
+            break;
+        end;
 
 	end % End of time dimension loop
 

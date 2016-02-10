@@ -11,7 +11,13 @@ function wrimg2fits (img, fname);
     % Determine the RA/DEC of this timeinstant based on observing time.
     [ra, dec] = convmjdsectoradec (img.tobs); % Result in rad.
 
-    fid = fits.createFile (fname);
+    try
+        fid = fits.createFile (fname);
+    catch ME
+        ME1 = MException ('wrimg2fits:filecreationerror', 'createFile failed!');
+        ME1 = addCause (ME1, ME);
+        throw (ME1);
+    end;
     fits.createImg (fid, 'float_img', [img.pix2laxis, img.pix2maxis, 1, 1]); 
     fits.writeKey  (fid, 'BSCALE', 1);
     fits.writeKey  (fid, 'BZERO',  0);        
