@@ -134,12 +134,7 @@ classdef VisRec < handle
         % Returns:
         %   gvis    : Gridded visibilities.
         function vis = gridFreq (obj, vis, freq, gparm)
-            % Determine highest spatial resolution grid, based on highest
-            % frequency.
 
-            % Create the grid
-
-            % Run through all visibilities, and splat them on the grid.
         end;
 
         % Function to carry out visibility based flagging along the freq.
@@ -178,7 +173,7 @@ classdef VisRec < handle
 		% Returns:
 		%   flagdat : structure containg the actual data vectors for XX and YY pols, and
 		%		  metadata.
-		function flagdat = readRec(obj, pol, chans)
+		function dat = readRec(obj, pol, chans)
 			assert (obj.fid > 0);
 
             stat = fseek (obj.fid, obj.recbytesize*obj.skip, 0);

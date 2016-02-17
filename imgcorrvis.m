@@ -11,7 +11,7 @@
 %		obs.nelem	: Number of antenna elements in input.[Default 288].
 %		obs.sub     : Subband number of each file.
 %		obs.freq	: Freq of each subband, in Hz.
-%		obs.stokes	: Stokes required (I, Q, XX, YY) [Default I].
+%		obs.stokes	: Stokes required (XX, YY, XY, YX, I, Q) [Default I].
 %		obs.bwidth	: Spectral integration needed on observation. Specify as a
 %		  			  range of subbands [start:skip:end] [Default all presented
 %		  			  subbands].[UnImplemented]
@@ -36,13 +36,15 @@ function [] = imgcorrvis (fname, obs, fout)
 	
 	% Setup the remainder of the obs structure, if uninitialized.
 	if (isfield (obs, 'nchan' ) == 0) obs.nchan =  63; end;
+	if (isfield (obs, 'chanwidth') == 0) obs.chanwidth =  3051.75; end;
+	if (isfield (obs, 'chans' ) == 0) obs.chans =  [1:63]; end;
 	if (isfield (obs, 'npol'  ) == 0) obs.npol  =   2; end;
 	if (isfield (obs, 'nelem' ) == 0) obs.nelem = 288; end;
 	if (isfield (obs, 'nbline') == 0) obs.nbline= 41616; end;
 	if (isfield (obs, 'freqflag') == 0) obs.freqflag= 0; end;
 	if (isfield (obs, 'skip'  ) == 0) obs.skip  =   0; end;
 	if (isfield (obs, 'deb'   ) == 0) obs.deb   =   0; end;
-	if (isfield (obs, 'stokes') == 0) obs.stokes=   4; end; % [XX=0,YY=1,XY=2,YX=3,I=4,Q=5]
+	if (isfield (obs, 'stokes') == 0) obs.stokes=   0; end; % [XX=0,YY=1,XY=2,YX=3,I=4,Q=5]
 	if (isfield (obs, 'fov'   ) == 0) obs.fov   = 180; end;
 	if (isfield (obs, 'cal'   ) == 0) obs.cal   =   1; end;
 	if (isfield (obs, 'ptSun' ) == 0) obs.ptSun =   1; end;
@@ -50,15 +52,12 @@ function [] = imgcorrvis (fname, obs, fout)
 	if (isfield (obs, 'uvflag_y') == 0) obs.uvflag_y =   eye(obs.nelem); end;
 	if (isfield (obs, 'imgspectint') == 0) obs.imgspectint= 1; end;
 	if (isfield (obs, 'bwidth') == 0) obs.bwidth= [1:nsub]; end;
-	if (isfield (obs, 'flagant_x') == 0) obs.flagant_x = [18, 84, 142, 168, 262]; end; % For 8sb observations
-	if (isfield (obs, 'flagant_y') == 0) obs.flagant_y = [18, 84, 142, 168, 262]; end;
+	if (isfield (obs, 'flagant_x') == 0) obs.flagant_x = []; end; 
+	if (isfield (obs, 'flagant_y') == 0) obs.flagant_y = []; end;
 	if (isfield (obs, 'posfilename') == 0) obs.posfilename = 'poslocal_outer.mat'; end;
 	if (isfield (obs, 'sub') == 0) 
         for i = 1:length (fname) obs.sub(i) = 294+i; end;
     end;
-	for i = 1:length(obs.sub)
-			obs.freq(i) = (obs.sub(i)*195312.5);
-	end;
 	if (isfield (obs, 'gridparm') == 0)
 		obs.gridparm.type = 'pillbox';
 	    obs.gridparm.lim  = 0;
@@ -83,23 +82,20 @@ function [] = imgcorrvis (fname, obs, fout)
     [uloc_y, vloc_y] = gen_flagged_uvloc (uloc, vloc, obs.flagant_y);
 
 	for i = [1:nsub]
-        fprintf (1, '<-- Creating VisRec object for file %s.\n', fname{i});
+        obs.freq = obs.sub(i)*195312.5;
+        fprintf (1, '<-- Creating VisRec object for file %s with freq %f.\n', fname{i}, obs.freq);
 		sbrecobj (i) = VisRec(fname{i}, obs); 
 	end;
 
-	% Determine the number of records to be read, based on the skip parameter.
-    % chan = [10, obs.nchan];
-    chan = [1, 63];
 	% Main loop handing the data.
     acm_x = zeros (nsub, obs.nelem, obs.nelem);
     acm_y = zeros (nsub, obs.nelem, obs.nelem);
-    acm_tmp = zeros (obs.nelem);
     t1 = triu (ones (obs.nelem));
     while 1
 		for sb = 1:nsub
             try
 			    % Read in a single record. Data stored internally.
-			    sbrecobj(sb).readRec ([1,0,0,1], [chan(1):chan(2)]);
+			    sbrecobj(sb).readRec ([1,0,0,1], obs.chans);
             catch ME
 	            fprintf (2, 'Exception in reading record: %s', ME.message);
                 break;
@@ -108,10 +104,11 @@ function [] = imgcorrvis (fname, obs, fout)
 			% Calibrate XX if stokes I or XX image is required
 			if (obs.stokes >= 2 || obs.stokes == 0)
 				% NOTE: readRec() already creates an average over channels!
+                acm_tmp = zeros (obs.nelem);
                 acm_tmp (t1 == 1) = sbrecobj(sb).xx;
                 acm_tmp = acm_tmp + acm_tmp';
                 acm_tmp (eye(obs.nelem) == 1) = real(diag(acm_tmp));
-				acm_x(sb,:,:) = acm_tmp;
+				acm_x(sb,:,:) = conj(acm_tmp);
 
                 if (obs.cal == 1)
 	                fprintf (2, '\n<-- Calibrating XX for subband %d.\n', sb);
@@ -122,10 +119,11 @@ function [] = imgcorrvis (fname, obs, fout)
 
 			% Calibrate YY if stokes I or YY image is required
 			if (obs.stokes >= 2 || obs.stokes == 1)
+                acm_tmp = zeros (obs.nelem);
                 acm_tmp (t1 == 1) = sbrecobj(sb).yy;
                 acm_tmp = acm_tmp + acm_tmp';
                 acm_tmp (eye(obs.nelem) == 1) = real(diag(acm_tmp));
-				acm_y(sb,:,:) = acm_tmp;
+				acm_y(sb,:,:) = conj(acm_tmp);
                 
                 if (obs.cal == 1)
                     fprintf (2, '\n<-- Calibrating YY for subband %d.\n', sb);
@@ -140,27 +138,59 @@ function [] = imgcorrvis (fname, obs, fout)
 		if (obs.imgspectint == 0)
 
 			% Splat all calibrated subbands on a common grid.
-			integvis_x = zeros (size (sol_x.calvis));
-			integvis_y = zeros (size (sol_y.calvis));
-			% NOTE: This is probably incorrect! DONT USE NOW!
+            freqgridvis_x = zeros (obs.gridparm.uvpad); % Will hold the integrated
+                                                      % visibilities after gridding to a common grid.
+            freqgridvis_y = zeros (obs.gridparm.uvpad); % Will hold the integrated
+                                                      % visibilities after gridding to a common grid.
+            sortfreq = sort (obs.sub)*195312.5; % Lowest frequency needs the highest resolution uv grid.
+            origduv  = obs.gridparm.duv;
 			for sb = 1:nsub
-				[gridvis, gridviscnt, padgridrng, kern] = genvisgrid (sol_x.calvis, uloc_x, vloc_x, obs.gridparm, obs.freq(sb), 0);
-				integvis_x = integvis_x + gridvis;
-				[gridvis, gridviscnt, padgridrng, kern] = genvisgrid (sol_y.calvis, uloc_y, vloc_y, obs.gridparm, obs.freq(sb), 0);
-				integvis_y = integvis_y + gridvis;
+                obs.freq = obs.sub(sb)*195312.5;
+                obs.gridparm.duv = origduv * (obs.freq/sortfreq(1));
+				[gridvis, gridviscnt, padgridrng, kern] = genvisgrid (sol_x(sb).calvis, uloc_x, vloc_x, obs.gridparm, obs.freq, 0);
+				freqgridvis_x = freqgridvis_x +  gridvis;
+				[gridvis, gridviscnt, padgridrng, kern] = genvisgrid (sol_y(sb).calvis, uloc_y, vloc_y, obs.gridparm, obs.freq, 0);
+				freqgridvis_y = freqgridvis_y +  gridvis;
 			end;
 
 			% Image the commonly gridded visibilities. (Maybe just do a 2dFFT
 			% right here)
-   			[radecmap, integmap_x, calvis, l, m] = ... 
-			    fft_imager_sjw_radec (integvis_x(:), uloc_x(:), vloc_x(:), ... 
-					obs.gridparm, [], [], sbrecobj(1).trecstart, mean (obs.freq), 0);
+            freqgridvis_x = conj(flipud(fliplr(fftshift(freqgridvis_x))));
+            skymap_x = fftshift(fft2(freqgridvis_x));
 
-   			[radecmap, integmap_y, calvis, l, m] = ... 
-			    fft_imager_sjw_radec (integvis_y(:), uloc_y(:), vloc_y(:), ... 
-					obs.gridparm, [], [], sbrecobj(1).trecstart, mean (obs.freq), 0);
+            freqgridvis_y = conj(flipud(fliplr(fftshift(freqgridvis_y))));
+            skymap_y = fftshift(fft2(freqgridvis_y));
+
+            dl = (1/(obs.gridparm.uvpad * origduv)); % dimensionless, in dir. cos. units
+		    lmax = dl * obs.gridparm.uvpad/ 2;
+			l = linspace (-lmax, lmax, obs.gridparm.uvpad);
+		    m = l;  % Identical resolution and extent along m-axis
+		    
+		    % Create a mask to mask out pixels beyond the unit circle (these are below 
+			% the horizon.)
+		    mask = NaN (length(l));
+		    mask(meshgrid(l).^2 + meshgrid(l).'.^2 < 1) = 1;
+            switch obs.stokes
+                case 0
+                    integmap = single (real(skymap_x) .* mask)';
+
+                case 1
+                    integmap = single (real(skymap_y) .* mask)';
+
+                case 4
+		            integmap = single (((real(skymap_x) + real(skymap_y))/2).* mask)';
+
+                case 5
+		            integmap = single (((real(skymap_x) - real(skymap_y))).* mask)';
+
+                otherwise
+                    fprintf (2, '### Case %d not implemented!\n', obs.stokes);
+            end;
+
 		else
 			% Image each subband separately
+            map_x = zeros (nsub, obs.gridparm.uvpad, obs.gridparm.uvpad);
+            map_y = zeros (nsub, obs.gridparm.uvpad, obs.gridparm.uvpad);
 			for sb = 1:nsub
 
                 fprintf (1, '\n<-- Imaging subband %d...\n', obs.sub(sb));
@@ -168,11 +198,11 @@ function [] = imgcorrvis (fname, obs, fout)
                     if (obs.cal == 1)
 	   				    [radecmap, map_x(sb,:,:), calvis(sb,:,:), l, m] = ... 
 					      fft_imager_sjw_radec (sol_x(sb).calvis(:), uloc_x(:), vloc_x(:), ... 
-					    	obs.gridparm, [], [], sbrecobj(sb).trecstart, obs.freq(sb), 0);
+					    	obs.gridparm, [], [], sbrecobj(sb).trecstart, obs.sub(sb)*195312.5, 0);
                     else 
 	   				    [radecmap, map_x(sb,:,:), calvis(sb,:,:), l, m] = ... 
 					      fft_imager_sjw_radec (squeeze(acm_x(sb, :, :)), uloc(:), vloc(:), ... 
-					    	obs.gridparm, [], [], sbrecobj(sb).trecstart, obs.freq(sb), 0);
+					    	obs.gridparm, [], [], sbrecobj(sb).trecstart, obs.sub(sb)*195312.5, 0);
                     end;
 	            end;
 	
@@ -180,18 +210,32 @@ function [] = imgcorrvis (fname, obs, fout)
                     if (obs.cal == 1)
 	   				    [radecmap, map_y(sb,:,:), calvis(sb,:,:), l, m] = ... 
 					         fft_imager_sjw_radec (sol_y(sb).calvis(:), uloc_y(:), vloc_y(:), ... 
-						        obs.gridparm, [], [], sbrecobj(sb).trecstart, obs.freq(sb), 0);
+						        obs.gridparm, [], [], sbrecobj(sb).trecstart, obs.sub(sb)*195312.5, 0);
                     else
 	   				    [radecmap, map_y(sb,:,:), calvis(sb,:,:), l, m] = ... 
 					         fft_imager_sjw_radec (squeeze(acm_y(sb,:,:)), uloc(:), vloc(:), ... 
-						        obs.gridparm, [], [], sbrecobj(sb).trecstart, obs.freq(sb), 0);
+						        obs.gridparm, [], [], sbrecobj(sb).trecstart, obs.sub(sb)*195312.5, 0);
                     end;
 				end;
+
             end;
-			
-			% Add up the subband images per polarization to obtain the final integrated image.
-			integmap = (squeeze(mean (map_x, 1) + mean (map_y, 1)))/2;
-			% integmap = (squeeze(median (map_x, 1) + median (map_y, 1)))/2;
+
+            switch obs.stokes
+                case 0
+                    integmap = squeeze (mean (map_x, 1));
+
+                case 1
+                    integmap = squeeze (mean (map_y, 1));
+
+                case 4
+                    integmap = squeeze (mean (map_x, 1) + mean (map_y,1))/2;
+
+                case 5
+                    integmap = squeeze (mean (map_x, 1) - mean (map_y,1));
+
+                otherwise
+                    fprintf (2, '### Case %d not implemented!\n', obs.stokes);
+            end;
 		end;
 
 		% Generate FITS filename for this final image
@@ -199,6 +243,7 @@ function [] = imgcorrvis (fname, obs, fout)
 		img.pix2laxis = size (integmap, 1);
 		img.pix2maxis = size (integmap, 2);
 		img.freq 	  = mean (obs.freq);
+        img.df        = length (obs.chans)*obs.chanwidth;
 		img.map 	  = integmap;
 		
 		integmapname = sprintf ('Sb%3d-%3d_R%02d-%02d_T%s.fits', obs.sub(1), obs.sub(end), chan(1), chan(2), datestr (mjdsec2datenum (sbrecobj(1).trecstart), 'dd-mm-yyyy_HH-MM-SS'));
@@ -213,5 +258,4 @@ function [] = imgcorrvis (fname, obs, fout)
         end;
 
 	end % End of time dimension loop
-
 end

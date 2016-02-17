@@ -7,6 +7,7 @@
 
 function wrimg2fits (img, fname);
     
+    assert (all (isfield (img, {'pix2laxis', 'pix2maxis', 'tobs', 'freq', 'df', 'map'})));
     import matlab.io.*; % For low level access to the FITS routines.
     % Determine the RA/DEC of this timeinstant based on observing time.
     [ra, dec] = convmjdsectoradec (img.tobs); % Result in rad.
@@ -59,7 +60,7 @@ function wrimg2fits (img, fname);
     fits.writeKey  (fid, 'CUNIT2' ,                      'deg');                     
     fits.writeKey  (fid, 'CTYPE3' ,                     'FREQ');                            
     fits.writeKey  (fid, 'CRVAL3' ,                   img.freq);     
-    fits.writeKey  (fid, 'CDELT3' ,                1.9226e+05 );     
+    fits.writeKey  (fid, 'CDELT3' ,                     img.df);     
     fits.writeKey  (fid, 'CRPIX3' ,                         1 );     
     fits.writeKey  (fid, 'CUNIT3' ,                      'Hz' );                             
     fits.writeKey  (fid, 'CTYPE4' ,                  'STOKES' );                         
@@ -84,6 +85,6 @@ function wrimg2fits (img, fname);
     fits.writeKey  (fid, 'OBSGEO-Y',                4.6102e+05);      
     fits.writeKey  (fid, 'OBSGEO-Z',                5.0649e+06);      
     fits.writeKey  (fid, 'DATE'   , datestr(now, 'yyyy-mm-ddTHH:MM:SS.FFF'));
-    fits.writeKey  (fid, 'ORIGIN' ,  'wrimg2bin.m');
+    fits.writeKey  (fid, 'ORIGIN' ,  'wrimg2fits.m');
     fits.writeImg  (fid, img.map);
     fits.closeFile (fid);
