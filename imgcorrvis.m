@@ -93,9 +93,13 @@ function [] = imgcorrvis (fname, obs, fout)
         paduvlim = floor (obs.gridparm.uvpad/2)*obs.gridparm.duv;
         padgridrng = linspace (-paduvlim, paduvlim, obs.gridparm.uvpad);
     
-        % UV coordinates in units of lowest frequency.
-        u = uloc_x(:)*sortfreq(1)/299792458.;
-        v = vloc_x(:)*sortfreq(1)/299792458.;
+        % UV coordinates for all baselines, in lambda units.
+        u = zeros (nsub, prod(size(uloc_x)));
+        v = zeros (nsub, prod(size(vloc_x)));
+        for sb = 1:nsub
+            u(sb,:) = uloc_x(:)*sortfreq(sb)/299792458.;
+            v(sb,:) = vloc_x(:)*sortfreq(sb)/299792458.;
+        end;
 
         % Generate a single grid for all subbands.
         [uc, vc] = meshgrid (gridrng);
@@ -112,8 +116,8 @@ function [] = imgcorrvis (fname, obs, fout)
     acm_x = zeros (nsub, obs.nelem, obs.nelem);
     acm_y = zeros (nsub, obs.nelem, obs.nelem);
     t1 = triu (ones (obs.nelem));
-    while 1
-    % for pep = 1:1
+    % while 1
+    for pep = 1:1
         for sb = 1:nsub
             try
                 % Read in a single record. Data stored internally.
@@ -159,29 +163,27 @@ function [] = imgcorrvis (fname, obs, fout)
         % If requested, splat all visibilities on a common grid
         if (obs.imgspectint == 0)
 
-
-            % Handle a single subband
-            gridvis_x = zeros(obs.gridparm.Nuv);
-            gridvis_y = zeros(obs.gridparm.Nuv);
-            gridvis_xcnt = gridvis_x;
-            gridvis_ycnt = gridvis_y;
-            missed_vis = 0;   % cumulative count of ignored visibilities due to 
-                              % gridded value exeeding grid size.
+	       % Handle a single subband
+	       gridvis_x = zeros(obs.gridparm.Nuv);
+	       gridvis_y = zeros(obs.gridparm.Nuv);
+	       gridvis_xcnt = ones (obs.gridparm.Nuv);
+	       gridvis_ycnt = ones (obs.gridparm.Nuv);
+	       missed_vis = 0;   % cumulative count of ignored visibilities due to 
+	                         % gridded value exeeding grid size.
 
             for sb = 1:nsub
                 fprintf (2, '<-- Splatting subband %d.\n', obs.sub(sb));
-                sb_duv = obs.gridparm.duv * (sortfreq(sb)/sortfreq(1));
 
                 % XX pol
                 if (obs.stokes >= 2 || obs.stokes == 0)
-                    for idx = 1:length(u(:))            % For every recorded visibility
+                    for idx = 1:length(uloc_x(:))            % For every recorded visibility
                     
                         % Get amp. and direction vector of visibility
                         ampl = abs(sol_x(sb).calvis(idx));            
                         phasor = sol_x(sb).calvis(idx) / ampl;
                     
                         % Determine the grid along U-axis in which observed visibility falls.
-                        uidx = u(idx) / sb_duv + obs.gridparm.Nuv / 2;  
+                        uidx = u(sb,idx) / obs.gridparm.duv + obs.gridparm.Nuv / 2;  
                         uidxl = floor(uidx);        % Find the lower and higher gridded U-value.
                         uidxh = ceil(uidx);
                     
@@ -196,7 +198,7 @@ function [] = imgcorrvis (fname, obs, fout)
                         suh = dul * ampl;
                         
                         % Determine the grid along V-axis in which observed visibility falls.
-                        vidx = v(idx) / sb_duv + obs.gridparm.Nuv / 2;
+                        vidx = v(sb, idx) / obs.gridparm.duv + obs.gridparm.Nuv / 2;
                         vidxl = floor(vidx);        % Find the lower and higher gridded V-value.
                         vidxh = ceil(vidx);
                     
@@ -233,7 +235,7 @@ function [] = imgcorrvis (fname, obs, fout)
                         end;
                 
                         % Deal with the autocorrelations explicitly, else they are set to 0 and lost.
-                        if (u(idx) == 0 && v(idx) == 0)
+                        if (u(sb, idx) == 0 && v(sb, idx) == 0)
                             gridvis_x(uidx, vidx) = gridvis_x(uidx, vidx) + ampl;
                             continue;
                         end;
@@ -248,24 +250,27 @@ function [] = imgcorrvis (fname, obs, fout)
                         gridvis_xcnt(uidxl, vidxh) = gridvis_xcnt(uidxl, vidxh) + 1;
                         gridvis_xcnt(uidxh, vidxl) = gridvis_xcnt(uidxh, vidxl) + 1;
                         gridvis_xcnt(uidxh, vidxh) = gridvis_xcnt(uidxh, vidxh) + 1;        
+
+
                         %W(uidx, vidx) = W(uidx, vidx)
                         if (missed_vis > 0)
                              fprintf (2, 'Missed vis: %d\n', missed_vis); 
                         end;
     
                     end; % End of visibility loop
+
                 end; % End of stokes condition
 
                 % YY pol
                 if (obs.stokes >= 2 || obs.stokes == 1)
-                    for idx = 1:length(u(:))            % For every recorded visibility
+                    for idx = 1:length(uloc_x(:))            % For every recorded visibility
                     
                         % Get amp. and direction vector of visibility
                         ampl = abs(sol_y(sb).calvis(idx));            
                         phasor = sol_y(sb).calvis(idx) / ampl;
                     
                         % Determine the grid along U-axis in which observed visibility falls.
-                        uidx = u(idx) / sb_duv + obs.gridparm.Nuv / 2;  
+                        uidx = u(sb, idx) / obs.gridparm.duv + obs.gridparm.Nuv / 2;  
                         uidxl = floor(uidx);        % Find the lower and higher gridded U-value.
                         uidxh = ceil(uidx);
                     
@@ -280,7 +285,7 @@ function [] = imgcorrvis (fname, obs, fout)
                         suh = dul * ampl;
                         
                         % Determine the grid along V-axis in which observed visibility falls.
-                        vidx = v(idx) / sb_duv + obs.gridparm.Nuv / 2;
+                        vidx = v(sb, idx) / obs.gridparm.duv + obs.gridparm.Nuv / 2;
                         vidxl = floor(vidx);        % Find the lower and higher gridded V-value.
                         vidxh = ceil(vidx);
                     
@@ -317,7 +322,7 @@ function [] = imgcorrvis (fname, obs, fout)
                         end;
                 
                         % Deal with the autocorrelations explicitly, else they are set to 0 and lost.
-                        if (u(idx) == 0 && v(idx) == 0)
+                        if (u(sb, idx) == 0 && v(sb, idx) == 0)
                             gridvis_y(uidx, vidx) = gridvis_y(uidx, vidx) + ampl;
                             continue;
                         end;
@@ -331,16 +336,25 @@ function [] = imgcorrvis (fname, obs, fout)
                         gridvis_ycnt(uidxl, vidxh) = gridvis_ycnt(uidxl, vidxh) + 1;
                         gridvis_ycnt(uidxh, vidxl) = gridvis_ycnt(uidxh, vidxl) + 1;
                         gridvis_ycnt(uidxh, vidxh) = gridvis_ycnt(uidxh, vidxh) + 1;        
+
+
                         if (missed_vis > 0)
                           fprintf (2, 'Missed vis: %d\n', missed_vis); 
                         end;
     
                     end; % End of visibility loop
+
                 end; % End of stokes condition
             
             end; % End of subband loop.
 
+            % Uniform weighting
+            % Calculate the average visibility, while accounting for
+            % the number of visibilities in each grid cell.
+            % gridvis_x = gridvis_x ./ gridvis_xcnt;
+            % gridvis_y = gridvis_y ./ gridvis_ycnt;
 
+            fprintf (1, '<-- Filled %d of %d gridpoints with %d subbands.\n', sum(gridvis_xcnt(:) ~= 1), length (gridvis_xcnt(:)), sb);
 
             dl = (1/(obs.gridparm.uvpad * obs.gridparm.duv)); % dimensionless, in dir. cos. units
             lmax = dl * obs.gridparm.uvpad/ 2;
@@ -367,21 +381,31 @@ function [] = imgcorrvis (fname, obs, fout)
                     integmap = single (real(skymap_y) .* mask)';
 
                 case 4
+                    % Where do these NaNs come from??
+                    gridvis_x (isnan(gridvis_x)) = 0;
                     gridvis_x = conj(flipud(fliplr(fftshift(gridvis_x))));
                     skymap_x = fftshift(fft2(gridvis_x));
+
+                    % Where do these NaNs come from??
+                    gridvis_y (isnan(gridvis_y)) = 0;
                     gridvis_y = conj(flipud(fliplr(fftshift(gridvis_y))));
                     skymap_y = fftshift(fft2(gridvis_y));
                     integmap = single (((real(skymap_x) + real(skymap_y))/2).* mask)';
 
                 case 5
+                    % Where do these NaNs come from??
+                    gridvis_x (isnan(gridvis_x)) = 0;
                     gridvis_x = conj(flipud(fliplr(fftshift(gridvis_x))));
                     skymap_x = fftshift(fft2(gridvis_x));
+
+                    % Where do these NaNs come from??
+                    gridvis_y (isnan(gridvis_y)) = 0;
                     gridvis_y = conj(flipud(fliplr(fftshift(gridvis_y))));
                     skymap_y = fftshift(fft2(gridvis_y));
                     integmap = single (((real(skymap_x) - real(skymap_y))).* mask)';
 
                 otherwise
-                    fprintf (2, '### Case %d not implemented!\n', obs.stokes);
+                    fprintf (2, '### Stokes Case %d not implemented!\n', obs.stokes);
             end;
 
         else
@@ -441,7 +465,8 @@ function [] = imgcorrvis (fname, obs, fout)
         img.pix2maxis = size (integmap, 2);
         img.freq       = mean (obs.sub*195312.5);
         img.df        = nsub*length (obs.chans)*obs.chanwidth;
-        img.map       = integmap;
+        tmp = integmap - min(min(integmap)); % Bring it up to 0;
+        img.map       = tmp./max(max(tmp)); % Get values between 0 and 1;
         
         if (isempty (fout)) 
             fout = './'; 
@@ -457,5 +482,21 @@ function [] = imgcorrvis (fname, obs, fout)
             break;
         end;
 
+        if (obs.imgspectint == 0)
+	        % Write out weightmap as a fits image
+	        img.map = gridvis_xcnt; % X and Y counts should be the same due to the
+	                                % same visibility coordinate
+	
+	        integmapname = sprintf ('%s/Sb%3d-%3d_R%02d-%02d_T%s_weight.fits', fout, obs.sub(1), obs.sub(end), obs.chans(1), obs.chans(end), datestr (mjdsec2datenum (sbrecobj(1).trecstart), 'dd-mm-yyyy_HH-MM-SS')); 
+	
+	        % Write out image as fits
+	        fprintf (1, '<-- Writing out weights into %s\n', integmapname);
+	        try
+	            wrimg2fits (img, integmapname);
+	        catch ME
+	            throw ME;
+	            break;
+	        end;
+        end;
     end % End of time dimension loop
 end

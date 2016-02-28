@@ -1,10 +1,18 @@
 % Driver code to generate images with various subband integration
 
-% cd '/dop312_0/prasad/GPU_CORR_DAT/afaac-6/8sb_29Jan16/'
-%fnames = {'SB295.vis', 'SB296.vis', 'SB297.vis', 'SB298.vis', 'SB299.vis', 'SB300.vis', 'SB301.vis', 'SB302.vis'};
+% 10sec stretch from 29Jan16 data, all subbands integrated
+ cd '/dop312_0/prasad/GPU_CORR_DAT/afaac-6/8sb_29Jan16/'
+fnames = {'SB295.vis', 'SB296.vis', 'SB297.vis', 'SB298.vis', 'SB299.vis', 'SB300.vis', 'SB301.vis', 'SB302.vis'};
+obs.sub = [295:302];
+obs.flagant_x = [18, 84, 142, 168, 262];
+obs.flagant_y = [18, 84, 142, 168, 262];
+obs.cal = 1;
+obs.stokes = 4;
+%obs.imgspectint = 1;
 %subs = [295:302];
+%imgcorrvis (fnames, obs, []);
 
-% SB002 run 01
+% SB002 run 01 on newly generated .vis visibilities from MS.
 %cd /home/prasad/struisdat/fhuizing
 %fnames = {'S293_C63_M9_T20131120-101100.vis'};
 %obs.flagant_x = [129, 140, 149];
@@ -25,20 +33,21 @@
 %obs.cal = 1;
 %subs = [295:302];
 %obs.freqflag = 1;
-%
+
+
 % 10hr recording on  20Dec15
-cd '/home/prasad'
+%cd '/home/prasad'
 % fnames = {'ais001dat/20Dec15/SB000_1450594188.vis', 'ais003dat/20Dec15/SB002_1450594187.vis', 'ais004dat/20Dec15/SB004_1450594186.vis', 'ais005dat/20Dec15/SB006_1450594185.vis'};
-fnames = {'ais003dat/20Dec15/SB002_1450594187.vis'};
-obs.skip = 60;
-obs.sub = 297;
-obs.flagant_x = [18, 84, 142, 168, 262];
-obs.flagant_y = [18, 84, 142, 168, 262];
-obs.cal = 1;
-obs.freqflag = 0;
-obs.stokes = 4;
-obs.imgspectint = 1;
-imgcorrvis (fnames(1), obs, '/home/prasad/struisdat/peeyush/20Dec15');
+%fnames = {'ais003dat/20Dec15/SB002_1450594187.vis'};
+%obs.skip = 60;
+%obs.sub = 297;
+%obs.flagant_x = [18, 84, 142, 168, 262];
+%obs.flagant_y = [18, 84, 142, 168, 262];
+%obs.cal = 1;
+%obs.freqflag = 0;
+%obs.stokes = 4;
+%obs.imgspectint = 1;
+%imgcorrvis (fnames(1), obs, '/home/prasad/struisdat/peeyush/20Dec15');
 
 % Image each subband separately
 %for i = 1:length (fnames)
@@ -54,15 +63,14 @@ imgcorrvis (fnames(1), obs, '/home/prasad/struisdat/peeyush/20Dec15');
 % obs.sub = subs;
 % imgcorrvis(fnames, obs, []);
 
-% Generate uncalibrated images: set obs.cal = 0 in imgcorrvis.m
-%for i = 2:length(fnames)
-%    proc_fnames = fnames (1:i);
-%    imgcorrvis (proc_fnames, [], []);
-%end;
-
 % Generate a set of images with increasing spectral integration with splatting.
-% obs.stokes = 0;
-% obs.imgspectint = 0;
+obs.imgspectint = 1;
+obs.stokes = 4;
+subs = [295:302]
+for i = 1:8
+    obs.sub = subs(1:i);
+    imgcorrvis (fnames(1:i), obs, []);
+end;
 
 % Generate a set of images with increasing spectral integration in the image
 % domain.

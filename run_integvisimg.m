@@ -89,11 +89,13 @@ for sb = 1:nsub
 
     % Generate FITS filename for this final image
     img.tobs       = sbrecobj(1).trecstart;
+    integmap = (integmap_x + integmap_y)/2;
     img.pix2laxis = size (integmap, 1);
     img.pix2maxis = size (integmap, 2);
     img.freq       = mean (obs.sub*195312.5);
     img.df        = sb*length (obs.chans)*obs.chanwidth;
-    img.map       = (integmap_x + integmap_y)/2;;
+    tmp = integmap - min(min(integmap)); % Bring it up to 0;
+    img.map       = tmp./max(max(tmp)); % Get values between 0 and 1;
     
     integmapname = sprintf ('%s/Sb%3d-%3d_R%02d-%02d_T%s.fits', fout, obs.sub(1), obs.sub(sb), obs.chans(1), obs.chans(end), datestr (mjdsec2datenum (sbrecobj(1).trecstart), 'dd-mm-yyyy_HH-MM-SS')); 
     wrimg2fits (img, integmapname);
