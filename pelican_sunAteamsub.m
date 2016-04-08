@@ -274,7 +274,7 @@ function [currsol] = pelican_sunAteamsub (acc, t_obs, ...
     srcpos0 = radectoITRF(rasrc, decsrc, epoch, t_obs); 
 
     % Determine which sources are above the local horizon (visible to us).
-    up = srcpos0 * rodata.normal > 0;
+    up = srcpos0 * rodata.normal > 0.1;
 
     % NOTE: We only estimate source positions for sources with an apparent flux
     % larger than 1% of the apparent flux of Cas A. 'sel' holds this subset of

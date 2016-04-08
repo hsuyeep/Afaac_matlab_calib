@@ -75,7 +75,7 @@ function [cal, sigmas, Sigman] = statcal_stefcal(acc, t_obs, freq, ...
         
 	    srcpos = radectoITRF(rasrc, decsrc, epoch, t_obs);
 	    
-	    up = srcpos * rodata.normal > 0;
+	    up = srcpos * rodata.normal > 0.1;
 	    A = exp(-(2 * pi * 1i * freq(idx) / rodata.C) * ... 
 				(rodata.posITRF_fl * srcpos(up, :).'));
 	    Rhat = squeeze(acc(:, :, idx));

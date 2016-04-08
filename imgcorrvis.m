@@ -116,8 +116,8 @@ function [] = imgcorrvis (fname, obs, fout)
     acm_x = zeros (nsub, obs.nelem, obs.nelem);
     acm_y = zeros (nsub, obs.nelem, obs.nelem);
     t1 = triu (ones (obs.nelem));
-    % while 1
-    for pep = 1:1
+    while 1
+    % for pep = 1:1
         for sb = 1:nsub
             try
                 % Read in a single record. Data stored internally.
@@ -465,8 +465,11 @@ function [] = imgcorrvis (fname, obs, fout)
         img.pix2maxis = size (integmap, 2);
         img.freq       = mean (obs.sub*195312.5);
         img.df        = nsub*length (obs.chans)*obs.chanwidth;
-        tmp = integmap - min(min(integmap)); % Bring it up to 0;
-        img.map       = tmp./max(max(tmp)); % Get values between 0 and 1;
+
+        % Generate map with pixel values ranging between 0 and 1
+        % tmp = integmap - min(min(integmap)); % Bring it up to 0;
+        % img.map       = tmp./max(max(tmp)); % Get values between 0 and 1;
+        img.map = integmap;
         
         if (isempty (fout)) 
             fout = './'; 
@@ -478,7 +481,7 @@ function [] = imgcorrvis (fname, obs, fout)
         try
             wrimg2fits (img, integmapname);
         catch ME
-            throw ME;
+            throw (ME);
             break;
         end;
 

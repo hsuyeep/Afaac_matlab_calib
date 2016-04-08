@@ -12,6 +12,7 @@ classdef VisRec < handle
 		nbline      = 0;  % Number of baselines
 		freq		= 0;  % Frequency of the subband of this visibility set.
         freqflag    = 0;  % Bool to indicate whether channel axis flagging should be carried out.
+        timeflag    = 0;  % Bool to indicate whether temporal flagging should be carried out.
 		fname		= {}; % Filename of file containing data
 		fid			= 0;  % fid of file.
 		currec		= 0;  % Current record number in the binary file.
@@ -23,10 +24,13 @@ classdef VisRec < handle
 		deb			= 0;  % Debug level, for verbosity of messages.
         recbytesize = 0;
         datfloatsize= 0;
+        flagsig     = 2.5;% Sigma threshold at which to clip
         xx          = [];
         xy          = [];
         yx          = [];
         yy          = [];
+        acm_xx      = [];
+        acm_yy      = [];
 
 	end; % End of properties.
 
@@ -53,6 +57,7 @@ classdef VisRec < handle
 			if (isfield (info, 'nelem' ) == 0) obj.nelem = 288; else obj.nelem = info.nelem; end;
 			if (isfield (info, 'nbline') == 0) obj.nbline= 41616; else obj.nbline = info.nbline; end;
 			if (isfield (info, 'freqflag') == 0) obj.freqflag= 0; else obj.freqflag = info.freqflag; end;
+			if (isfield (info, 'timeflag') == 0) obj.timeflag= 0; else obj.timeflag = info.timeflag; end;
 			if (isfield (info, 'freq') == 0) obj.freq = 0; else obj.freq = info.freq; end;
 			if (isfield (info, 'skip'  ) == 0) obj.skip  =   0; else obj.skip = info.skip; end;
 			if (isfield (info, 'deb'   ) == 0) obj.deb   =   0; else obj.deb = info.deb; end;
@@ -61,12 +66,27 @@ classdef VisRec < handle
 			obj.getVisMeta (info); % Initialize internal data based on input data.
 		end;
 
+
 		% Destructor
 		function delete (obj)
 			if (obj.fid > 0)
 				fclose (obj.fid);
 			end;
 		end;
+
+
+        % Return the internal state of the VisRec object.
+        function [obs] = getObsInfo (obj)
+		    if (isfield (obj, 'nchan' ) == 0)    obs.nchan     = obj.nchan; end;    
+		    if (isfield (obj, 'npol'  ) == 0)    obs.npol      = obj.npol; end;     
+		    if (isfield (obj, 'nelem' ) == 0)    obs.nelem     = obj.nelem; end;    
+		    if (isfield (obj, 'nbline') == 0)    obs.nbline    = obj.nbline; end;   
+		    if (isfield (obj, 'freqflag')== 0)   obs.freqflag  = obj.freqflag; end; 
+		    if (isfield (obj, 'timeflag')== 0)   obs.timeflag  = obj.timeflag; end; 
+		    if (isfield (obj, 'freq')   == 0)    obs.freq      = obj.freq; end; 
+		    if (isfield (obj, 'skip')   == 0)    obs.skip      = obj.skip; end; 
+        end;
+
 
 		% Examine data stream, generate metadata structure.
 		% Called only once to initialize internal data.
@@ -87,6 +107,7 @@ classdef VisRec < handle
 				if (isfield (info, 'nelem')) obj.nelem = info.nelem; end;
 				if (isfield (info, 'npol')) obj.npol  = info.npol; end;
 				if (isfield (info, 'freq')) obj.freq  = info.freq; end;
+				if (isfield (info, 'sub')) obj.freq  = info.sub*195312.5; end;
                 if (isfield (info, 'nbline')) obj.nbline= info.nelem*(info.nelem+1)/2; end;
 				% In units of floats, the native output datatype of the
 				% correlator.
@@ -108,6 +129,7 @@ classdef VisRec < handle
 			fseek (obj.fid, 0, 'bof'); % Move to the beginning of the file for further operations.
 		end;
 		
+
 		% Function interprets the binary header and returns meta information.
 		% Arguments:
 		%	hdr : array of 512 uint8, corresponding to the first 512 bytes of
@@ -137,6 +159,7 @@ classdef VisRec < handle
 
         end;
 
+
         % Function to carry out visibility based flagging along the freq.
         % axis. Statistics are generated over the channel axis.
         % Arguments:
@@ -156,7 +179,7 @@ classdef VisRec < handle
                         for i = 1:5
 			                mvis = mean (seldat(sel == 1));
 			                svis = std  (seldat(sel == 1));
-			                sel  = (abs (seldat(sel) - mvis) < 2.5*svis);
+			                sel  = (abs (seldat(sel) - mvis) < obj.flagsig*svis);
                         end
                         flagdat (r,p,v) = mean (seldat(sel));
                     end;
@@ -164,6 +187,23 @@ classdef VisRec < handle
             end;
             
         end;
+
+
+        % Function to convert data stored in the xx/yy linear arrays into
+        % a square symmetric Array Covariance Matrix.
+        function dat2acm (obj)
+            assert (~isempty (obj.xx));
+            assert (~isempty (obj.yy));
+            t = triu (ones(obj.nelem));
+            obj.acm_xx = zeros (obj.nelem);
+            obj.acm_xx (t == 1) = obj.xx; 
+            obj.acm_xx = conj (obj.acm_xx + obj.acm_xx');
+
+            obj.acm_yy = zeros (obj.nelem);
+            obj.acm_yy (t == 1) = obj.yy; 
+            obj.acm_yy = conj (obj.acm_yy + obj.acm_yy');
+        end;
+
 
         % Function to read in a single binary visibility record, and return a
         % subset of channels and pols. Also allows skipping time records.
@@ -216,7 +256,121 @@ classdef VisRec < handle
 			end;
 			% NOTE: Ignoring XY and YX pols for now.
 		end;
+
+
+        % Function to read in multiple timeslices of data, sigmaclip in time
+        % axis and present an averaged visibility to the user. For implementing
+        % time domain averaging in visibilities before imaging.
+        % Calls readRec() underneath.
+		% Arguments:
+		%	pol  : The pols to  be read in. Bool array, [XX, XY, YX, YY]	
+		%	chans: The channel subset to  be read in. Range [1:obj.nchans]	
+        % tslices: The number of timeslices to average over.
+		% Returns:
+		%   dat  : Time averaged visibilities, flagged both along the channel and time
+		%          axis.
+		function dat = readTimeAvgRec (obj, pol, chans, tslices)
+            
+            for ind = 1:tslices
+                obj.readRec (pol, chans);
+                xxtslices(ind, :) = obj.xx;
+                yytslices(ind, :) = obj.yy;
+            end;
+
+            if (obj.timeflag)
+	            % Selection mask
+	            selxx = ones (size (xxtslices));
+	            selyy = ones (size (yytslices));
+                % ### UNIMPLEMENTED, DONT USE!
+	            while 1
+	                m = nanmean (xxtslices);
+	                s = nanstd  (xxtslices);
+	                xxtslices(abs(xxtslices-repmat (m, [obj.nbline, 1])) > repmat (obj.flagsig*abs(s), [obj.nbline, 1])) = nan;
+	
+	                m = nanmean (yytslices);
+	                s = nanstd  (yytslices);
+	                yytslices(abs(yytslices-repmat (m, [obj.nbline, 1])) > repmat (obj.flagsig*abs(s), [obj.nbline, 1])) = nan;
+	            end;
+            else
+                dat.xx = mean (xxtslices, 1);
+                dat.yy = mean (yytslices, 1);
+            end;
+        end;
+
+
+        % Function to generate a calibrated map from the observed
+        % visibilities. Returns generated images in the img structure
+        % Both XX and YY images are returned.
+        %
+        % Arguments:
+        %   arrayconfig : One of 'lba_outer', 'lba_inner'
+        %   flagant     : Index of antennas to be flagged.
+        % Returns:
+        %   img : structure containing generated images.
+        %   sol : Solution structure as generated by the calibration routine.
+        function [img, solx, soly] = genCalMap (obj, arrayconfig, flagant)
+            load ('poslocal_outer.mat', 'poslocal');
+            uloc = meshgrid (poslocal(:,1)) - meshgrid (poslocal (:,1)).';
+            vloc = meshgrid (poslocal(:,2)) - meshgrid (poslocal (:,2)).';
+			gparm.type = 'pillbox';
+		    gparm.lim  = 0;
+		    gparm.duv = 0.5;				% Default, reassigned from freq. of obs. to
+											% image just the full Fov (-1<l<1)
+		    gparm.Nuv = 512;				% size of gridded visibility matrix
+		    gparm.uvpad = 512;				% specifies if any padding needs to be added
+		    gparm.fft  = 1;
+
+            img.tobs = obj.trecstart;
+            img.freq = obj.freq;
+
+
+	   	    solx = pelican_sunAteamsub (obj.acm_xx, img.tobs, img.freq, eye(obj.nelem), ... 
+				flagant, 0, 1, [], [], 'poslocal_outer.mat', [], []);
+	   	    soly = pelican_sunAteamsub (obj.acm_yy, img.tobs, img.freq, eye(obj.nelem), ... 
+				flagant, 0, 1, [], [], 'poslocal_outer.mat', [], []);
+
+            [uloc_flag, vloc_flag] = gen_flagged_uvloc (uloc, vloc, flagant);
+   		    [~, img.map_xx, ~, img.l, img.m] = ... 
+		        fft_imager_sjw_radec (solx.calvis(:), uloc_flag(:), vloc_flag(:), ... 
+					gparm, [], [], img.tobs, img.freq, 0);
+   		    [~, img.map_yy, ~, img.l, img.m] = ... 
+		        fft_imager_sjw_radec (soly.calvis(:), uloc_flag(:), vloc_flag(:), ... 
+					gparm, [], [], img.tobs, img.freq, 0);
+        end;
+
+
+        % Function to generate an uncalibrated map from the observed
+        % visibilities. Returns generated images in the img structure
+        % Both XX and YY images are returned.
+        %
+        % Arguments:
+        %   arrayconfig : One of 'lba_outer', 'lba_inner'
+        % Returns:
+        %   img : structure containing generated images.
+        function img = genUncalMap (obj, arrayconfig)
+            assert (obj.freq ~= 0);
+            load ('poslocal_outer.mat', 'poslocal');
+            uloc = meshgrid (poslocal(:,1)) - meshgrid (poslocal (:,1)).';
+            vloc = meshgrid (poslocal(:,2)) - meshgrid (poslocal (:,2)).';
+			gparm.type = 'pillbox';
+		    gparm.lim  = 0;
+		    gparm.duv = 0.5;				% Default, reassigned from freq. of obs. to
+											% image just the full Fov (-1<l<1)
+		    gparm.Nuv = 512;				% size of gridded visibility matrix
+		    gparm.uvpad = 512;				% specifies if any padding needs to be added
+		    gparm.fft  = 1;
+
+            img.tobs = obj.trecstart;
+            img.freq = obj.freq;
+   		    [~, img.map_xx, ~, img.l, img.m] = ... 
+		        fft_imager_sjw_radec (obj.acm_xx(:), uloc(:), vloc(:), ... 
+					gparm, [], [], img.tobs, img.freq, 0);
+   		    [~, img.map_yy, ~, img.l, img.m] = ... 
+		        fft_imager_sjw_radec (obj.acm_yy(:), uloc(:), vloc(:), ... 
+					gparm, [], [], img.tobs, img.freq, 0);
+        end;
 			
+
 	end % End of methods
 
 end % End of classdef

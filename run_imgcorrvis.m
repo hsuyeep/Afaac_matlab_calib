@@ -12,6 +12,16 @@ obs.stokes = 4;
 %subs = [295:302];
 %imgcorrvis (fnames, obs, []);
 
+% Add in Gaussian GCF
+obs.gridparm.type = 'Gaussian';
+obs.gridparm.duv  = 0.5;
+obs.gridparm.Nuv  = 1000;
+obs.gridparm.uvpad = 1024;
+obs.gridparm.fft  = 1;
+obs.gridparm.pa(1) = 0.5;
+obs.gridparm.pa(2) = 0.5; % Gaussian kernel sigx/sigy in wavelength units.
+obs.gridparm.lim = 4;     % Extent of Gaussian kernel for GCF
+
 % SB002 run 01 on newly generated .vis visibilities from MS.
 %cd /home/prasad/struisdat/fhuizing
 %fnames = {'S293_C63_M9_T20131120-101100.vis'};
@@ -64,7 +74,7 @@ obs.stokes = 4;
 % imgcorrvis(fnames, obs, []);
 
 % Generate a set of images with increasing spectral integration with splatting.
-obs.imgspectint = 1;
+obs.imgspectint = 0;
 obs.stokes = 4;
 subs = [295:302]
 for i = 1:8
