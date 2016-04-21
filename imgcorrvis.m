@@ -18,6 +18,8 @@
 %        obs.imgspectint: Bool indicating whether spectral integration should occur
 %                         pre or post imaging [Default postimaging].
 %        obs.fov        : FoV to image, in deg[Default 180, all-sky].
+%        obs.toff    : Time offset (currently only in records) to start
+%                       processing from.
 %        obs.skip    : Stride of time records to image. Set as a python range
 %                      [start:skip:end, -1 for end] [Default skip none]
 %                      [Unimplemented].
@@ -54,6 +56,7 @@ function [] = imgcorrvis (fname, obs, fout)
     if (isfield (obs, 'bwidth') == 0) obs.bwidth= [1:nsub]; end;
     if (isfield (obs, 'flagant_x') == 0) obs.flagant_x = []; end; 
     if (isfield (obs, 'flagant_y') == 0) obs.flagant_y = []; end;
+    if (isfield (obs, 'mosaic') == 0) obs.mosaic = 0; end;
     if (isfield (obs, 'posfilename') == 0) obs.posfilename = 'poslocal_outer.mat'; end;
     if (isfield (obs, 'sub') == 0) 
         for i = 1:length (fname) obs.sub(i) = 294+i; end;
@@ -110,6 +113,9 @@ function [] = imgcorrvis (fname, obs, fout)
         obs.freq = obs.sub(i)*195312.5;
         fprintf (1, '<-- Creating VisRec object for file %s with freq %f.\n', fname{i}, obs.freq);
         sbrecobj (i) = VisRec(fname{i}, obs); 
+        if (isfield (obs, 'toff') == 1)
+            sbrecobj(i).skipRec (obs.toff, 'rec');
+        end;
     end;
 
     % Main loop handing the data.
@@ -132,7 +138,7 @@ function [] = imgcorrvis (fname, obs, fout)
                 % NOTE: readRec() already creates an average over channels!
                 acm_tmp = zeros (obs.nelem);
                 acm_tmp (t1 == 1) = sbrecobj(sb).xx;
-                acm_tmp = acm_tmp + acm_tmp';
+                acm_tmp = acm_tmp + acm_tmp' - diag(acm_tmp);
                 acm_tmp (eye(obs.nelem) == 1) = real(diag(acm_tmp));
                 acm_x(sb,:,:) = conj(acm_tmp);
 
@@ -417,25 +423,41 @@ function [] = imgcorrvis (fname, obs, fout)
                 fprintf (1, '\n<-- Imaging subband %d...\n', obs.sub(sb));
                 if (obs.stokes >= 2 || obs.stokes == 0)
                     if (obs.cal == 1)
+                        if (obs.mosaic == 0)
                            [radecmap, map_x(sb,:,:), calvis(sb,:,:), l, m] = ... 
-                          fft_imager_sjw_radec (sol_x(sb).calvis(:), uloc_x(:), vloc_x(:), ... 
-                            obs.gridparm, [], [], sbrecobj(sb).trecstart, obs.sub(sb)*195312.5, 0);
+                                fft_imager_sjw_radec (sol_x(sb).calvis(:), uloc_x(:), vloc_x(:), ... 
+                                    obs.gridparm, [], [], sbrecobj(sb).trecstart, obs.sub(sb)*195312.5, 0);
+                        else
+                            [map_x(sb,:,:), l, m] = genmosaic (sol_x(sb).calvis(:), sbrecobj(sb).trecstart, obs.sub(s)*195312.5, 3, 256, uloc_x(:), vloc_x(:), posITRF, 0);
+                        end;
                     else 
+                        if (obs.mosaic == 0)
                            [radecmap, map_x(sb,:,:), calvis(sb,:,:), l, m] = ... 
                           fft_imager_sjw_radec (squeeze(acm_x(sb, :, :)), uloc(:), vloc(:), ... 
                             obs.gridparm, [], [], sbrecobj(sb).trecstart, obs.sub(sb)*195312.5, 0);
+                        else
+                            [map_x(sb,:,:), l, m] = genmosaic (acm_x(sb,:,:), sbrecobj(sb).trecstart, obs.sub(s)*195312.5, 3, 256, uloc_x(:), vloc_x(:), posITRF, 0);
+                        end;
                     end;
                 end;
     
                 if (obs.stokes >= 2 || obs.stokes == 1)
                     if (obs.cal == 1)
+                        if (obs.mosaic == 0)
                            [radecmap, map_y(sb,:,:), calvis(sb,:,:), l, m] = ... 
                              fft_imager_sjw_radec (sol_y(sb).calvis(:), uloc_y(:), vloc_y(:), ... 
                                 obs.gridparm, [], [], sbrecobj(sb).trecstart, obs.sub(sb)*195312.5, 0);
+                        else
+                            [map_y(sb,:,:), l, m] = genmosaic (sol_y(sb).calvis(:), sbrecobj(sb).trecstart, obs.sub(s)*195312.5, 3, 256, uloc_x(:), vloc_x(:), posITRF, 0);
+                        end;
                     else
+                        if (obs.mosaic == 0)
                            [radecmap, map_y(sb,:,:), calvis(sb,:,:), l, m] = ... 
                              fft_imager_sjw_radec (squeeze(acm_y(sb,:,:)), uloc(:), vloc(:), ... 
                                 obs.gridparm, [], [], sbrecobj(sb).trecstart, obs.sub(sb)*195312.5, 0);
+                        else
+                            [map_y(sb,:,:), l, m] = genmosaic (acm_y(sb,:,:), sbrecobj(sb).trecstart, obs.sub(s)*195312.5, 3, 256, uloc_x(:), vloc_x(:), posITRF, 0);
+                        end;
                     end;
                 end;
 

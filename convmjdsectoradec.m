@@ -31,5 +31,5 @@ function [ra, dec] = convmjdsectoradec (mjdsec)
 	% Eliminate multiples of 360deg. to bring within 2pi
 	lstturns = double(int32(lst/360)); 
 	lst = lst - lstturns * 360;
-	ra  = lst * pi / 180; % For HA = 0 (zenith), RA = LST.
+	ra  = lst * pi / 180 + pi; % For HA = 0 (zenith), RA = LST.
 	dec = lat * pi / 180; % Dec of zenith = lat of array.

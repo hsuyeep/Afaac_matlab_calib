@@ -18,8 +18,8 @@ classdef VisRec < handle
 		currec		= 0;  % Current record number in the binary file.
 		tfilestart  = 0;  % Timestamp of first record in binary file.
 		tfileend	= 0;  % Timestamp of last record in binary file.
-		trecstart   = 0;  % Timestamp of first record in binary file.
-		trecend	    = 0;  % Timestamp of last record in binary file.
+		trecstart   = 0;  % Timestamp of start of currently read record.
+		trecend	    = 0;  % Timestamp of end of currently read record.
 		skip		= 0;  % Number of records to skip while reading data.
 		deb			= 0;  % Debug level, for verbosity of messages.
         recbytesize = 0;
@@ -31,6 +31,7 @@ classdef VisRec < handle
         yy          = [];
         acm_xx      = [];
         acm_yy      = [];
+        dt          = 0;
 
 	end; % End of properties.
 
@@ -102,6 +103,7 @@ classdef VisRec < handle
 			if (meta.magic == 999878658) % = 0x3B98F002, correlator magic number.
 				fprintf (1, '<-- Found Magic number 0x%x in first record.\n',meta.magic);		
 				obj.tfilestart = meta.tstart;
+                obj.trecstart = meta.tstart;
 				fprintf (1, '<-- First record start time: %s.\n', datestr (mjdsec2datenum(obj.tfilestart)));
                 if (isfield (info, 'nchan')) obj.nchan = info.nchan; end;
 				if (isfield (info, 'nelem')) obj.nelem = info.nelem; end;
@@ -117,15 +119,38 @@ classdef VisRec < handle
 		
             fprintf (1, '<-- Record size : %d Bytes, datasize: %d floats.\n', obj.recbytesize, obj.datfloatsize);
 
+            % Move to next record to obtain integration time
+			fseek (obj.fid, 0, 'bof'); % Move to the beginning of the file for further operations.
+            fseek (obj.fid, obj.recbytesize, 'cof'); % Move past first record, which can have a 0 in its timestamp.
+            
+    		hdr = fread (obj.fid, obj.recbytesize/8, 'double'); % Read in the full record as doubles.
+    		meta = obj.interpretHdr (hdr);
+            obj.tfilestart = meta.tstart; % Rejecting first record.
+            obj.trecstart = meta.tstart;
+            prevtime = obj.tfilestart;
+            for i = 1:3 % Arbitrarily reading 3 records to determine dt.
+    			hdr = fread (obj.fid, obj.recbytesize/8, 'double'); % Read in the full record as doubles.
+    			meta = obj.interpretHdr (hdr);
+                obj.trecstart = meta.tstart;
+                dt(i) = meta.tstart - prevtime;
+                prevtime = meta.tstart;
+    			if (meta.magic == 999878658) % = 0x3B98F002, correlator magic number.
+    				fprintf (1, '<-- Found Magic number 0x%x in record %d, time %s, dt %fsec.\n', ...
+                             meta.magic, i, datestr (mjdsec2datenum(obj.trecstart)), dt(i));		
+                end;
+            end;
+            obj.dt = mean (dt);
+                
+            
 			% Move to end of the file to obtain last record.
-%			fseek (obj.fid, -(obj.recbytesize+1), 'eof');
-%			hdr = fread (obj.fid, 64, 'double'); % Read in hdr of the last record.
-%			meta = obj.interpretHdr (hdr);
-%			if (meta.magic == 999878658)
-%				fprintf (1, '<-- Found Magic number 0x%x in last record. %x\n', meta.magic);		
-%				obj.tfileend = meta.tstart;
-%				fprintf (1, '<-- Last record start time: %s.\n', datestr(mjdsec2datenum(obj.tfileend)));		
-%			end;
+			fseek (obj.fid, -(obj.recbytesize), 'eof');
+			hdr = fread (obj.fid, obj.recbytesize/8, 'double'); % Read in hdr of the last record.
+			meta = obj.interpretHdr (hdr);
+			if (meta.magic == 999878658)
+				fprintf (1, '<-- Found Magic number 0x%x in last record. %x\n', meta.magic);		
+				obj.tfileend = meta.tstart;
+				fprintf (1, '<-- Last record start time: %s.\n', datestr(mjdsec2datenum(obj.tfileend)));		
+			end;
 			fseek (obj.fid, 0, 'bof'); % Move to the beginning of the file for further operations.
 		end;
 		
@@ -204,6 +229,47 @@ classdef VisRec < handle
             obj.acm_yy = conj (obj.acm_yy + obj.acm_yy');
         end;
 
+        % Function to skip raw records in the .vis file.
+        % Assumes that the observation parameters of data are already
+        % initialized.
+        % Arguments:
+        %   rec : Number of records to skip.
+        %   unit: string ('rec', 'dt', 'mjdsec') Whether to skip records or seconds, or to
+        %   an absolute time.
+        % Returns:
+        %   Void.
+        function skipRec (obj, rec, unit)
+            % If unit is time (sec), determine number of records to skip based
+            % on integration time and current time.
+            switch lower(unit)
+                case 'sec' % Should be in seconds
+                    recs2move = int32(rec/obj.dt);
+                    fprintf (1, '<-- Moving %d recs for %d seconds.\n', recs2move, rec)
+                    stat = fseek (obj.fid, obj.recbytesize*recs2move, 0);
+                    if (stat < 0)
+                        throw (MException ('VisRec.m:skipRec()', ferror (obj.fid)));
+                    end;
+                
+                case 'mjdsec'
+                    assert (obj.tfileend > rec);
+                    assert (obj.tfilestart < rec);
+                    recs2move = int32((rec-obj.trecstart)/obj.dt);
+                    fprintf (1, '<-- Moving %d recs (class %s) for %f seconds.\n', recs2move, class (recs2move), rec - obj.trecstart)
+                    stat = fseek (obj.fid, obj.recbytesize*recs2move, 0);
+                    if (stat < 0)
+                        throw (MException ('VisRec.m:skipRec()', ferror (obj.fid)));
+                    end;
+                
+                case 'rec' 
+                    stat = fseek (obj.fid, obj.recbytesize*rec, 0);
+                    if (stat < 0)
+                        throw (MException ('VisRec.m:skipRec()', ferror (obj.fid)));
+                    end;
+            
+                otherwise
+                    fprintf (2, '### Unknown skip option %s.\n', unit);
+            end;
+        end;
 
         % Function to read in a single binary visibility record, and return a
         % subset of channels and pols. Also allows skipping time records.
@@ -325,9 +391,9 @@ classdef VisRec < handle
 
 
 	   	    solx = pelican_sunAteamsub (obj.acm_xx, img.tobs, img.freq, eye(obj.nelem), ... 
-				flagant, 0, 1, [], [], 'poslocal_outer.mat', [], []);
+				flagant, obj.deb, 1, [], [], 'poslocal_outer.mat', [], []);
 	   	    soly = pelican_sunAteamsub (obj.acm_yy, img.tobs, img.freq, eye(obj.nelem), ... 
-				flagant, 0, 1, [], [], 'poslocal_outer.mat', [], []);
+				flagant, obj.deb, 1, [], [], 'poslocal_outer.mat', [], []);
 
             [uloc_flag, vloc_flag] = gen_flagged_uvloc (uloc, vloc, flagant);
    		    [~, img.map_xx, ~, img.l, img.m] = ... 

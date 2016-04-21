@@ -50,12 +50,12 @@ function wrimg2fits (img, fname);
     fits.writeKey  (fid, 'PC04_04',                          1);      
     fits.writeKey  (fid, 'CTYPE1' ,                 'RA---SIN');                        
     fits.writeKey  (fid, 'CRVAL1' ,                  ra*180/pi);      
-    fits.writeKey  (fid, 'CDELT1' , asind(1/(img.pix2laxis/2)));      
+    fits.writeKey  (fid, 'CDELT1' ,-asind(1/(img.pix2laxis/2)));      
     fits.writeKey  (fid, 'CRPIX1' ,          img.pix2laxis/2+1);      
     fits.writeKey  (fid, 'CUNIT1' ,                      'deg');                             
     fits.writeKey  (fid, 'CTYPE2' ,                 'DEC--SIN');                        
     fits.writeKey  (fid, 'CRVAL2' ,                     52.915);      
-    fits.writeKey  (fid, 'CDELT2' ,-asind(1/(img.pix2laxis/2)));
+    fits.writeKey  (fid, 'CDELT2' , asind(1/(img.pix2laxis/2)));
     fits.writeKey  (fid, 'CRPIX2' ,          img.pix2maxis/2+1);      
     fits.writeKey  (fid, 'CUNIT2' ,                      'deg');                     
     fits.writeKey  (fid, 'CTYPE3' ,                     'FREQ');                            
@@ -86,5 +86,8 @@ function wrimg2fits (img, fname);
     fits.writeKey  (fid, 'OBSGEO-Z',                5.0649e+06);      
     fits.writeKey  (fid, 'DATE'   , datestr(now, 'yyyy-mm-ddTHH:MM:SS.FFF'));
     fits.writeKey  (fid, 'ORIGIN' ,  'wrimg2fits.m');
-    fits.writeImg  (fid, img.map);
+
+    % fliplr added by pep/14Apr16 to ensure proper coordinates on the generated
+    % images.
+    fits.writeImg  (fid, fliplr(img.map)); 
     fits.closeFile (fid);
