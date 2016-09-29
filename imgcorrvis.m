@@ -122,406 +122,410 @@ function [] = imgcorrvis (fname, obs, fout)
     acm_x = zeros (nsub, obs.nelem, obs.nelem);
     acm_y = zeros (nsub, obs.nelem, obs.nelem);
     t1 = triu (ones (obs.nelem));
-    while 1
+    try
+        while 1
     % for pep = 1:1
-        for sb = 1:nsub
-            try
-                % Read in a single record. Data stored internally.
-                sbrecobj(sb).readRec ([1,0,0,1], obs.chans);
-            catch ME
-                fprintf (2, 'Exception in reading record: %s', ME.message);
-                break;
-            end;            
-
-            % Calibrate XX if stokes I or XX image is required
-            if (obs.stokes >= 2 || obs.stokes == 0)
-                % NOTE: readRec() already creates an average over channels!
-                acm_tmp = zeros (obs.nelem);
-                acm_tmp (t1 == 1) = sbrecobj(sb).xx;
-                acm_tmp = acm_tmp + acm_tmp' - diag(acm_tmp);
-                acm_tmp (eye(obs.nelem) == 1) = real(diag(acm_tmp));
-                acm_x(sb,:,:) = conj(acm_tmp);
-
-                if (obs.cal == 1)
-                    fprintf (2, '\n<-- Calibrating XX for subband %d.\n', sb);
-                    sol_x(sb) = pelican_sunAteamsub (squeeze(acm_x(sb,:,:)), sbrecobj(sb).trecstart, sbrecobj(sb).freq, obs.uvflag_x, obs.flagant_x, obs.deb, obs.ptSun, [], [], obs.posfilename, [], []);
-                    fprintf (1, '<-- Sigmas : %.5f\n', sol_x(sb).sigmas);
-                end;
-            end;
-
-            % Calibrate YY if stokes I or YY image is required
-            if (obs.stokes >= 2 || obs.stokes == 1)
-                acm_tmp = zeros (obs.nelem);
-                acm_tmp (t1 == 1) = sbrecobj(sb).yy;
-                acm_tmp = acm_tmp + acm_tmp';
-                acm_tmp (eye(obs.nelem) == 1) = real(diag(acm_tmp));
-                acm_y(sb,:,:) = conj(acm_tmp);
-                
-                if (obs.cal == 1)
-                    fprintf (2, '\n<-- Calibrating YY for subband %d.\n', sb);
-                    sol_y(sb) = pelican_sunAteamsub (squeeze(acm_y(sb,:,:)), sbrecobj(sb).trecstart, sbrecobj(sb).freq, obs.uvflag_y, obs.flagant_y, obs.deb, obs.ptSun, [], [], obs.posfilename, [], []);
-                    fprintf (1, '<-- Sigmas : %.5f\n', sol_y(sb).sigmas);
-                end;
-            end;
-
-        end; % End of calibration loop over subbands
-
-        % If requested, splat all visibilities on a common grid
-        if (obs.imgspectint == 0)
-
-	       % Handle a single subband
-	       gridvis_x = zeros(obs.gridparm.Nuv);
-	       gridvis_y = zeros(obs.gridparm.Nuv);
-	       gridvis_xcnt = ones (obs.gridparm.Nuv);
-	       gridvis_ycnt = ones (obs.gridparm.Nuv);
-	       missed_vis = 0;   % cumulative count of ignored visibilities due to 
-	                         % gridded value exeeding grid size.
-
             for sb = 1:nsub
-                fprintf (2, '<-- Splatting subband %d.\n', obs.sub(sb));
-
-                % XX pol
-                if (obs.stokes >= 2 || obs.stokes == 0)
-                    for idx = 1:length(uloc_x(:))            % For every recorded visibility
-                    
-                        % Get amp. and direction vector of visibility
-                        ampl = abs(sol_x(sb).calvis(idx));            
-                        phasor = sol_x(sb).calvis(idx) / ampl;
-                    
-                        % Determine the grid along U-axis in which observed visibility falls.
-                        uidx = u(sb,idx) / obs.gridparm.duv + obs.gridparm.Nuv / 2;  
-                        uidxl = floor(uidx);        % Find the lower and higher gridded U-value.
-                        uidxh = ceil(uidx);
-                    
-                        % Find absolute distance of measured visibility from grid points, in the
-                        % U-direction only.
-                        dul = abs(uidx - uidxl);        
-                        duh = abs(uidx - uidxh);
-                    
-                        % Distribute the visiblity amplitude among the two grid points on the 
-                        % U-axis in proportion to their distance from the observed visiblity.
-                        sul = duh * ampl;
-                        suh = dul * ampl;
-                        
-                        % Determine the grid along V-axis in which observed visibility falls.
-                        vidx = v(sb, idx) / obs.gridparm.duv + obs.gridparm.Nuv / 2;
-                        vidxl = floor(vidx);        % Find the lower and higher gridded V-value.
-                        vidxh = ceil(vidx);
-                    
-                        % Find absolute distance of measured visibility from grid points, in the
-                        % V-direction only.
-                        dvl = abs(vidx - vidxl);
-                        dvh = abs(vidx - vidxh);
-                    
-                        % Distribute the HIGHER u-grid point's share of the observed visibility
-                        % amp. between the higher and lower V-grid point.
-                        sull = dvh * sul;
-                        suhl = dvh * suh;
-                    
-                        % Distribute the LOWER u-grid point's share of the observed visibility 
-                        % amp. between the higher and lower V-grid point.
-                        sulh = dvl * sul;
-                        suhh = dvl * suh;
-                        
-                        % Now that the observed visiblity amplitude is distributed among its 
-                        % surrounding 4 grid points, fill the gridded visibility matrix with
-                        % vectors with the same phase as the original observed visibility.
-                        % NOTE: Adding the 4 vectors at the corners of the grid square will give
-                        % back the original ungridded observed visibility.
-                        % NOTE: We need to accumulate this to prevent overwriting the gridded 
-                        % values from a visibility from a neighbouring grid square.
-                        if ((uidxl < 1) || (uidxh < 1) || (uidxl > obs.gridparm.Nuv) || (uidxh > obs.gridparm.Nuv))
-                            missed_vis = missed_vis + 1;
-                            continue;
-                        end;
-                
-                        if ((vidxl < 1) || (vidxh < 1) || (vidxl > obs.gridparm.Nuv) || (vidxh > obs.gridparm.Nuv))
-                            missed_vis = missed_vis + 1;
-                            continue;
-                        end;
-                
-                        % Deal with the autocorrelations explicitly, else they are set to 0 and lost.
-                        if (u(sb, idx) == 0 && v(sb, idx) == 0)
-                            gridvis_x(uidx, vidx) = gridvis_x(uidx, vidx) + ampl;
-                            continue;
-                        end;
-                            
-                        gridvis_x(uidxl, vidxl) = gridvis_x(uidxl, vidxl) + sull * phasor;
-                        gridvis_x(uidxl, vidxh) = gridvis_x(uidxl, vidxh) + sulh * phasor;
-                        gridvis_x(uidxh, vidxl) = gridvis_x(uidxh, vidxl) + suhl * phasor;
-                        gridvis_x(uidxh, vidxh) = gridvis_x(uidxh, vidxh) + suhh * phasor;
-            
-
-                        gridvis_xcnt(uidxl, vidxl) = gridvis_xcnt(uidxl, vidxl) + 1;
-                        gridvis_xcnt(uidxl, vidxh) = gridvis_xcnt(uidxl, vidxh) + 1;
-                        gridvis_xcnt(uidxh, vidxl) = gridvis_xcnt(uidxh, vidxl) + 1;
-                        gridvis_xcnt(uidxh, vidxh) = gridvis_xcnt(uidxh, vidxh) + 1;        
-
-
-                        %W(uidx, vidx) = W(uidx, vidx)
-                        if (missed_vis > 0)
-                             fprintf (2, 'Missed vis: %d\n', missed_vis); 
-                        end;
+                try
+                    % Read in a single record. Data stored internally.
+                    sbrecobj(sb).readRec ([1,0,0,1], obs.chans);
+                catch ME
+                    fprintf (2, 'Exception in reading record for subband %d: %s', sb, ME.message);
+                    rethrow (ME);
+                end;            
     
-                    end; % End of visibility loop
-
-                end; % End of stokes condition
-
-                % YY pol
-                if (obs.stokes >= 2 || obs.stokes == 1)
-                    for idx = 1:length(uloc_x(:))            % For every recorded visibility
-                    
-                        % Get amp. and direction vector of visibility
-                        ampl = abs(sol_y(sb).calvis(idx));            
-                        phasor = sol_y(sb).calvis(idx) / ampl;
-                    
-                        % Determine the grid along U-axis in which observed visibility falls.
-                        uidx = u(sb, idx) / obs.gridparm.duv + obs.gridparm.Nuv / 2;  
-                        uidxl = floor(uidx);        % Find the lower and higher gridded U-value.
-                        uidxh = ceil(uidx);
-                    
-                        % Find absolute distance of measured visibility from grid points, in the
-                        % U-direction only.
-                        dul = abs(uidx - uidxl);        
-                        duh = abs(uidx - uidxh);
-                    
-                        % Distribute the visiblity amplitude among the two grid points on the 
-                        % U-axis in proportion to their distance from the observed visiblity.
-                        sul = duh * ampl;
-                        suh = dul * ampl;
-                        
-                        % Determine the grid along V-axis in which observed visibility falls.
-                        vidx = v(sb, idx) / obs.gridparm.duv + obs.gridparm.Nuv / 2;
-                        vidxl = floor(vidx);        % Find the lower and higher gridded V-value.
-                        vidxh = ceil(vidx);
-                    
-                        % Find absolute distance of measured visibility from grid points, in the
-                        % V-direction only.
-                        dvl = abs(vidx - vidxl);
-                        dvh = abs(vidx - vidxh);
-                    
-                        % Distribute the HIGHER u-grid point's share of the observed visibility
-                        % amp. between the higher and lower V-grid point.
-                        sull = dvh * sul;
-                        suhl = dvh * suh;
-                    
-                        % Distribute the LOWER u-grid point's share of the observed visibility 
-                        % amp. between the higher and lower V-grid point.
-                        sulh = dvl * sul;
-                        suhh = dvl * suh;
-                        
-                        % Now that the observed visiblity amplitude is distributed among its 
-                        % surrounding 4 grid points, fill the gridded visibility matrix with
-                        % vectors with the same phase as the original observed visibility.
-                        % NOTE: Adding the 4 vectors at the corners of the grid square will give
-                        % back the original ungridded observed visibility.
-                        % NOTE: We need to accumulate this to prevent overwriting the gridded 
-                        % values from a visibility from a neighbouring grid square.
-                        if ((uidxl < 1) || (uidxh < 1) || (uidxl > obs.gridparm.Nuv) || (uidxh > obs.gridparm.Nuv))
-                            missed_vis = missed_vis + 1;
-                            continue;
-                        end;
-                
-                        if ((vidxl < 1) || (vidxh < 1) || (vidxl > obs.gridparm.Nuv) || (vidxh > obs.gridparm.Nuv))
-                            missed_vis = missed_vis + 1;
-                            continue;
-                        end;
-                
-                        % Deal with the autocorrelations explicitly, else they are set to 0 and lost.
-                        if (u(sb, idx) == 0 && v(sb, idx) == 0)
-                            gridvis_y(uidx, vidx) = gridvis_y(uidx, vidx) + ampl;
-                            continue;
-                        end;
-                            
-                        gridvis_y(uidxl, vidxl) = gridvis_y(uidxl, vidxl) + sull * phasor;
-                        gridvis_y(uidxl, vidxh) = gridvis_y(uidxl, vidxh) + sulh * phasor;
-                        gridvis_y(uidxh, vidxl) = gridvis_y(uidxh, vidxl) + suhl * phasor;
-                        gridvis_y(uidxh, vidxh) = gridvis_y(uidxh, vidxh) + suhh * phasor;
-
-                        gridvis_ycnt(uidxl, vidxl) = gridvis_ycnt(uidxl, vidxl) + 1;
-                        gridvis_ycnt(uidxl, vidxh) = gridvis_ycnt(uidxl, vidxh) + 1;
-                        gridvis_ycnt(uidxh, vidxl) = gridvis_ycnt(uidxh, vidxl) + 1;
-                        gridvis_ycnt(uidxh, vidxh) = gridvis_ycnt(uidxh, vidxh) + 1;        
-
-
-                        if (missed_vis > 0)
-                          fprintf (2, 'Missed vis: %d\n', missed_vis); 
-                        end;
-    
-                    end; % End of visibility loop
-
-                end; % End of stokes condition
-            
-            end; % End of subband loop.
-
-            % Uniform weighting
-            % Calculate the average visibility, while accounting for
-            % the number of visibilities in each grid cell.
-            % gridvis_x = gridvis_x ./ gridvis_xcnt;
-            % gridvis_y = gridvis_y ./ gridvis_ycnt;
-
-            fprintf (1, '<-- Filled %d of %d gridpoints with %d subbands.\n', sum(gridvis_xcnt(:) ~= 1), length (gridvis_xcnt(:)), sb);
-
-            dl = (1/(obs.gridparm.uvpad * obs.gridparm.duv)); % dimensionless, in dir. cos. units
-            lmax = dl * obs.gridparm.uvpad/ 2;
-            l = linspace (-lmax, lmax, obs.gridparm.uvpad);
-            m = l;  % Identical resolution and extent along m-axis
-            
-            % Create a mask to mask out pixels beyond the unit circle (these are below 
-            % the horizon.)
-            mask = NaN (length(l));
-            mask(meshgrid(l).^2 + meshgrid(l).'.^2 < 1) = 1;
-            switch obs.stokes
-                case 0
-                    % Where do these NaNs come from??
-                    gridvis_x (isnan(gridvis_x)) = 0;
-                    gridvis_x = conj(flipud(fliplr(fftshift(gridvis_x))));
-                    skymap_x = fftshift(fft2(gridvis_x));
-                    integmap = single (real(skymap_x) .* mask)';
-
-                case 1
-                    % Where do these NaNs come from??
-                    gridvis_y (isnan(gridvis_y)) = 0;
-                    gridvis_y = conj(flipud(fliplr(fftshift(gridvis_y))));
-                    skymap_y = fftshift(fft2(gridvis_y));
-                    integmap = single (real(skymap_y) .* mask)';
-
-                case 4
-                    % Where do these NaNs come from??
-                    gridvis_x (isnan(gridvis_x)) = 0;
-                    gridvis_x = conj(flipud(fliplr(fftshift(gridvis_x))));
-                    skymap_x = fftshift(fft2(gridvis_x));
-
-                    % Where do these NaNs come from??
-                    gridvis_y (isnan(gridvis_y)) = 0;
-                    gridvis_y = conj(flipud(fliplr(fftshift(gridvis_y))));
-                    skymap_y = fftshift(fft2(gridvis_y));
-                    integmap = single (((real(skymap_x) + real(skymap_y))/2).* mask)';
-
-                case 5
-                    % Where do these NaNs come from??
-                    gridvis_x (isnan(gridvis_x)) = 0;
-                    gridvis_x = conj(flipud(fliplr(fftshift(gridvis_x))));
-                    skymap_x = fftshift(fft2(gridvis_x));
-
-                    % Where do these NaNs come from??
-                    gridvis_y (isnan(gridvis_y)) = 0;
-                    gridvis_y = conj(flipud(fliplr(fftshift(gridvis_y))));
-                    skymap_y = fftshift(fft2(gridvis_y));
-                    integmap = single (((real(skymap_x) - real(skymap_y))).* mask)';
-
-                otherwise
-                    fprintf (2, '### Stokes Case %d not implemented!\n', obs.stokes);
-            end;
-
-        else
-            % Image each subband separately
-            map_x = zeros (nsub, obs.gridparm.uvpad, obs.gridparm.uvpad);
-            map_y = zeros (nsub, obs.gridparm.uvpad, obs.gridparm.uvpad);
-            for sb = 1:nsub
-
-                fprintf (1, '\n<-- Imaging subband %d...\n', obs.sub(sb));
+                % Calibrate XX if stokes I or XX image is required
                 if (obs.stokes >= 2 || obs.stokes == 0)
+                    % NOTE: readRec() already creates an average over channels!
+                    acm_tmp = zeros (obs.nelem);
+                    acm_tmp (t1 == 1) = sbrecobj(sb).xx;
+                    acm_tmp = acm_tmp + acm_tmp';
+                    acm_tmp (eye(obs.nelem) == 1) = real(diag(acm_tmp));
+                    acm_x(sb,:,:) = conj(acm_tmp);
+    
                     if (obs.cal == 1)
-                        if (obs.mosaic == 0)
-                           [radecmap, map_x(sb,:,:), calvis(sb,:,:), l, m] = ... 
-                                fft_imager_sjw_radec (sol_x(sb).calvis(:), uloc_x(:), vloc_x(:), ... 
-                                    obs.gridparm, [], [], sbrecobj(sb).trecstart, obs.sub(sb)*195312.5, 0);
-                        else
-                            [map_x(sb,:,:), l, m] = genmosaic (sol_x(sb).calvis(:), sbrecobj(sb).trecstart, obs.sub(s)*195312.5, 3, 256, uloc_x(:), vloc_x(:), posITRF, 0);
-                        end;
-                    else 
-                        if (obs.mosaic == 0)
-                           [radecmap, map_x(sb,:,:), calvis(sb,:,:), l, m] = ... 
-                          fft_imager_sjw_radec (squeeze(acm_x(sb, :, :)), uloc(:), vloc(:), ... 
-                            obs.gridparm, [], [], sbrecobj(sb).trecstart, obs.sub(sb)*195312.5, 0);
-                        else
-                            [map_x(sb,:,:), l, m] = genmosaic (acm_x(sb,:,:), sbrecobj(sb).trecstart, obs.sub(s)*195312.5, 3, 256, uloc_x(:), vloc_x(:), posITRF, 0);
-                        end;
+                        fprintf (2, '\n<-- Calibrating XX for subband %d.\n', sb);
+                        sol_x(sb) = pelican_sunAteamsub (squeeze(acm_x(sb,:,:)), sbrecobj(sb).trecstart, sbrecobj(sb).freq, obs.uvflag_x, obs.flagant_x, obs.deb, obs.ptSun, [], [], obs.posfilename, [], []);
+                        fprintf (1, '<-- Sigmas : %.5f\n', sol_x(sb).sigmas);
                     end;
                 end;
     
+                % Calibrate YY if stokes I or YY image is required
                 if (obs.stokes >= 2 || obs.stokes == 1)
+                    acm_tmp = zeros (obs.nelem);
+                    acm_tmp (t1 == 1) = sbrecobj(sb).yy;
+                    acm_tmp = acm_tmp + acm_tmp';
+                    acm_tmp (eye(obs.nelem) == 1) = real(diag(acm_tmp));
+                    acm_y(sb,:,:) = conj(acm_tmp);
+                    
                     if (obs.cal == 1)
-                        if (obs.mosaic == 0)
-                           [radecmap, map_y(sb,:,:), calvis(sb,:,:), l, m] = ... 
-                             fft_imager_sjw_radec (sol_y(sb).calvis(:), uloc_y(:), vloc_y(:), ... 
-                                obs.gridparm, [], [], sbrecobj(sb).trecstart, obs.sub(sb)*195312.5, 0);
-                        else
-                            [map_y(sb,:,:), l, m] = genmosaic (sol_y(sb).calvis(:), sbrecobj(sb).trecstart, obs.sub(s)*195312.5, 3, 256, uloc_x(:), vloc_x(:), posITRF, 0);
-                        end;
-                    else
-                        if (obs.mosaic == 0)
-                           [radecmap, map_y(sb,:,:), calvis(sb,:,:), l, m] = ... 
-                             fft_imager_sjw_radec (squeeze(acm_y(sb,:,:)), uloc(:), vloc(:), ... 
-                                obs.gridparm, [], [], sbrecobj(sb).trecstart, obs.sub(sb)*195312.5, 0);
-                        else
-                            [map_y(sb,:,:), l, m] = genmosaic (acm_y(sb,:,:), sbrecobj(sb).trecstart, obs.sub(s)*195312.5, 3, 256, uloc_x(:), vloc_x(:), posITRF, 0);
-                        end;
+                        fprintf (2, '\n<-- Calibrating YY for subband %d.\n', sb);
+                        sol_y(sb) = pelican_sunAteamsub (squeeze(acm_y(sb,:,:)), sbrecobj(sb).trecstart, sbrecobj(sb).freq, obs.uvflag_y, obs.flagant_y, obs.deb, obs.ptSun, [], [], obs.posfilename, [], []);
+                        fprintf (1, '<-- Sigmas : %.5f\n', sol_y(sb).sigmas);
                     end;
                 end;
-
-            end;
-
-            switch obs.stokes
-                case 0
-                    integmap = squeeze (mean (map_x, 1));
-
-                case 1
-                    integmap = squeeze (mean (map_y, 1));
-
-                case 4
-                    integmap = squeeze (mean (map_x, 1) + mean (map_y,1))/2;
-
-                case 5
-                    integmap = squeeze (mean (map_x, 1) - mean (map_y,1));
-
-                otherwise
-                    fprintf (2, '### Case %d not implemented!\n', obs.stokes);
-            end
-        end % End of else imgspectcorr
-
-        % Generate FITS filename for this final image
-        img.tobs       = sbrecobj(1).trecstart;
-        img.pix2laxis = size (integmap, 1);
-        img.pix2maxis = size (integmap, 2);
-        img.freq       = mean (obs.sub*195312.5);
-        img.df        = nsub*length (obs.chans)*obs.chanwidth;
-
-        % Generate map with pixel values ranging between 0 and 1
-        % tmp = integmap - min(min(integmap)); % Bring it up to 0;
-        % img.map       = tmp./max(max(tmp)); % Get values between 0 and 1;
-        img.map = integmap;
+    
+            end; % End of calibration loop over subbands
+    
+            % If requested, splat all visibilities on a common grid
+            if (obs.imgspectint == 0)
+    
+    	       % Handle a single subband
+    	       gridvis_x = zeros(obs.gridparm.Nuv);
+    	       gridvis_y = zeros(obs.gridparm.Nuv);
+    	       gridvis_xcnt = ones (obs.gridparm.Nuv);
+    	       gridvis_ycnt = ones (obs.gridparm.Nuv);
+    	       missed_vis = 0;   % cumulative count of ignored visibilities due to 
+    	                         % gridded value exeeding grid size.
+    
+                for sb = 1:nsub
+                    fprintf (2, '<-- Splatting subband %d.\n', obs.sub(sb));
+    
+                    % XX pol
+                    if (obs.stokes >= 2 || obs.stokes == 0)
+                        for idx = 1:length(uloc_x(:))            % For every recorded visibility
+                        
+                            % Get amp. and direction vector of visibility
+                            ampl = abs(sol_x(sb).calvis(idx));            
+                            phasor = sol_x(sb).calvis(idx) / ampl;
+                        
+                            % Determine the grid along U-axis in which observed visibility falls.
+                            uidx = u(sb,idx) / obs.gridparm.duv + obs.gridparm.Nuv / 2;  
+                            uidxl = floor(uidx);        % Find the lower and higher gridded U-value.
+                            uidxh = ceil(uidx);
+                        
+                            % Find absolute distance of measured visibility from grid points, in the
+                            % U-direction only.
+                            dul = abs(uidx - uidxl);        
+                            duh = abs(uidx - uidxh);
+                        
+                            % Distribute the visiblity amplitude among the two grid points on the 
+                            % U-axis in proportion to their distance from the observed visiblity.
+                            sul = duh * ampl;
+                            suh = dul * ampl;
+                            
+                            % Determine the grid along V-axis in which observed visibility falls.
+                            vidx = v(sb, idx) / obs.gridparm.duv + obs.gridparm.Nuv / 2;
+                            vidxl = floor(vidx);        % Find the lower and higher gridded V-value.
+                            vidxh = ceil(vidx);
+                        
+                            % Find absolute distance of measured visibility from grid points, in the
+                            % V-direction only.
+                            dvl = abs(vidx - vidxl);
+                            dvh = abs(vidx - vidxh);
+                        
+                            % Distribute the HIGHER u-grid point's share of the observed visibility
+                            % amp. between the higher and lower V-grid point.
+                            sull = dvh * sul;
+                            suhl = dvh * suh;
+                        
+                            % Distribute the LOWER u-grid point's share of the observed visibility 
+                            % amp. between the higher and lower V-grid point.
+                            sulh = dvl * sul;
+                            suhh = dvl * suh;
+                            
+                            % Now that the observed visiblity amplitude is distributed among its 
+                            % surrounding 4 grid points, fill the gridded visibility matrix with
+                            % vectors with the same phase as the original observed visibility.
+                            % NOTE: Adding the 4 vectors at the corners of the grid square will give
+                            % back the original ungridded observed visibility.
+                            % NOTE: We need to accumulate this to prevent overwriting the gridded 
+                            % values from a visibility from a neighbouring grid square.
+                            if ((uidxl < 1) || (uidxh < 1) || (uidxl > obs.gridparm.Nuv) || (uidxh > obs.gridparm.Nuv))
+                                missed_vis = missed_vis + 1;
+                                continue;
+                            end;
+                    
+                            if ((vidxl < 1) || (vidxh < 1) || (vidxl > obs.gridparm.Nuv) || (vidxh > obs.gridparm.Nuv))
+                                missed_vis = missed_vis + 1;
+                                continue;
+                            end;
+                    
+                            % Deal with the autocorrelations explicitly, else they are set to 0 and lost.
+                            if (u(sb, idx) == 0 && v(sb, idx) == 0)
+                                gridvis_x(uidx, vidx) = gridvis_x(uidx, vidx) + ampl;
+                                continue;
+                            end;
+                                
+                            gridvis_x(uidxl, vidxl) = gridvis_x(uidxl, vidxl) + sull * phasor;
+                            gridvis_x(uidxl, vidxh) = gridvis_x(uidxl, vidxh) + sulh * phasor;
+                            gridvis_x(uidxh, vidxl) = gridvis_x(uidxh, vidxl) + suhl * phasor;
+                            gridvis_x(uidxh, vidxh) = gridvis_x(uidxh, vidxh) + suhh * phasor;
+                
+    
+                            gridvis_xcnt(uidxl, vidxl) = gridvis_xcnt(uidxl, vidxl) + 1;
+                            gridvis_xcnt(uidxl, vidxh) = gridvis_xcnt(uidxl, vidxh) + 1;
+                            gridvis_xcnt(uidxh, vidxl) = gridvis_xcnt(uidxh, vidxl) + 1;
+                            gridvis_xcnt(uidxh, vidxh) = gridvis_xcnt(uidxh, vidxh) + 1;        
+    
+    
+                            %W(uidx, vidx) = W(uidx, vidx)
+                            if (missed_vis > 0)
+                                 fprintf (2, 'Missed vis: %d\n', missed_vis); 
+                            end;
         
-        if (isempty (fout)) 
-            fout = './'; 
-        end;
-        integmapname = sprintf ('%s/Sb%3d-%3d_R%02d-%02d_T%s.fits', fout, obs.sub(1), obs.sub(end), obs.chans(1), obs.chans(end), datestr (mjdsec2datenum (sbrecobj(1).trecstart), 'dd-mm-yyyy_HH-MM-SS')); 
-
-        % Write out image as fits
-        fprintf (1, '<-- Writing out %s\n', integmapname);
-        try
-            wrimg2fits (img, integmapname);
-        catch ME
-            throw (ME);
-            break;
-        end;
-
-        if (obs.imgspectint == 0)
-	        % Write out weightmap as a fits image
-	        img.map = gridvis_xcnt; % X and Y counts should be the same due to the
-	                                % same visibility coordinate
-	
-	        integmapname = sprintf ('%s/Sb%3d-%3d_R%02d-%02d_T%s_weight.fits', fout, obs.sub(1), obs.sub(end), obs.chans(1), obs.chans(end), datestr (mjdsec2datenum (sbrecobj(1).trecstart), 'dd-mm-yyyy_HH-MM-SS')); 
-	
-	        % Write out image as fits
-	        fprintf (1, '<-- Writing out weights into %s\n', integmapname);
-	        try
-	            wrimg2fits (img, integmapname);
-	        catch ME
-	            throw ME;
-	            break;
-	        end;
-        end;
-    end % End of time dimension loop
+                        end; % End of visibility loop
+    
+                    end; % End of stokes condition
+    
+                    % YY pol
+                    if (obs.stokes >= 2 || obs.stokes == 1)
+                        for idx = 1:length(uloc_x(:))            % For every recorded visibility
+                        
+                            % Get amp. and direction vector of visibility
+                            ampl = abs(sol_y(sb).calvis(idx));            
+                            phasor = sol_y(sb).calvis(idx) / ampl;
+                        
+                            % Determine the grid along U-axis in which observed visibility falls.
+                            uidx = u(sb, idx) / obs.gridparm.duv + obs.gridparm.Nuv / 2;  
+                            uidxl = floor(uidx);        % Find the lower and higher gridded U-value.
+                            uidxh = ceil(uidx);
+                        
+                            % Find absolute distance of measured visibility from grid points, in the
+                            % U-direction only.
+                            dul = abs(uidx - uidxl);        
+                            duh = abs(uidx - uidxh);
+                        
+                            % Distribute the visiblity amplitude among the two grid points on the 
+                            % U-axis in proportion to their distance from the observed visiblity.
+                            sul = duh * ampl;
+                            suh = dul * ampl;
+                            
+                            % Determine the grid along V-axis in which observed visibility falls.
+                            vidx = v(sb, idx) / obs.gridparm.duv + obs.gridparm.Nuv / 2;
+                            vidxl = floor(vidx);        % Find the lower and higher gridded V-value.
+                            vidxh = ceil(vidx);
+                        
+                            % Find absolute distance of measured visibility from grid points, in the
+                            % V-direction only.
+                            dvl = abs(vidx - vidxl);
+                            dvh = abs(vidx - vidxh);
+                        
+                            % Distribute the HIGHER u-grid point's share of the observed visibility
+                            % amp. between the higher and lower V-grid point.
+                            sull = dvh * sul;
+                            suhl = dvh * suh;
+                        
+                            % Distribute the LOWER u-grid point's share of the observed visibility 
+                            % amp. between the higher and lower V-grid point.
+                            sulh = dvl * sul;
+                            suhh = dvl * suh;
+                            
+                            % Now that the observed visiblity amplitude is distributed among its 
+                            % surrounding 4 grid points, fill the gridded visibility matrix with
+                            % vectors with the same phase as the original observed visibility.
+                            % NOTE: Adding the 4 vectors at the corners of the grid square will give
+                            % back the original ungridded observed visibility.
+                            % NOTE: We need to accumulate this to prevent overwriting the gridded 
+                            % values from a visibility from a neighbouring grid square.
+                            if ((uidxl < 1) || (uidxh < 1) || (uidxl > obs.gridparm.Nuv) || (uidxh > obs.gridparm.Nuv))
+                                missed_vis = missed_vis + 1;
+                                continue;
+                            end;
+                    
+                            if ((vidxl < 1) || (vidxh < 1) || (vidxl > obs.gridparm.Nuv) || (vidxh > obs.gridparm.Nuv))
+                                missed_vis = missed_vis + 1;
+                                continue;
+                            end;
+                    
+                            % Deal with the autocorrelations explicitly, else they are set to 0 and lost.
+                            if (u(sb, idx) == 0 && v(sb, idx) == 0)
+                                gridvis_y(uidx, vidx) = gridvis_y(uidx, vidx) + ampl;
+                                continue;
+                            end;
+                                
+                            gridvis_y(uidxl, vidxl) = gridvis_y(uidxl, vidxl) + sull * phasor;
+                            gridvis_y(uidxl, vidxh) = gridvis_y(uidxl, vidxh) + sulh * phasor;
+                            gridvis_y(uidxh, vidxl) = gridvis_y(uidxh, vidxl) + suhl * phasor;
+                            gridvis_y(uidxh, vidxh) = gridvis_y(uidxh, vidxh) + suhh * phasor;
+    
+                            gridvis_ycnt(uidxl, vidxl) = gridvis_ycnt(uidxl, vidxl) + 1;
+                            gridvis_ycnt(uidxl, vidxh) = gridvis_ycnt(uidxl, vidxh) + 1;
+                            gridvis_ycnt(uidxh, vidxl) = gridvis_ycnt(uidxh, vidxl) + 1;
+                            gridvis_ycnt(uidxh, vidxh) = gridvis_ycnt(uidxh, vidxh) + 1;        
+    
+    
+                            if (missed_vis > 0)
+                              fprintf (2, 'Missed vis: %d\n', missed_vis); 
+                            end;
+        
+                        end; % End of visibility loop
+    
+                    end; % End of stokes condition
+                
+                end; % End of subband loop.
+    
+                % Uniform weighting
+                % Calculate the average visibility, while accounting for
+                % the number of visibilities in each grid cell.
+                % gridvis_x = gridvis_x ./ gridvis_xcnt;
+                % gridvis_y = gridvis_y ./ gridvis_ycnt;
+    
+                fprintf (1, '<-- Filled %d of %d gridpoints with %d subbands.\n', sum(gridvis_xcnt(:) ~= 1), length (gridvis_xcnt(:)), sb);
+    
+                dl = (1/(obs.gridparm.uvpad * obs.gridparm.duv)); % dimensionless, in dir. cos. units
+                lmax = dl * obs.gridparm.uvpad/ 2;
+                l = linspace (-lmax, lmax, obs.gridparm.uvpad);
+                m = l;  % Identical resolution and extent along m-axis
+                
+                % Create a mask to mask out pixels beyond the unit circle (these are below 
+                % the horizon.)
+                mask = NaN (length(l));
+                mask(meshgrid(l).^2 + meshgrid(l).'.^2 < 1) = 1;
+                switch obs.stokes
+                    case 0
+                        % Where do these NaNs come from??
+                        gridvis_x (isnan(gridvis_x)) = 0;
+                        gridvis_x = conj(flipud(fliplr(fftshift(gridvis_x))));
+                        skymap_x = fftshift(fft2(gridvis_x));
+                        integmap = single (real(skymap_x) .* mask)';
+    
+                    case 1
+                        % Where do these NaNs come from??
+                        gridvis_y (isnan(gridvis_y)) = 0;
+                        gridvis_y = conj(flipud(fliplr(fftshift(gridvis_y))));
+                        skymap_y = fftshift(fft2(gridvis_y));
+                        integmap = single (real(skymap_y) .* mask)';
+    
+                    case 4
+                        % Where do these NaNs come from??
+                        gridvis_x (isnan(gridvis_x)) = 0;
+                        gridvis_x = conj(flipud(fliplr(fftshift(gridvis_x))));
+                        skymap_x = fftshift(fft2(gridvis_x));
+    
+                        % Where do these NaNs come from??
+                        gridvis_y (isnan(gridvis_y)) = 0;
+                        gridvis_y = conj(flipud(fliplr(fftshift(gridvis_y))));
+                        skymap_y = fftshift(fft2(gridvis_y));
+                        integmap = single (((real(skymap_x) + real(skymap_y))/2).* mask)';
+    
+                    case 5
+                        % Where do these NaNs come from??
+                        gridvis_x (isnan(gridvis_x)) = 0;
+                        gridvis_x = conj(flipud(fliplr(fftshift(gridvis_x))));
+                        skymap_x = fftshift(fft2(gridvis_x));
+    
+                        % Where do these NaNs come from??
+                        gridvis_y (isnan(gridvis_y)) = 0;
+                        gridvis_y = conj(flipud(fliplr(fftshift(gridvis_y))));
+                        skymap_y = fftshift(fft2(gridvis_y));
+                        integmap = single (((real(skymap_x) - real(skymap_y))).* mask)';
+    
+                    otherwise
+                        fprintf (2, '### Stokes Case %d not implemented!\n', obs.stokes);
+                end;
+    
+            else
+                % Image each subband separately
+                map_x = zeros (nsub, obs.gridparm.uvpad, obs.gridparm.uvpad);
+                map_y = zeros (nsub, obs.gridparm.uvpad, obs.gridparm.uvpad);
+                for sb = 1:nsub
+    
+                    fprintf (1, '\n<-- Imaging subband %d...\n', obs.sub(sb));
+                    if (obs.stokes >= 2 || obs.stokes == 0)
+                        if (obs.cal == 1)
+                            if (obs.mosaic == 0)
+                               [radecmap, map_x(sb,:,:), calvis(sb,:,:), l, m] = ... 
+                                    fft_imager_sjw_radec (sol_x(sb).calvis(:), uloc_x(:), vloc_x(:), ... 
+                                        obs.gridparm, [], [], sbrecobj(sb).trecstart, obs.sub(sb)*195312.5, 0);
+                            else
+                                [map_x(sb,:,:), l, m] = genmosaic (sol_x(sb).calvis(:), sbrecobj(sb).trecstart, obs.sub(s)*195312.5, 3, 256, uloc_x(:), vloc_x(:), posITRF, 0);
+                            end;
+                        else 
+                            if (obs.mosaic == 0)
+                               [radecmap, map_x(sb,:,:), calvis(sb,:,:), l, m] = ... 
+                              fft_imager_sjw_radec (squeeze(acm_x(sb, :, :)), uloc(:), vloc(:), ... 
+                                obs.gridparm, [], [], sbrecobj(sb).trecstart, obs.sub(sb)*195312.5, 0);
+                            else
+                                [map_x(sb,:,:), l, m] = genmosaic (acm_x(sb,:,:), sbrecobj(sb).trecstart, obs.sub(s)*195312.5, 3, 256, uloc_x(:), vloc_x(:), posITRF, 0);
+                            end;
+                        end;
+                    end;
+        
+                    if (obs.stokes >= 2 || obs.stokes == 1)
+                        if (obs.cal == 1)
+                            if (obs.mosaic == 0)
+                               [radecmap, map_y(sb,:,:), calvis(sb,:,:), l, m] = ... 
+                                 fft_imager_sjw_radec (sol_y(sb).calvis(:), uloc_y(:), vloc_y(:), ... 
+                                    obs.gridparm, [], [], sbrecobj(sb).trecstart, obs.sub(sb)*195312.5, 0);
+                            else
+                                [map_y(sb,:,:), l, m] = genmosaic (sol_y(sb).calvis(:), sbrecobj(sb).trecstart, obs.sub(s)*195312.5, 3, 256, uloc_x(:), vloc_x(:), posITRF, 0);
+                            end;
+                        else
+                            if (obs.mosaic == 0)
+                               [radecmap, map_y(sb,:,:), calvis(sb,:,:), l, m] = ... 
+                                 fft_imager_sjw_radec (squeeze(acm_y(sb,:,:)), uloc(:), vloc(:), ... 
+                                    obs.gridparm, [], [], sbrecobj(sb).trecstart, obs.sub(sb)*195312.5, 0);
+                            else
+                                [map_y(sb,:,:), l, m] = genmosaic (acm_y(sb,:,:), sbrecobj(sb).trecstart, obs.sub(s)*195312.5, 3, 256, uloc_x(:), vloc_x(:), posITRF, 0);
+                            end;
+                        end;
+                    end;
+    
+                end;
+    
+                switch obs.stokes
+                    case 0
+                        integmap = squeeze (mean (map_x, 1));
+    
+                    case 1
+                        integmap = squeeze (mean (map_y, 1));
+    
+                    case 4
+                        integmap = squeeze (mean (map_x, 1) + mean (map_y,1))/2;
+    
+                    case 5
+                        integmap = squeeze (mean (map_x, 1) - mean (map_y,1));
+    
+                    otherwise
+                        fprintf (2, '### Case %d not implemented!\n', obs.stokes);
+                end
+            end % End of else imgspectcorr
+    
+            % Generate FITS filename for this final image
+            img.tobs       = sbrecobj(1).trecstart;
+            img.pix2laxis = size (integmap, 1);
+            img.pix2maxis = size (integmap, 2);
+            img.freq       = mean (obs.sub*195312.5);
+            img.df        = nsub*length (obs.chans)*obs.chanwidth;
+    
+            % Generate map with pixel values ranging between 0 and 1
+            % tmp = integmap - min(min(integmap)); % Bring it up to 0;
+            % img.map       = tmp./max(max(tmp)); % Get values between 0 and 1;
+            img.map = integmap;
+            
+            if (isempty (fout)) 
+                fout = './'; 
+            end;
+            integmapname = sprintf ('%s/Sb%3d-%3d_R%02d-%02d_T%s.fits', fout, obs.sub(1), obs.sub(end), obs.chans(1), obs.chans(end), datestr (mjdsec2datenum (sbrecobj(1).trecstart), 'dd-mm-yyyy_HH-MM-SS')); 
+    
+            % Write out image as fits
+            fprintf (1, '<-- Writing out %s\n', integmapname);
+            try
+                wrimg2fits (img, integmapname);
+            catch ME
+                throw (ME);
+                break;
+            end;
+    
+            if (obs.imgspectint == 0)
+    	        % Write out weightmap as a fits image
+    	        img.map = gridvis_xcnt; % X and Y counts should be the same due to the
+    	                                % same visibility coordinate
+    	
+    	        integmapname = sprintf ('%s/Sb%3d-%3d_R%02d-%02d_T%s_weight.fits', fout, obs.sub(1), obs.sub(end), obs.chans(1), obs.chans(end), datestr (mjdsec2datenum (sbrecobj(1).trecstart), 'dd-mm-yyyy_HH-MM-SS')); 
+    	
+    	        % Write out image as fits
+    	        fprintf (1, '<-- Writing out weights into %s\n', integmapname);
+    	        try
+    	            wrimg2fits (img, integmapname);
+    	        catch ME
+    	            throw ME;
+    	            break;
+    	        end;
+            end;
+        end % End of time dimension loop
+    catch ME
+       fprintf (2, 'Exception in reading record for subband %d: %s', sb, ME.message);
+    end;
 end

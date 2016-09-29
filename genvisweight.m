@@ -33,10 +33,14 @@ function [weight] = genvisweight (posITRF, wparm, plt)
 		case {'uniform'}
 			% For every visibility, figure out how many other sampled 
 			% visibilities fall within the cell of radius wparm.cellrad
+            counter=int32(length(uvdist)/10);
 			for vis = 1:length (uvdist)
 				% Checking all visibilities, bit bruteforce
 				dist = hypot ((uvec(vis)-uvec), (vvec(vis)-vvec));
 				weight (vis) = length (find (dist < wparm.cellrad));
+                if (mod(vis, counter) == 0)
+                    fprintf (1, '.');
+                end;
 			end;
 		
 		otherwise

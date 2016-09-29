@@ -6,7 +6,7 @@
 % Returns:
 %   u/vloc_flag: vectors containing the u/v positions of the remaining unflagged elements. 
 
-function [uloc_flag, vloc_flag] = gen_flagged_uvloc (uloc, vloc, flagant)
+function [uloc_flag, vloc_flag, wloc_flag] = gen_flagged_uvloc (uloc, vloc, wloc, flagant)
 	% Nelem = int32(sqrt (length (uloc))); % Assuming a square matrix always
 	% uloc = reshape (uloc, [Nelem, Nelem]);
 	% vloc = reshape (vloc, [Nelem, Nelem]);
@@ -17,3 +17,4 @@ function [uloc_flag, vloc_flag] = gen_flagged_uvloc (uloc, vloc, flagant)
 	end
 	uloc_flag = reshape(uloc(mask ~= 1), [rem_ants, rem_ants]);
 	vloc_flag = reshape(vloc(mask ~= 1), [rem_ants, rem_ants]);
+	wloc_flag = reshape(wloc(mask ~= 1), [rem_ants, rem_ants]);

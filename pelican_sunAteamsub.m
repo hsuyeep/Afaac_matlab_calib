@@ -84,14 +84,17 @@ function [currsol] = pelican_sunAteamsub (acc, t_obs, ...
        	rodata.srcsel =  [324, 283, 88, 179, 0]; 
 
     	% ---- Calibration and imaging parameters ---- 
-	    calim.restriction    = 10;    % Avoid vis. below 'restriction' 
+	    calim.restriction    = 5;    % Avoid vis. below 'restriction' 
 	                                  % wavelengths length.
 	    calim.maxrestriction = 60;    % Avoid vis. above 'maxrestriction' 
 	                                  % meters (NOT wavelengths!)
 		% NOTE: Taper computation now pulled out from statcal_stefcal.
 		calim.parm.type = 'Gaussian';
-		calim.parm.minlambda = 10;    % NOTE: Units of lambda. 
-		calim.parm.maxmeters = 350;	  % NOTE: Units of meters.
+		% calim.parm.minlambda = 10;    % NOTE: Units of lambda, A6 and above.
+		calim.parm.minlambda = 5;   % NOTE: Units of lambda, single station
+		% cal.. 
+		% calim.parm.maxmeters = 350;	  % NOTE: Units of meters.
+		calim.parm.maxmeters = 1000;	  % NOTE: Units of meters.
 		calim.parm.pa(1) = 0;		  % NOTE: Units of lambda. 
 		calim.parm.pa(2) = calim.parm.pa(1); % Inner taper sigx/sigy
 		calim.parm.pa(3) = -1; 	  % NOTE: Units of lambda.
@@ -131,7 +134,9 @@ function [currsol] = pelican_sunAteamsub (acc, t_obs, ...
 					meshgrid (rodata.poslocal (:,1)).';
 	    	vloc = meshgrid (rodata.poslocal(:,2)) - ... 
 					meshgrid (rodata.poslocal (:,2)).';
-		    [uloc_flag, vloc_flag] = gen_flagged_uvloc (uloc, vloc, flagant); 
+	    	wloc = meshgrid (rodata.poslocal(:,3)) - ... 
+					meshgrid (rodata.poslocal (:,3)).';
+		    [uloc_flag, vloc_flag, wloc_flag] = gen_flagged_uvloc (uloc, vloc, wloc, flagant); 
 
 			gparm.type = 'pillbox';
 			gparm.lim = 0;

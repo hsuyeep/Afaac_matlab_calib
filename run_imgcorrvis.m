@@ -1,4 +1,13 @@
 % Driver code to generate images with various subband integration
+% 16Sec stretch from all 16 subbands, recorded on 08Aug16
+cd '~/struisscratch/fhuizing/good16bit/';
+obs.sub = [295:310];
+obs.flagant_x = 
+obs.flagant_y = obs.flagant_x;
+obs.cal = 1;
+obs.stokes = 4;
+
+
 
 % 10sec stretch from 29Jan16 data, all subbands integrated
  cd '/dop312_0/prasad/GPU_CORR_DAT/afaac-6/8sb_29Jan16/'

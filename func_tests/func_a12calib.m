@@ -29,7 +29,9 @@
 load ('/dop312_0/prasad/GPU_CORR_DAT/afaac-12/lbaouter_06Nv15/sb0_1447252930.vis_1447252960-1447252969.mat');
 fobs = 195312.5*296; % Hz.
 addpath '~/Documents/AARTFAAC_Project_SW_system_plan/afaac_GPU_interface/src'
-flagant = [324, 373, 419, 492, 527, 537, 538];
+% flagant = [324, 373, 419, 492, 527, 537, 538];
+% Looked at the visi. in log space, and determined the following flags:
+flagant = [289:336, 432:480, 372, 419, 492, 530, 538];
 [acm_t, tmjdsec,fobs,map,l] = gengpuimg (acm, 576,tobs,fobs,[1:15],[],[],[],0,0);
 
 acm_uncal= zeros (1, 576, 576);

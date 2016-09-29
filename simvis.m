@@ -2,8 +2,10 @@
 % Arguments:
 % 	parm.arrayrad : Extent of the array to be simulated, in meters.
 %	parm.elemspace : Element spacing, in meters.
+%   parm.zslope    : Max. z height across elements in the array, in meters.
 %   parm.pa        : Position angle of the array
 %   parm.stretch   : Factor by which to stretch one dimension wrt. other.
+%   parm.flux      : Flux (in arbit units) of specified sources in the sky.
 %	parm.l0,m0     : Location of point sources in the sky, in l,m coordinates
 %   parm.deb       : Bool controlling the generation of debug plots
 %	parm.arrayconfig: Distribution of antennas. 
@@ -26,9 +28,12 @@ function [out, parm] = simvis (parm)
 	if (exist ('parm') == 0)
 		parm.arrayrad = 25;  % meters
 		parm.elemspace = 2.5; % Default lambda / 2;
+        parm.zslope = 0;
 		parm.deb       = 1;
          % Locate sources of unit amplitude at the locations (in l,m units) as specified above.
-		parm.l0 = 0.25, parm.m0 = 0.25;
+        parm.flux = [5, 6];
+		parm.l0 = [0.25, 0.25];
+        parm.m0 = [0.25, -0.25];
 		parm.deb       = 1;
 		parm.arrayconfig = 'rect';
         parm.fft       = 1;
@@ -46,6 +51,10 @@ function [out, parm] = simvis (parm)
             parm.elemspace = 2.5;
         end;
 
+        if (isfield (parm, 'zslope') == 0)
+            parm.zslope = 0;
+        end;
+
         if (isfield (parm, 'pa') == 0)
             parm.pa = 0;
         end;
@@ -55,19 +64,23 @@ function [out, parm] = simvis (parm)
         end;
 
         if (isfield (parm, 'l0') == 0)
-            parm.l0 = 0.25;
+            parm.flux = [5, 6];
+        end;
+
+        if (isfield (parm, 'l0') == 0)
+            parm.l0 = [0.25, 0.25];
         end;
 
         if (isfield (parm, 'm0') == 0)
-            parm.m0 = 0.25;
+            parm.m0 = [0.25, -0.25];
         end;
 
         if (isfield (parm, 'deb') == 0)
             parm.deb = 1;
         end;
 
-        if (isfield (parm, 'array_config') == 0)
-            parm.array_config = 'rect';
+        if (isfield (parm, 'arrayconfig') == 0)
+            parm.arrayconfig = 'rect';
         end;
 
         if (isfield (parm, 'fft') == 0)
@@ -83,8 +96,11 @@ function [out, parm] = simvis (parm)
     if (strcmp (lower(parm.arrayconfig), 'lba_outer') == 0 && strcmp(lower(parm.arrayconfig),'lba_inner') == 0 && strcmp(lower(parm.arrayconfig), 'lba_outer_12') == 0)
 	    arraysampling_x = [-parm.arrayrad:parm.elemspace:parm.arrayrad]; 
         arraysampling_y = [-parm.arrayrad*parm.stretch:parm.elemspace:parm.arrayrad*parm.stretch];
+        % Slope is always along the X dimension only.
+        arraysampling_z = linspace (0, parm.zslope, length (arraysampling_x));
     end;
 	deb = parm.deb;
+    assert (length(parm.l0) == length (parm.m0));
 	l0 = parm.l0;
 	m0 = parm.m0;
 
@@ -95,7 +111,9 @@ function [out, parm] = simvis (parm)
 	fprintf (1, '<-- %s array config chosen.\n', parm.arrayconfig);
 	switch lower(parm.arrayconfig)
         case 'linear'
-            [xpos, ypos] = meshgrid (arraysampling_x, arraysampling_y);
+            xpos = arraysampling_x; 
+            ypos = ones (1, length(xpos)); 
+            zpos = zeros (size (xpos));
 
 		case 'rect'
             % Example parameter structure:
@@ -104,7 +122,7 @@ function [out, parm] = simvis (parm)
 
 			% Create a rectangular grid of antenna, equi-spaced
 			[xpos, ypos] = meshgrid (arraysampling_x, arraysampling_y);
-            zpos = zeros (1, size (xpos));
+            zpos = meshgrid (arraysampling_z, zeros (size (arraysampling_x)));
 
 		case 'disk'
             % Example parameter structure:
@@ -138,6 +156,8 @@ function [out, parm] = simvis (parm)
 
 		case 'lba_outer'
 			load ('poslocal_outer.mat', 'poslocal');
+            arraysampling_x = poslocal(:,1);
+            arraysampling_y = poslocal(:,2);
 			xpos = poslocal(:,1); % - poslocal(1,1);
 			ypos = poslocal(:,2); % - poslocal(1,2);
             zpos = poslocal(:,3);
@@ -169,30 +189,31 @@ function [out, parm] = simvis (parm)
 	if (deb > 0)
 		% Show the array layout. A different colored dot for each row of elements in the array.
         figure();
-		plot (xpos(:), ypos(:), '.'); 
-		xlabel ('xpos (m)'); ylabel ('ypos(m)');
+		plot3 (xpos(:), ypos(:), zpos(:), '.'); 
+		xlabel ('xpos (m)'); ylabel ('ypos(m)'); zlabel ('zpos(m)');
 		title (sprintf ('Array configuration %s.\n', parm.arrayconfig));
 	end;
 
-    uloc = (meshgrid (xpos) - meshgrid (xpos).'); % U in m 
-    vloc = (meshgrid (ypos) - meshgrid (ypos).'); % V in m
-    wloc = (meshgrid (zpos) - meshgrid (zpos).'); % W in m
+    uloc = (meshgrid (xpos(:)) - meshgrid (xpos(:)).'); % U in m 
+    vloc = (meshgrid (ypos(:)) - meshgrid (ypos(:)).'); % V in m
+    wloc = (meshgrid (zpos(:)) - meshgrid (zpos(:)).'); % W in m
     uvdist = sqrt (uloc(:).^2 + vloc(:).^2 + wloc(:).^2);
-    % V = exp (-(2*pi*1i*parm.freq/299792458)*(uloc*l0 + vloc*m0));
+    V = sum(repmat ((parm.flux), size(uloc(:)),1) .* exp (-(2*pi*1i*parm.freq/299792458)*(uloc(:)*l0 + vloc(:)*m0 + wloc(:)*sqrt(1-l0-m0))), 2);
+    V = reshape (V, [length(xpos(:)), length(ypos(:))]);
     
+    % Another approach of first generating phasors in position coordinates.
     % Generate phasor due to location of each element
-    we = exp (-(2*pi*1i*parm.freq/299792458) *(xpos(:)*l0 + ypos(:)*m0)); 
-    % we = exp (-(2*pi*1i*parm.freq/299792458) *(xpos(:)*l0 + ypos(:)*m0 + zpos(:)*sqrt (1-l0^2 -m0*2))); 
-	V = we * we'; % Generate the visibilities for the system at hand.
+    % we = repmat ((parm.flux), size (xpos(:)), 1) .* (exp (-(2*pi*1i*parm.freq/299792458) *(xpos(:)*l0 + ypos(:)*m0) + zpos(:)*sqrt(1-l0.^2-m0.^2))); 
+	% V = we * we'; % Generate the visibilities for the system at hand.
 
 	out.tobs = now();
 	out.freq = parm.freq;
     if (parm.fft == 0)
 
 	    % Create an image using acm2skymap:
-	    out.img_l = [-1:0.0025:1];
+	    out.img_l = [-1:0.01:1];
     	out.img_m = out.img_l;
-        out.map = acm2skyimage (V, ypos(:), xpos(:), 299792458, out.img_l, out.img_m);
+        out.map = acm2skyimage (V, xpos(:), ypos(:), 299792458, out.img_l, out.img_m);
     else
 
 	    % Create a map using FFT imaging.
@@ -209,14 +230,16 @@ function [out, parm] = simvis (parm)
 	   	[radecmap, out.map, out.gridvis, out.img_l, out.img_m] = ... 
 			  fft_imager_sjw_radec (V(:), uloc(:), vloc(:), ... 
 						gparm, [], [], out.tobs, out.freq, 0);
+        scalefac = (length(uloc(:))/gparm.uvpad).^2;
+        out.map = out.map/scalefac;
     end;
 	out.V = V;
 
 	if (deb > 0)
         figure();
         mask = meshgrid(out.img_l).^2 + meshgrid(out.img_m).'.^2 < 1;
-		imagesc (out.img_l, out.img_m, 10*log10(real(out.map)).*mask); colorbar; axis tight;
-		% imagesc (out.img_l, out.img_m, (real(out.map)).*mask); colorbar; axis tight;
+		% imagesc (out.img_l, out.img_m, 10*log10(real(out.map)).*mask); colorbar; axis tight;
+		imagesc (out.img_l, out.img_m, (real(out.map)).*mask); colorbar; axis tight;
 		xlabel ('l'); ylabel ('m');
 		title (sprintf ('Simulated map for %s array, max bline %.2f lambda, Ampl (dB)', parm.arrayconfig, max(uvdist(:))/(299792458/parm.freq)));
         
