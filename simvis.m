@@ -14,6 +14,7 @@
 %					- 'disk' : Equispaced anntennas within a disk
 %					- 'ring' : Equispaced antennas within an annuli
 %					- 'lba_outer': LOFAR's LBA_OUTER actual configuration
+%					- 'lba_outer_12': 12-station LBA_OUTER actual configuration
 %					- 'lba_inner': LOFAR's LBA_INNER actual configuration
 %  parm.fft        : Parameter defining whether FFT imaging should be carried
 %                    out.
@@ -32,14 +33,16 @@ function [out, parm] = simvis (parm)
 		parm.deb       = 1;
          % Locate sources of unit amplitude at the locations (in l,m units) as specified above.
         parm.flux = [5, 6];
-		parm.l0 = [0.25, 0.25];
-        parm.m0 = [0.25, -0.25];
+		parm.l0 = [0.2, 0.25];
+        parm.m0 = [0.3, -0.45];
 		parm.deb       = 1;
 		parm.arrayconfig = 'rect';
         parm.fft       = 1;
         parm.freq      = def_freq;
         parm.pa        = 0;
         parm.stretch   = 1;
+        parm.ateam     = 0; % Switch off A-team simulation.
+        parm.snr       = 5; % WGN to add to the visibilities.
 	else
         % Check if all required parameters are available, else put in defaults,
         % even if unsed.
@@ -68,11 +71,11 @@ function [out, parm] = simvis (parm)
         end;
 
         if (isfield (parm, 'l0') == 0)
-            parm.l0 = [0.25, 0.25];
+		    parm.l0 = [0.2, 0.25];
         end;
 
         if (isfield (parm, 'm0') == 0)
-            parm.m0 = [0.25, -0.25];
+            parm.m0 = [0.3, -0.45];
         end;
 
         if (isfield (parm, 'deb') == 0)
@@ -91,16 +94,62 @@ function [out, parm] = simvis (parm)
             parm.freq = def_freq;
         end;
         
+        if (isfield (parm,'ateam') == 0)
+            parm.ateam = 0;
+        end;
+        
+        if (isfield (parm,'snr') == 0)
+            parm.snr = 10;
+        end;
+        
     end;
+
     % Need these parameters only for theoretical arrays
     if (strcmp (lower(parm.arrayconfig), 'lba_outer') == 0 && strcmp(lower(parm.arrayconfig),'lba_inner') == 0 && strcmp(lower(parm.arrayconfig), 'lba_outer_12') == 0)
 	    arraysampling_x = [-parm.arrayrad:parm.elemspace:parm.arrayrad]; 
         arraysampling_y = [-parm.arrayrad*parm.stretch:parm.elemspace:parm.arrayrad*parm.stretch];
         % Slope is always along the X dimension only.
         arraysampling_z = linspace (0, parm.zslope, length (arraysampling_x));
+        normal = [0,0,1].';
+    else
+        normal = [0.598753, 0.072099, 0.797682].'; % Normal to CS002
     end;
+
+    %%  Put in the Ateam sources for the given time.
+    out.tobs = now ();
+    out.freq = parm.freq;
+
+    if (parm.ateam == 1)
+	    % load the 3CR catalog for positions and fluxes
+	    load 'srclist3CR.mat';
+	    ateam_ind =  [324, 283, 88, 179];
+	    ateam_ra = [srclist3CR(ateam_ind).alpha]; % RA
+	    ateam_dec= [srclist3CR(ateam_ind).delta]; % DEC
+	    ateam_fl = [srclist3CR(ateam_ind).flux];  % Jy
+	    epoch = true ([1, length(ateam_ind)]);
+	
+        [l, m] = radectolm(ateam_ra, ateam_dec, JulianDay(out.tobs), 6.869837540, 52.915122495,  epoch);
+
+	    % Convert ra/dec from catalog to ITRF coordinates
+	    srcpos = radectoITRF(ateam_ra, ateam_dec, epoch, JulianDay (out.tobs));
+	    up = srcpos * normal > 0.1; % Sources visible at this time.
+        parm.l0 = l(up).';
+        parm.m0 = m(up).';
+        parm.flux = ateam_fl(up);
+        
+	    % A = exp(-(2 * pi * 1i * obs.freq / 299792458)*(posITRF* srcpos(up).'));
+	    % RAteam = A * diag(ateam_fl(sel)) * A';
+    end;
+    
+    
 	deb = parm.deb;
     assert (length(parm.l0) == length (parm.m0));
+    assert (length(parm.flux) == length (parm.l0));
+    fprintf (1, '<-- Simulated source properties (l,m,Jy): \n\t');
+    for ind = 1:length(parm.l0)
+        fprintf (1, '[%.2f, %.2f, %.2f] ', parm.l0(ind), parm.m0(ind), parm.flux(ind));
+    end 
+    fprintf (1,'\n');
 	l0 = parm.l0;
 	m0 = parm.m0;
 
@@ -178,6 +227,7 @@ function [out, parm] = simvis (parm)
 			error (sprintf ('### Config %s is unimplemented!\n', parm.arrayconfig));
 	end;
 
+    
 
     % Rotate the configuration
     tmp = rotmat * [xpos(:) ypos(:)]';
@@ -198,22 +248,30 @@ function [out, parm] = simvis (parm)
     vloc = (meshgrid (ypos(:)) - meshgrid (ypos(:)).'); % V in m
     wloc = (meshgrid (zpos(:)) - meshgrid (zpos(:)).'); % W in m
     uvdist = sqrt (uloc(:).^2 + vloc(:).^2 + wloc(:).^2);
-    V = sum(repmat ((parm.flux), size(uloc(:)),1) .* exp (-(2*pi*1i*parm.freq/299792458)*(uloc(:)*l0 + vloc(:)*m0 + wloc(:)*sqrt(1-l0-m0))), 2);
-    V = reshape (V, [length(xpos(:)), length(ypos(:))]);
+    % V = sum(repmat ((parm.flux), size(uloc(:)),1) .* exp (-(2*pi*1i*parm.freq/299792458)*(uloc(:)*l0 + vloc(:)*m0 + wloc(:)*(sqrt(1-l0.^2-m0.^2) - 1))), 2);
+    V = sum(repmat ((parm.flux), size(uloc(:)),1) .* exp (-(2*pi*1i*parm.freq/299792458)*(uloc(:)*l0 + vloc(:)*m0 )), 2);
+    V = conj (reshape (V, [length(xpos(:)), length(ypos(:))]));
+
+    % Add noise to the visibilities
+    if (parm.snr ~= 0)
+        V = V + (mean(real(V(:)))/parm.snr) * randn (size (V)) +i*(mean(imag(V(:)))/parm.snr) * randn (size (V));
+    end;
     
     % Another approach of first generating phasors in position coordinates.
     % Generate phasor due to location of each element
     % we = repmat ((parm.flux), size (xpos(:)), 1) .* (exp (-(2*pi*1i*parm.freq/299792458) *(xpos(:)*l0 + ypos(:)*m0) + zpos(:)*sqrt(1-l0.^2-m0.^2))); 
 	% V = we * we'; % Generate the visibilities for the system at hand.
 
-	out.tobs = now();
-	out.freq = parm.freq;
     if (parm.fft == 0)
 
 	    % Create an image using acm2skymap:
 	    out.img_l = [-1:0.01:1];
     	out.img_m = out.img_l;
-        out.map = acm2skyimage (V, xpos(:), ypos(:), 299792458, out.img_l, out.img_m);
+        mask = meshgrid(out.img_l).^2 + meshgrid(out.img_m).'.^2 < 1;
+        out.map = acm2skyimage (V, xpos(:), ypos(:), zpos(:), out.freq, out.img_l, out.img_m);
+        out.map = flipud(rot90 (out.map)); % To match the locations of the
+                                           % simulated point sources.
+        scalefac = length (V(:));
     else
 
 	    % Create a map using FFT imaging.
@@ -230,10 +288,15 @@ function [out, parm] = simvis (parm)
 	   	[radecmap, out.map, out.gridvis, out.img_l, out.img_m] = ... 
 			  fft_imager_sjw_radec (V(:), uloc(:), vloc(:), ... 
 						gparm, [], [], out.tobs, out.freq, 0);
-        scalefac = (length(uloc(:))/gparm.uvpad).^2;
-        out.map = out.map/scalefac;
+        scalefac = (length(uloc(:))/gparm.Nuv).^2; % Still get a factor 10 extra
+                                                   % flux... pep/03Oct16
     end;
+    out.map = out.map/scalefac;
 	out.V = V;
+    out.uvdist = uvdist;
+    out.xpos = xpos;
+    out.ypos = ypos;
+    out.zpos = zpos;
 
 	if (deb > 0)
         figure();

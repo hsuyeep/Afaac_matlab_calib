@@ -1,4 +1,4 @@
-function skymap = acm2skyimage(acm, xpos, ypos, freq, l, m)
+function skymap = acm2skyimage(acm, xpos, ypos, zpos, freq, l, m)
 
 % skymap = acm2skyimag(acm, xpos, ypos, freq, l, m)
 %
@@ -32,9 +32,10 @@ for nch = 1:nchannel
   k = 2 * pi / lambda;
   wx = exp(-i * k * xpos(:) * l(:).');
   wy = exp(-i * k * ypos(:) * m(:).');
+  wz = exp(-i * k * zpos(:) * (sqrt (1 - l(:).^2 - m(:).^2)).');
   for lidx = 1:length(l)
     for midx = 1:length(m)
-      weight = wx(:, lidx) .* wy(:, midx);
+      weight = wx(:, lidx) .* wy(:, midx) .* wz(:,midx);
       skymap(lidx, midx, nch) = real(weight' * (acm(:, :, nch)) * weight);
     end
   end
