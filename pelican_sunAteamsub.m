@@ -97,7 +97,8 @@ function [currsol] = pelican_sunAteamsub (acc, t_obs, ...
 		calim.parm.maxmeters = 1000;	  % NOTE: Units of meters.
 		calim.parm.pa(1) = 0;		  % NOTE: Units of lambda. 
 		calim.parm.pa(2) = calim.parm.pa(1); % Inner taper sigx/sigy
-		calim.parm.pa(3) = -1; 	  % NOTE: Units of lambda.
+		% calim.parm.pa(3) = -1; 	  % NOTE: Units of lambda.
+		calim.parm.pa(3) = 60; 	  % NOTE: Units of lambda.
 		calim.parm.pa(4) = calim.parm.pa(3); % Outer taper sigx/sigy
 		[calim.intap, calim.outtap, calim.den, calim.mask, uvdist] =  ...
 				taper (rodata.posITRF, calim.parm, -1, freq, 0);
@@ -222,7 +223,7 @@ function [currsol] = pelican_sunAteamsub (acc, t_obs, ...
 
     % Initial calibration
     [cal1, sigmas1, Sigman1] = statcal_stefcal (acc, t_obs, freq, ... 
-        rodata, calim, calim.uvflag, calim.intap_fl, mod_ra, mod_de);
+        rodata, calim, calim.uvflag, mod_ra, mod_de);
 
     % [cal1, sigmas1, Sigman1] = statcal_vlss(acc, t_obs, freq, posITRF, srcsel,
     %                          normal, 10, maxrestriction, eye(Nelem), catalog);

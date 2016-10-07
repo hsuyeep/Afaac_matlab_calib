@@ -20,6 +20,7 @@
 %                    out.
 %  parm.freq       : Frequency of simulation. Needed as array extent is in
 %                    meters.
+%  parm.flagant    : Indices in the antenna array to be flagged.
 % pep/28Apr15
 
 function [out, parm] = simvis (parm)
@@ -43,6 +44,7 @@ function [out, parm] = simvis (parm)
         parm.stretch   = 1;
         parm.ateam     = 0; % Switch off A-team simulation.
         parm.snr       = 5; % WGN to add to the visibilities.
+        parm.flagant   = []; % None flagged.
 	else
         % Check if all required parameters are available, else put in defaults,
         % even if unsed.
@@ -101,7 +103,11 @@ function [out, parm] = simvis (parm)
         if (isfield (parm,'snr') == 0)
             parm.snr = 10;
         end;
-        
+
+        if (isfield (parm,'flagant') == 0)
+            parm.flagant = [];
+        end;
+
     end;
 
     % Need these parameters only for theoretical arrays
@@ -204,9 +210,12 @@ function [out, parm] = simvis (parm)
             zpos = zeros (1, length (xpos));
 
 		case 'lba_outer'
-			load ('poslocal_outer.mat', 'poslocal');
+			load ('poslocal_outer_cs07w1.mat', 'poslocal');
+			% load ('poslocal_outer_cs02w0.5.mat', 'poslocal');
+			% load ('poslocal_outer.mat', 'poslocal');
             arraysampling_x = poslocal(:,1);
             arraysampling_y = poslocal(:,2);
+            remants = setdiff([1:size(poslocal,1)], parm.flagant);
 			xpos = poslocal(:,1); % - poslocal(1,1);
 			ypos = poslocal(:,2); % - poslocal(1,2);
             zpos = poslocal(:,3);
@@ -218,7 +227,8 @@ function [out, parm] = simvis (parm)
             zpos = poslocal(:,3);
 
 		case 'lba_outer_12'
-			load ('poslocal_outer_afaac12.mat', 'poslocal');
+            load ('poslocal_afaac12_outer_0w.mat', 'poslocal');
+			% load ('poslocal_afaac12_outer.mat', 'poslocal');
 			xpos = poslocal(:,1); % - poslocal(1,1);
 			ypos = poslocal(:,2); % - poslocal(1,2);
             zpos = poslocal(:,3);
@@ -248,8 +258,8 @@ function [out, parm] = simvis (parm)
     vloc = (meshgrid (ypos(:)) - meshgrid (ypos(:)).'); % V in m
     wloc = (meshgrid (zpos(:)) - meshgrid (zpos(:)).'); % W in m
     uvdist = sqrt (uloc(:).^2 + vloc(:).^2 + wloc(:).^2);
-    % V = sum(repmat ((parm.flux), size(uloc(:)),1) .* exp (-(2*pi*1i*parm.freq/299792458)*(uloc(:)*l0 + vloc(:)*m0 + wloc(:)*(sqrt(1-l0.^2-m0.^2) - 1))), 2);
-    V = sum(repmat ((parm.flux), size(uloc(:)),1) .* exp (-(2*pi*1i*parm.freq/299792458)*(uloc(:)*l0 + vloc(:)*m0 )), 2);
+    V = sum(repmat ((parm.flux), size(uloc(:)),1) .* exp (-(2*pi*1i*parm.freq/299792458)*(uloc(:)*l0 + vloc(:)*m0 + wloc(:)*(sqrt(1-l0.^2-m0.^2) - 1))), 2);
+    % V = sum(repmat ((parm.flux), size(uloc(:)),1) .* exp (-(2*pi*1i*parm.freq/299792458)*(uloc(:)*l0 + vloc(:)*m0 )), 2);
     V = conj (reshape (V, [length(xpos(:)), length(ypos(:))]));
 
     % Add noise to the visibilities

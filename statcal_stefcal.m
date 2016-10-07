@@ -25,7 +25,7 @@
 % modified on 18 May 2011 by SJW to use ITRF coordinates
 
 function [cal, sigmas, Sigman] = statcal_stefcal(acc, t_obs, freq, ...
-					 rodata, calim, uvflag, intap, mod_ra, mod_de)
+					 rodata, calim, uvflag, mod_ra, mod_de)
 % parameter section
 	Nsb = length(freq);
 	srcsel = rodata.srcsel;
@@ -85,7 +85,10 @@ function [cal, sigmas, Sigman] = statcal_stefcal(acc, t_obs, freq, ...
 	    % 		   min([calim.restriction * (rodata.C / freq(idx)), ... 
 		%			calim.maxrestriction]);
 	    % mask =(1- mask) | uvflag; % Masked visibilties are used for tsys est.
-		mask = intap & (1-uvflag); % if uvflag == 1, ignore vis.
+		
+        % Changed by Peeyush, 06Oct16, to apply a taper via downweighting the visibilities.
+        % mask = calim.intap_fl & (1-uvflag); % if uvflag == 1, ignore vis.
+		mask = calim.outtap_fl .* calim.intap_fl .* (1-uvflag); % if uvflag == 1, ignore vis.
 	
 		% Model source flux estimation via least squares imaging.
 		% Ignore visibilities in the inner taper.
@@ -110,7 +113,7 @@ function [cal, sigmas, Sigman] = statcal_stefcal(acc, t_obs, freq, ...
 		if (calim.debug > 1)
 			fprintf (1, 'statcal_stefcal: Carrying out cal_ext.\n');
 		end;
-	    [sol, stefsol] = cal_ext_stefcal(Rhat, A, flux, (1-intap), uvflag, calim);
+	    [sol, stefsol] = cal_ext_stefcal(Rhat, A, flux, (1-calim.intap_fl), uvflag, calim);
 	    
 %	    cal(idx, :) = conj(1./ghat);
 %	    sigmas(idx, up) = sigmahat; % Returning sigmahat
