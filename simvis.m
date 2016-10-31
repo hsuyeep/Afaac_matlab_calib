@@ -45,6 +45,7 @@ function [out, parm] = simvis (parm)
         parm.ateam     = 0; % Switch off A-team simulation.
         parm.snr       = 5; % WGN to add to the visibilities.
         parm.flagant   = []; % None flagged.
+        parm.tobs      = now();
 	else
         % Check if all required parameters are available, else put in defaults,
         % even if unsed.
@@ -108,6 +109,10 @@ function [out, parm] = simvis (parm)
             parm.flagant = [];
         end;
 
+        if (isfield (parm,'tobs') == 0)
+            parm.tobs = now;
+        end;
+
     end;
 
     % Need these parameters only for theoretical arrays
@@ -122,26 +127,39 @@ function [out, parm] = simvis (parm)
     end;
 
     %%  Put in the Ateam sources for the given time.
-    out.tobs = now ();
+    out.tobs = parm.tobs;
     out.freq = parm.freq;
+    fprintf (2, '<-- Simulation for timestamp %s, freq %f.\n', datestr(out.tobs), out.freq);
 
     if (parm.ateam == 1)
 	    % load the 3CR catalog for positions and fluxes
 	    load 'srclist3CR.mat';
 	    ateam_ind =  [324, 283, 88, 179];
+        ateam_name = {'Cas.A', 'Cyg.A', 'Vir.A', 'Tau.A', 'Sun'};
 	    ateam_ra = [srclist3CR(ateam_ind).alpha]; % RA
 	    ateam_dec= [srclist3CR(ateam_ind).delta]; % DEC
 	    ateam_fl = [srclist3CR(ateam_ind).flux];  % Jy
 	    epoch = true ([1, length(ateam_ind)]);
 	
-        [l, m] = radectolm(ateam_ra, ateam_dec, JulianDay(out.tobs), 6.869837540, 52.915122495,  epoch);
 
+        % Add Solar flux to the ateam
+        [ateam_ra(length(ateam_ind)+1), ateam_dec(length(ateam_ind)+1)] = SunRaDec (datenum2mjdsec(out.tobs)/86400. + 2400000.5);
+
+        % Flux of the quiet Sun in Jy.
+        % from  [http://www.astro.phys.ethz.ch/astro1/Users/benz/papers/LBReview_thermal.pdf]
+        % Valid 30<x<350MHz, freq. in MHz
+        ateam_fl(length(ateam_ind)+1) = (1.94) * (out.freq/1e6)^1.992; 
+        epoch(length(ateam_ind)+1) = false;
+
+        [l, m] = radectolm(ateam_ra, ateam_dec, JulianDay(out.tobs), 6.869837540, 52.915122495,  epoch);
+        fprintf (2, '<-- Sun located at RA/DEC: %.4f, %.4f, [l,m]: %.4f,%.4f\n', ateam_ra(end), ateam_dec(end), l(end), m(end));
 	    % Convert ra/dec from catalog to ITRF coordinates
 	    srcpos = radectoITRF(ateam_ra, ateam_dec, epoch, JulianDay (out.tobs));
 	    up = srcpos * normal > 0.1; % Sources visible at this time.
-        parm.l0 = l(up).';
-        parm.m0 = m(up).';
+        parm.l0 = l(up);
+        parm.m0 = m(up);
         parm.flux = ateam_fl(up);
+        parm.srcname = ateam_name(up);
         
 	    % A = exp(-(2 * pi * 1i * obs.freq / 299792458)*(posITRF* srcpos(up).'));
 	    % RAteam = A * diag(ateam_fl(sel)) * A';
@@ -151,9 +169,9 @@ function [out, parm] = simvis (parm)
 	deb = parm.deb;
     assert (length(parm.l0) == length (parm.m0));
     assert (length(parm.flux) == length (parm.l0));
-    fprintf (1, '<-- Simulated source properties (l,m,Jy): \n\t');
+    fprintf (1, '<-- Simulated source properties (l,m,Jy(frac.power),Name): \n');
     for ind = 1:length(parm.l0)
-        fprintf (1, '[%.2f, %.2f, %.2f] ', parm.l0(ind), parm.m0(ind), parm.flux(ind));
+        fprintf (1, '   [%5.2f, %5.2f, %8.2f (%6.4f), %s]\n', parm.l0(ind), parm.m0(ind), parm.flux(ind), parm.flux(ind)/sum(parm.flux),parm.srcname{ind});
     end 
     fprintf (1,'\n');
 	l0 = parm.l0;
