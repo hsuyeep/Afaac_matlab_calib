@@ -35,7 +35,7 @@ for nch = 1:nchannel
   wz = exp(-i * k * zpos(:) * (sqrt (1 - l(:).^2 - m(:).^2)).');
   for lidx = 1:length(l)
     for midx = 1:length(m)
-      weight = wx(:, lidx) .* wy(:, midx) .* wz(:,midx);
+      weight = wx(:, lidx) .* wy(:, midx); % .* wz(:,midx);
       skymap(lidx, midx, nch) = real(weight' * (acm(:, :, nch)) * weight);
     end
   end

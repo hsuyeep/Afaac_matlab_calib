@@ -21,6 +21,9 @@
 %  parm.freq       : Frequency of simulation. Needed as array extent is in
 %                    meters.
 %  parm.flagant    : Indices in the antenna array to be flagged.
+%  parm.tobs       : Simulated time of the observation (as a datenum)
+%  parm.ateam      : Flag controlling simulation of a sky with the A-team+Sun
+%  parm.snr        : Controls the SNR of the visibilities.
 % pep/28Apr15
 
 function [out, parm] = simvis (parm)
@@ -126,11 +129,11 @@ function [out, parm] = simvis (parm)
         normal = [0.598753, 0.072099, 0.797682].'; % Normal to CS002
     end;
 
-    %%  Put in the Ateam sources for the given time.
     out.tobs = parm.tobs;
     out.freq = parm.freq;
     fprintf (2, '<-- Simulation for timestamp %s, freq %f.\n', datestr(out.tobs), out.freq);
 
+    %%  Put in the Ateam sources for the given time.
     if (parm.ateam == 1)
 	    % load the 3CR catalog for positions and fluxes
 	    load 'srclist3CR.mat';
@@ -146,7 +149,8 @@ function [out, parm] = simvis (parm)
         [ateam_ra(length(ateam_ind)+1), ateam_dec(length(ateam_ind)+1)] = SunRaDec (datenum2mjdsec(out.tobs)/86400. + 2400000.5);
 
         % Flux of the quiet Sun in Jy.
-        % from  [http://www.astro.phys.ethz.ch/astro1/Users/benz/papers/LBReview_thermal.pdf]
+        % from  [http://www.astro.phys.ethz.ch/astro1/Users/benz/papers/\
+        % LBReview_thermal.pdf]
         % Valid 30<x<350MHz, freq. in MHz
         ateam_fl(length(ateam_ind)+1) = (1.94) * (out.freq/1e6)^1.992; 
         epoch(length(ateam_ind)+1) = false;
@@ -228,21 +232,21 @@ function [out, parm] = simvis (parm)
             zpos = zeros (1, length (xpos));
 
 		case 'lba_outer'
-			load ('poslocal_outer_cs07w1.mat', 'poslocal');
+			% load ('poslocal_outer_cs07w1.mat', 'poslocal');
 			% load ('poslocal_outer_cs02w0.5.mat', 'poslocal');
-			% load ('poslocal_outer.mat', 'poslocal');
-            arraysampling_x = poslocal(:,1);
-            arraysampling_y = poslocal(:,2);
-            remants = setdiff([1:size(poslocal,1)], parm.flagant);
-			xpos = poslocal(:,1); % - poslocal(1,1);
-			ypos = poslocal(:,2); % - poslocal(1,2);
-            zpos = poslocal(:,3);
+			load ('poslocal_outer.mat', 'posITRF');
+            arraysampling_x = posITRF(:,1);
+            arraysampling_y = posITRF(:,2);
+            remants = setdiff([1:size(posITRF,1)], parm.flagant);
+			xpos = posITRF(:,1); % - posITRF(1,1);
+			ypos = posITRF(:,2); % - posITRF(1,2);
+            zpos = posITRF(:,3);
 
 		case 'lba_inner'
-			load ('poslocal_inner.mat', 'poslocal');
-			xpos = poslocal(:,1) - poslocal(1,1);
-			ypos = poslocal(:,2) - poslocal(1,2);
-            zpos = poslocal(:,3);
+			load ('poslocal_inner.mat', 'posITRF');
+			xpos = posITRF(:,1) - posITRF(1,1);
+			ypos = posITRF(:,2) - posITRF(1,2);
+            zpos = posITRF(:,3);
 
 		case 'lba_outer_12'
             load ('poslocal_afaac12_outer_0w.mat', 'poslocal');
@@ -265,7 +269,8 @@ function [out, parm] = simvis (parm)
 	Nelem = length (xpos(:));
 
 	if (deb > 0)
-		% Show the array layout. A different colored dot for each row of elements in the array.
+		% Show the array layout. A different colored dot for each row of 
+        % elements in the array.
         figure();
 		plot3 (xpos(:), ypos(:), zpos(:), '.'); 
 		xlabel ('xpos (m)'); ylabel ('ypos(m)'); zlabel ('zpos(m)');
@@ -276,8 +281,17 @@ function [out, parm] = simvis (parm)
     vloc = (meshgrid (ypos(:)) - meshgrid (ypos(:)).'); % V in m
     wloc = (meshgrid (zpos(:)) - meshgrid (zpos(:)).'); % W in m
     uvdist = sqrt (uloc(:).^2 + vloc(:).^2 + wloc(:).^2);
-    V = sum(repmat ((parm.flux), size(uloc(:)),1) .* exp (-(2*pi*1i*parm.freq/299792458)*(uloc(:)*l0 + vloc(:)*m0 + wloc(:)*(sqrt(1-l0.^2-m0.^2) - 1))), 2);
-    % V = sum(repmat ((parm.flux), size(uloc(:)),1) .* exp (-(2*pi*1i*parm.freq/299792458)*(uloc(:)*l0 + vloc(:)*m0 )), 2);
+    
+    % Visibilities with an extra w-term, meant for phase-tracking
+    % interferometers
+    % V = sum(repmat ((parm.flux), size(uloc(:)),1) .* exp (-(2*pi*1i*parm.freq/299792458)*(uloc(:)*l0 + vloc(:)*m0 + wloc(:)*(sqrt(1-l0.^2-m0.^2) - 1))), 2);
+
+    % Vis. as seen by arrays including a w-term
+    % V = sum(repmat ((parm.flux), size(uloc(:)),1) .* exp (-(2*pi*1i*parm.freq/299792458)*(uloc(:)*l0 + vloc(:)*m0 + wloc(:)*(sqrt(1-l0.^2-m0.^2)))), 2);
+
+    % Vis. from arrays without a w-term.
+    V = sum(repmat ((parm.flux), size(uloc(:)),1) .* exp (-(2*pi*1i*parm.freq/299792458)*(uloc(:)*l0 + vloc(:)*m0 )), 2);
+
     V = conj (reshape (V, [length(xpos(:)), length(ypos(:))]));
 
     % Add noise to the visibilities
@@ -325,14 +339,19 @@ function [out, parm] = simvis (parm)
     out.xpos = xpos;
     out.ypos = ypos;
     out.zpos = zpos;
+    out.uloc = uloc;
+    out.vloc = vloc;
+    out.wloc = wloc;
 
 	if (deb > 0)
         figure();
         mask = meshgrid(out.img_l).^2 + meshgrid(out.img_m).'.^2 < 1;
-		% imagesc (out.img_l, out.img_m, 10*log10(real(out.map)).*mask); colorbar; axis tight;
-		imagesc (out.img_l, out.img_m, (real(out.map)).*mask); colorbar; axis tight;
+		% imagesc (out.img_l, out.img_m, 10*log10(real(out.map)).*mask); 
+        % colorbar; axis tight;
+		imagesc (out.img_l, out.img_m, (real(out.map)).*mask); 
+        colorbar; axis tight;
 		xlabel ('l'); ylabel ('m');
-		title (sprintf ('Simulated map for %s array, max bline %.2f lambda, Ampl (dB)', parm.arrayconfig, max(uvdist(:))/(299792458/parm.freq)));
+		title (sprintf ('Simulated map for %s array, max bline %.2f lambda, Ampl', parm.arrayconfig, max(uvdist(:))/(299792458/parm.freq)));
         
 %        figure();
 %        subplot (121);

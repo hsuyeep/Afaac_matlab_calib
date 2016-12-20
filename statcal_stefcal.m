@@ -24,7 +24,7 @@
 % SJW, 2009
 % modified on 18 May 2011 by SJW to use ITRF coordinates
 
-function [cal, sigmas, Sigman] = statcal_stefcal(acc, t_obs, freq, ...
+function [cal, sigmas, Sigman, flux] = statcal_stefcal(acc, t_obs, freq, ...
 					 rodata, calim, uvflag, mod_ra, mod_de)
 % parameter section
 	Nsb = length(freq);

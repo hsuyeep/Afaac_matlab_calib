@@ -93,8 +93,8 @@ function [currsol] = pelican_sunAteamsub (acc, t_obs, ...
 		% calim.parm.minlambda = 10;    % NOTE: Units of lambda, A6 and above.
 		calim.parm.minlambda = 5;   % NOTE: Units of lambda, single station
 		% cal.. 
-		% calim.parm.maxmeters = 350;	  % NOTE: Units of meters.
-		calim.parm.maxmeters = 1000;	  % NOTE: Units of meters.
+		calim.parm.maxmeters = 350;	  % NOTE: Units of meters.
+		% calim.parm.maxmeters = 1000;	  % NOTE: Units of meters.
 		calim.parm.pa(1) = 0;		  % NOTE: Units of lambda. 
 		calim.parm.pa(2) = calim.parm.pa(1); % Inner taper sigx/sigy
 		% calim.parm.pa(3) = -1; 	  % NOTE: Units of lambda.
@@ -184,6 +184,8 @@ function [currsol] = pelican_sunAteamsub (acc, t_obs, ...
     	acc = reshape (acc(antmask ~= 1), [calim.rem_ants, calim.rem_ants]);
     	rodata.posITRF_fl = reshape(rodata.posITRF(posmask ~=1), ... 
         							[calim.rem_ants, 3]);
+    	rodata.poslocal_fl = reshape(rodata.poslocal(posmask ~=1), ... 
+        							[calim.rem_ants, 3]);
     	calim.uvflag  = reshape (uvflag(antmask ~= 1), ... 
         				   [calim.rem_ants, calim.rem_ants]);
 		calim.intap_fl = reshape (calim.intap (antmask ~= 1), ...
@@ -203,6 +205,7 @@ function [currsol] = pelican_sunAteamsub (acc, t_obs, ...
 	    calim.uvdist = sqrt(sum(uvw.^2, 2) - (uvw * rodata.normal).^2);
     else
       	rodata.posITRF_fl = rodata.posITRF;
+      	rodata.poslocal_fl = rodata.poslocal;
 		calim.uvflag = uvflag;
 		% ---- Generate flagged uv coordinates. ----
 		u=meshgrid(rodata.posITRF_fl(:, 1))-meshgrid(rodata.posITRF_fl(:, 1)).';
@@ -222,7 +225,7 @@ function [currsol] = pelican_sunAteamsub (acc, t_obs, ...
     acc = acc ./ sqrt(diag(acc) * diag(acc).');
 
     % Initial calibration
-    [cal1, sigmas1, Sigman1] = statcal_stefcal (acc, t_obs, freq, ... 
+    [cal1, sigmas1, Sigman1, flux1] = statcal_stefcal (acc, t_obs, freq, ... 
         rodata, calim, calim.uvflag, mod_ra, mod_de);
 
     % [cal1, sigmas1, Sigman1] = statcal_vlss(acc, t_obs, freq, posITRF, srcsel,
@@ -327,6 +330,7 @@ function [currsol] = pelican_sunAteamsub (acc, t_obs, ...
 	currsol.sigmas (sel) = sol.sigmas;
 	currsol.sigmas_statcal = zeros (length(rodata.srcsel), 1);
 	currsol.sigmas_statcal = sigmas1;
+    currsol.lsflux = flux1;
 	currsol.sigman = sol.sigman;
 	currsol.calext_iters = sol.calext_iters;
 	currsol.stefcal_iters = sol.stefcal_iters;

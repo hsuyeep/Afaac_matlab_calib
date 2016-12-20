@@ -4,26 +4,32 @@
 % Argument:
 %    fname    : Array of filenames, one per subband, of binary .vis files.
 %    obs        : Structure with observation related parameters. 
-%             If parameters are not specified, the defaults present here are
-%             used.
+%        If parameters are not specified, the defaults present here are
+%        used.
 %        obs.npol    : Number of pols in input. [Default 2].
-%        obs.nchan    : Number of chans in input.[Default 63].
-%        obs.nelem    : Number of antenna elements in input.[Default 288].
+%        obs.nchan   : Number of chans in input.[Default 63].
+%        obs.nelem   : Number of antenna elements in input.[Default 288].
 %        obs.sub     : Subband number of each file.
 %        obs.freq    : Freq of each subband, in Hz.
-%        obs.stokes    : Stokes required (XX, YY, XY, YX, I, Q) [Default I].
-%        obs.bwidth    : Spectral integration needed on observation. Specify as a
-%                        range of subbands [start:skip:end] [Default all presented
-%                        subbands].[UnImplemented]
+%        obs.stokes  : Stokes required (XX, YY, XY, YX, I, Q) [Default I].
+%        obs.bwidth  : Spectral integration needed on observation. Specify as a
+%                      range of subbands [start:skip:end] [Default all presented
+%                      subbands].[UnImplemented]
 %        obs.imgspectint: Bool indicating whether spectral integration should occur
 %                         pre or post imaging [Default postimaging].
-%        obs.fov        : FoV to image, in deg[Default 180, all-sky].
+%        obs.fov     : FoV to image, in deg[Default 180, all-sky].
 %        obs.toff    : Time offset (currently only in records) to start
 %                       processing from.
 %        obs.skip    : Stride of time records to image. Set as a python range
 %                      [start:skip:end, -1 for end] [Default skip none]
 %                      [Unimplemented].
 %        obs.flagant : Preflagging of antennas;
+%        obs.gal     : Bool; true for adding back the shortest baselines.
+%        obs.tavg    : Time interval to average over, in seconds.
+%        obs.chavg   : Number of consecutive channels to average over.
+%        obs.wrimg   : Bool controlling the writing out of generated images.
+%        obs.wrvis   : Bool controlling the writing out of calibrated
+%                      visibilities.
 %    fout    : Output folder, which will contain the generated FITS image files
 %              [Default same folder as that containing .vis files].
 
@@ -57,6 +63,14 @@ function [] = imgcorrvis (fname, obs, fout)
     if (isfield (obs, 'flagant_x') == 0) obs.flagant_x = []; end; 
     if (isfield (obs, 'flagant_y') == 0) obs.flagant_y = []; end;
     if (isfield (obs, 'mosaic') == 0) obs.mosaic = 0; end;
+    if (isfield (obs, 'gal') == 0) obs.gal = 0; end;
+
+    % Indicates process individual time records without any averaging.
+    if (isfield (obs, 'tavg') == 0) obs.tavg = 0; end; 
+
+    % Indicates process individual channels without any averaging.
+    if (isfield (obs, 'chavg') == 0) obs.tavg = 0; end; 
+
     if (isfield (obs, 'posfilename') == 0) obs.posfilename = 'poslocal_outer.mat'; end;
     if (isfield (obs, 'sub') == 0) 
         for i = 1:length (fname) obs.sub(i) = 294+i; end;
@@ -80,9 +94,10 @@ function [] = imgcorrvis (fname, obs, fout)
     % Generate uv coordinates in local horizon coord. system, needed for imaging
     uloc = meshgrid (poslocal(:,1)) - meshgrid (poslocal (:,1)).';
     vloc = meshgrid (poslocal(:,2)) - meshgrid (poslocal (:,2)).';
+    wloc = meshgrid (poslocal(:,3)) - meshgrid (poslocal (:,3)).';
 
-    [uloc_x, vloc_x] = gen_flagged_uvloc (uloc, vloc, obs.flagant_x);
-    [uloc_y, vloc_y] = gen_flagged_uvloc (uloc, vloc, obs.flagant_y);
+    [uloc_x, vloc_x, wloc_x] = gen_flagged_uvloc (uloc, vloc, wloc, obs.flagant_x);
+    [uloc_y, vloc_y, wloc_y] = gen_flagged_uvloc (uloc, vloc, wloc, obs.flagant_y);
 
     % Generate a one time grid for frequency splatting.
     if (obs.imgspectint == 0)
@@ -142,11 +157,25 @@ function [] = imgcorrvis (fname, obs, fout)
                     acm_tmp = acm_tmp + acm_tmp';
                     acm_tmp (eye(obs.nelem) == 1) = real(diag(acm_tmp));
                     acm_x(sb,:,:) = conj(acm_tmp);
+
+                    [uvflag, flagant] = flagdeadcorr (squeeze(acm_x(sb,:,:)), sbrecobj(sb).trecstart, sbrecobj(sb).freq, [], []);
+
+                    if (isempty (flagant))
+                        [uloc_x, vloc_x, wloc_x] = gen_flagged_uvloc (uloc, vloc, wloc, obs.flagant_x);
+                        [uloc_y, vloc_y, wloc_y] = gen_flagged_uvloc (uloc, vloc, wloc, obs.flagant_y);
+                    else 
+                        [uloc_x, vloc_x, wloc_x] = gen_flagged_uvloc (uloc, vloc, wloc, union (obs.flagant_x, flagant));
+                        [uloc_y, vloc_y, wloc_y] = gen_flagged_uvloc (uloc, vloc, wloc, union (obs.flagant_y, flagant));
+                    end;
     
                     if (obs.cal == 1)
                         fprintf (2, '\n<-- Calibrating XX for subband %d.\n', sb);
-                        sol_x(sb) = pelican_sunAteamsub (squeeze(acm_x(sb,:,:)), sbrecobj(sb).trecstart, sbrecobj(sb).freq, obs.uvflag_x, obs.flagant_x, obs.deb, obs.ptSun, [], [], obs.posfilename, [], []);
+                        sol_x(sb) = pelican_sunAteamsub (squeeze(acm_x(sb,:,:)), sbrecobj(sb).trecstart, sbrecobj(sb).freq, obs.uvflag_x, union (obs.flagant_x,flagant), obs.deb, obs.ptSun, [], [], obs.posfilename, [], []);
                         fprintf (1, '<-- Sigmas : %.5f\n', sol_x(sb).sigmas);
+
+                        if (obs.gal == 1)
+                            sol_x(sb).calvis = sol_x(sb).calvis + sol_x(sb).sigman;
+                        end;
                     end;
                 end;
     
@@ -157,11 +186,16 @@ function [] = imgcorrvis (fname, obs, fout)
                     acm_tmp = acm_tmp + acm_tmp';
                     acm_tmp (eye(obs.nelem) == 1) = real(diag(acm_tmp));
                     acm_y(sb,:,:) = conj(acm_tmp);
+                    [uvflag, flagant] = flagdeadcorr (squeeze(acm_y(sb,:,:)), sbrecobj(sb).trecstart, sbrecobj(sb).freq, [], []);
                     
                     if (obs.cal == 1)
                         fprintf (2, '\n<-- Calibrating YY for subband %d.\n', sb);
-                        sol_y(sb) = pelican_sunAteamsub (squeeze(acm_y(sb,:,:)), sbrecobj(sb).trecstart, sbrecobj(sb).freq, obs.uvflag_y, obs.flagant_y, obs.deb, obs.ptSun, [], [], obs.posfilename, [], []);
+                        sol_y(sb) = pelican_sunAteamsub (squeeze(acm_y(sb,:,:)), sbrecobj(sb).trecstart, sbrecobj(sb).freq, obs.uvflag_y, union (flagant, obs.flagant_y), obs.deb, obs.ptSun, [], [], obs.posfilename, [], []);
                         fprintf (1, '<-- Sigmas : %.5f\n', sol_y(sb).sigmas);
+
+                        if (obs.gal == 1)
+                            sol_x(sb).calvis = sol_x(sb).calvis + sol_x(sb).sigman;
+                        end;
                     end;
                 end;
     

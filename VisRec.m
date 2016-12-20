@@ -16,7 +16,7 @@ classdef VisRec < handle
 		fname		= {}; % Filename of file containing data
 		fid			= 0;  % fid of file.
 		currec		= 0;  % Current record number in the binary file.
-		tfilestart  = 0;  % Timestamp of first record in binary file.
+		tfilestart  = 0;  % Timestamp of first record in binary file. -- All ts in MJDsec --
 		tfileend	= 0;  % Timestamp of last record in binary file.
 		trecstart   = 0;  % Timestamp of start of currently read record.
 		trecend	    = 0;  % Timestamp of end of currently read record.
@@ -323,26 +323,56 @@ classdef VisRec < handle
 				obj.yy = complex (squeeze(flagdat(1,2,:)), squeeze(flagdat(2,2,:)));
 			end;
 			% NOTE: Ignoring XY and YX pols for now.
+
+            obj.dat2acm();
 		end;
 
 
         % Function to read in multiple timeslices of data, sigmaclip in time
-        % axis and present an averaged visibility to the user. For implementing
+        % axis and write the averaged visibility back to the object. For implementing
         % time domain averaging in visibilities before imaging.
         % Calls readRec() underneath.
+        % NOTE: The VisRec object no longer corresponds to the raw visibility in
+        % the associated file after calling this method! Only the trecstart,
+        % freq, nchan, acm_xx and acm_yy are updated. recbytesize, datfloatsize
+        % are not updated to allow reading in the next set of raw records.
 		% Arguments:
 		%	pol  : The pols to  be read in. Bool array, [XX, XY, YX, YY]	
 		%	chans: The channel subset to  be read in. Range [1:obj.nchans]	
-        % tslices: The number of timeslices to average over.
+        %   tavg : The number of seconds (modulo integration time) to average over.
 		% Returns:
 		%   dat  : Time averaged visibilities, flagged both along the channel and time
 		%          axis.
-		function dat = readTimeAvgRec (obj, pol, chans, tslices)
+		function dat = readTimeAvgRec (obj, pol, chans, tavg)
             
-            for ind = 1:tslices
+            % Read in the next record to determine its timestamp.
+            obj.readRec (pol, chans);
+
+            % Determine the end timestamp
+            tend = obj.trecstart + tavg;
+
+            % Check!
+            assert (tend > obj.trecstart);
+
+            % Internally store records
+            xxtslices(1, :) = obj.xx;
+            yytslices(1, :) = obj.yy;
+            trecavg = obj.trecstart - obj.dt + tavg/2;
+
+            if (obj.deb > 2)
+                fprintf (2, 'readTimeAvgRec: output time %.2f', dat.trecstart);
+            end;
+
+            % Ingest records till avg. is reached.
+            ind = 2;
+            while (obj.trecstart + obj.dt <= tend)
                 obj.readRec (pol, chans);
-                xxtslices(ind, :) = obj.xx;
-                yytslices(ind, :) = obj.yy;
+                xxtslices (ind, :) = obj.xx;
+                yytslices (ind, :) = obj.yy;
+                ind = ind + 1;
+                if (obj.deb > 2)
+                    fprintf (2, '%d:%.2f ', ind, obj.trecstart);
+                end;
             end;
 
             if (obj.timeflag)
@@ -360,11 +390,13 @@ classdef VisRec < handle
 	                yytslices(abs(yytslices-repmat (m, [obj.nbline, 1])) > repmat (obj.flagsig*abs(s), [obj.nbline, 1])) = nan;
 	            end;
             else
-                dat.xx = mean (xxtslices, 1);
-                dat.yy = mean (yytslices, 1);
+                obj.xx = mean (xxtslices, 1);
+                obj.yy = mean (yytslices, 1);
+                obj.trecstart = trecavg;
+                % TODO: Check what else needs to be updated in order to keep the
+                % the parent VisRec object's metadata consistent.
             end;
         end;
-
 
         % Function to generate a calibrated map from the observed
         % visibilities. Returns generated images in the img structure
@@ -380,6 +412,7 @@ classdef VisRec < handle
             load ('poslocal_outer.mat', 'poslocal');
             uloc = meshgrid (poslocal(:,1)) - meshgrid (poslocal (:,1)).';
             vloc = meshgrid (poslocal(:,2)) - meshgrid (poslocal (:,2)).';
+            wloc = meshgrid (poslocal(:,3)) - meshgrid (poslocal (:,3)).';
 			gparm.type = 'pillbox';
 		    gparm.lim  = 0;
 		    gparm.duv = 0.5;				% Default, reassigned from freq. of obs. to
@@ -397,7 +430,7 @@ classdef VisRec < handle
 	   	    soly = pelican_sunAteamsub (obj.acm_yy, img.tobs, img.freq, eye(obj.nelem), ... 
 				flagant, obj.deb, 1, [], [], 'poslocal_outer.mat', [], []);
 
-            [uloc_flag, vloc_flag] = gen_flagged_uvloc (uloc, vloc, flagant);
+            [uloc_flag, vloc_flag, ~] = gen_flagged_uvloc (uloc, vloc, wloc, flagant);
    		    [~, img.map_xx, ~, img.l, img.m] = ... 
 		        fft_imager_sjw_radec (solx.calvis(:), uloc_flag(:), vloc_flag(:), ... 
 					gparm, [], [], img.tobs, img.freq, 0);
