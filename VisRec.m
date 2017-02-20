@@ -100,7 +100,9 @@ classdef VisRec < handle
 			assert (obj.fid > 0);
 			hdr = fread (obj.fid, 64, 'double');
 			meta = obj.interpretHdr (hdr);
+            fprintf (1, '%d', meta.magic);
 			if (meta.magic == 999878658) % = 0x3B98F002, correlator magic number.
+			% if (meta.magic == 1178681667) % = 0x4141525446414143, calibrated vis magic number.
 				fprintf (1, '<-- Found Magic number 0x%x in first record.\n',meta.magic);		
 				obj.tfilestart = meta.tstart;
                 obj.trecstart = meta.tstart;
@@ -135,6 +137,7 @@ classdef VisRec < handle
                 dt(i) = meta.tstart - prevtime;
                 prevtime = meta.tstart;
     			if (meta.magic == 999878658) % = 0x3B98F002, correlator magic number.
+    			% if (meta.magic == 1178681667) % = 0x3B98F002, calibrated vis. magic number.
     				fprintf (1, '<-- Found Magic number 0x%x in record %d, time %s, dt %fsec.\n', ...
                              meta.magic, i, datestr (mjdsec2datenum(obj.trecstart)), dt(i));		
                 end;
@@ -147,6 +150,7 @@ classdef VisRec < handle
 			hdr = fread (obj.fid, obj.recbytesize/8, 'double'); % Read in hdr of the last record.
 			meta = obj.interpretHdr (hdr);
 			if (meta.magic == 999878658)
+			% if (meta.magic == 1178681667)
 				fprintf (1, '<-- Found Magic number 0x%x in last record. %x\n', meta.magic);		
 				obj.tfileend = meta.tstart;
 				fprintf (1, '<-- Last record start time: %s.\n', datestr(mjdsec2datenum(obj.tfileend)));		
