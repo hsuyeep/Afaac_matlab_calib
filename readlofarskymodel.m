@@ -67,11 +67,11 @@ function [model] = readlofarskymodel (fname, freq)
                 rem = dat(ind).patch{7}(comp);
                 dec = 0;
                 % split () and strsplit () do not exist in R2012!
-                for ind = 1:3
+                for jind = 1:2
                     [tok, rem] = strtok (rem, '.');
-                    dec = dec + str2double (tok)/60^(ind-1);
-                    if ind == 2
-                        dec = dec + str2double (rem{1}(2:end))/60^(ind);
+                    dec = dec + str2double (tok)/60^(jind-1);
+                    if jind == 2
+                        dec = dec + str2double (rem{1}(2:end))/60^(jind);
                     end
                 end;
 	            dat(ind).patch{18}(comp) = dec*(pi/180);
