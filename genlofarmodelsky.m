@@ -27,39 +27,39 @@ function genlofarmodelsky (t_obs, freq, nant, skymodfname, rodata, ...
     res = 10; % Hardcoded resolution (arcsec) for gaussian model building.
     fprintf (1, 'test');
 	if (isempty (t_obs))
-		fprintf (1, 'genmodelsky: No time provided, using current time.');	
+		fprintf (1, 'genlofarmodelsky: No time provided, using current time.');	
         t_obs = datenum2mjdsec(now);
 	end;
 
 	if (isempty (freq))
-		fprintf (1, 'genmodelsky: No freq. provided, using 60MHz.');	
+		fprintf (1, 'genlofarmodelsky: No freq. provided, using 60MHz.');	
         freq = 60e6;
 	end;
 
 	if (isempty (nant))
-		fprintf (1, 'genmodelsky: No array information provided, assuming AARTFAAC-6.');	
+		fprintf (1, 'genlofarmodelsky: No array information provided, assuming AARTFAAC-6.');	
         nant = 288;
 	end;
 
 	if (isempty (skymodfname))
-		fprintf (1, 'genmodelsky: No sky model has been provided, assuming A-Team_4.sky.\n');
+		fprintf (1, 'genlofarmodelsky: No sky model has been provided, assuming A-Team_4.sky.\n');
         skymodfname = 'A-Team_4.sky';
 	end;
 
 	if (isempty (antgains))
-		fprintf (1, 'genmodelsky: No antenna gains provided, setting them to one.\n');
+		fprintf (1, 'genlofarmodelsky: No antenna gains provided, setting them to one.\n');
         antgains = diag (nant);
 	end;
 
 	if (isempty (sigman))
-		fprintf (1, 'genmodelsky: No system noise provided, setting them to one.\n');
+		fprintf (1, 'genlofarmodelsky: No system noise provided, setting them to one.\n');
         sigman = zeros (nant);
 	end;
 
 	% Lazy caller, lets fill it ourselves.
 	if (isempty (rodata))
     	% ---- Initialize Read-only data ---- 
-        disp ('genmodelsky: Initializing rodata.');
+        disp ('genlofarmodelsky: Initializing rodata.');
     	rodata.C       = 299792458;         % speed of light, m/s
         rodata.lon     = 6.869837540;       % longitude of CS002 in degrees
         rodata.lat     = 52.915122495;      % latitude of CS002 in degrees
@@ -67,7 +67,7 @@ function genlofarmodelsky (t_obs, freq, nant, skymodfname, rodata, ...
     	% 3 x 1 normal vector to the station field
         rodata.normal  = [0.598753, 0.072099, 0.797682].'; % Normal to CS002
 
-        fprintf (1, 'genmodelsky: Loading local antenna positions.\n');
+        fprintf (1, 'genlofarmodelsky: Loading local antenna positions.\n');
         if (nant == 288)
             load ('poslocal.mat', 'posITRF', 'poslocal'); 
         elseif (nant == 576)
@@ -76,7 +76,7 @@ function genlofarmodelsky (t_obs, freq, nant, skymodfname, rodata, ...
 
     	rodata.posITRF = posITRF;
     	rodata.poslocal = poslocal;
-        fprintf (1, 'genmodelsky: Loading sky model from file %s.\n',...
+        fprintf (1, 'genlofarmodelsky: Loading sky model from file %s.\n',...
                  skymodfname);
         mod = readlofarskymodel (skymodfname, freq);
     	clear posITRF, poslocal;			% Couldn't think of a better way

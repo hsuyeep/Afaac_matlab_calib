@@ -111,6 +111,13 @@ function [currsol] = pelican_sunAteamsub (acc, t_obs, ...
 		calim.opt      = optimset ();     % Note: Using all default values!
         calim.uvflag = uvflag;
  	
+        % Create a model sky based on a LOFAR sky model file (c.f.
+        % genlofarmodelsky.m). Returns a spatial grid around a 
+        % reference position (per patch in the sky model), along with
+        % a flux associated with each position. The resolution and extent 
+        % of the grid can be specified.
+
+        
  	    % Calibration stopping conditions
    	    calim.diffstop = 1e-3;         % difference bet. calib. solutions
 		if (isempty (max_calext_iter))
