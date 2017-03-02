@@ -168,21 +168,23 @@ function genlofarmodelsky (t_obs, freq, nant, skymodfname, rodata, ...
 				meshgrid (rodata.poslocal (:,3)).';
 		[uloc_flag, vloc_flag, wloc_flag] = gen_flagged_uvloc (uloc, vloc, ...
                                                 wloc, calim.flagant); 
+
 		gparm.type = 'pillbox';
 		gparm.duv = 0.5; 
 		gparm.Nuv = 2000;
 		gparm.uvpad = 2048; 
 		gparm.fft = 1;
         gparm.lim = 0;
-        l = linspace (-1, 1, gparm.uvpad);
-	    [radecmap, calmap, calvis] = ... 
+	    [radecmap, calmap, calvis, l, m] = ... 
 			fft_imager_sjw_radec (simsky_acc(:), uloc_flag(:), vloc_flag(:), ... 
 								  gparm, [], [], t_obs, freq, 0);
 	    [radecmap_3c, calmap_3c, calvis_3c] = ... 
 			fft_imager_sjw_radec (RAteam(:), uloc_flag(:), vloc_flag(:), ... 
 								  gparm, [], [], t_obs, freq, 0);
+
+        mask = meshgrid(l).^2 + meshgrid(m).'.^2 < 1;
 		figure;
-		imagesc (l, l, abs(calmap));
+		imagesc (l, m, abs(calmap).*mask);
 		colorbar;
 		title (sprintf ('Recovered Simulated sky. %s, Freq: %.2f', ... 
 			   datestr (mjdsec2datenum (t_obs_mjdsec)), freq));

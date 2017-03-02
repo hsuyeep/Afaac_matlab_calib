@@ -1,4 +1,5 @@
-% Script to simulate visibilities from a specific array configuration, and source locations.
+% Script to simulate visibilities from a specific array configuration, and 
+% source locations.
 % Arguments:
 % 	parm.arrayrad : Extent of the array to be simulated, in meters.
 %	parm.elemspace : Element spacing, in meters.
@@ -35,7 +36,9 @@ function [out, parm] = simvis (parm)
 		parm.elemspace = 2.5; % Default lambda / 2;
         parm.zslope = 0;
 		parm.deb       = 1;
-         % Locate sources of unit amplitude at the locations (in l,m units) as specified above.
+
+        % Locate sources of unit amplitude at the locations (in l,m units) as
+        % specified above.
         parm.flux = [5, 6];
 		parm.l0 = [0.2, 0.25];
         parm.m0 = [0.3, -0.45];
@@ -45,10 +48,10 @@ function [out, parm] = simvis (parm)
         parm.freq      = def_freq;
         parm.pa        = 0;
         parm.stretch   = 1;
-        parm.ateam     = 0; % Switch off A-team simulation.
-        parm.snr       = 5; % WGN to add to the visibilities.
+        parm.ateam     = 0;  % Switch off A-team simulation.
+        parm.snr       = 5;  % WGN to add to the visibilities.
         parm.flagant   = []; % None flagged.
-        parm.tobs      = now();
+        parm.tobs      = now(); % datenum
 	else
         % Check if all required parameters are available, else put in defaults,
         % even if unsed.
@@ -101,7 +104,7 @@ function [out, parm] = simvis (parm)
         end;
         
         if (isfield (parm,'ateam') == 0)
-            parm.ateam = 0;
+            parm.ateam = 1;
         end;
         
         if (isfield (parm,'snr') == 0)
@@ -119,19 +122,34 @@ function [out, parm] = simvis (parm)
     end;
 
     % Need these parameters only for theoretical arrays
-    if (strcmp (lower(parm.arrayconfig), 'lba_outer') == 0 && strcmp(lower(parm.arrayconfig),'lba_inner') == 0 && strcmp(lower(parm.arrayconfig), 'lba_outer_12') == 0)
-	    arraysampling_x = [-parm.arrayrad:parm.elemspace:parm.arrayrad]; 
-        arraysampling_y = [-parm.arrayrad*parm.stretch:parm.elemspace:parm.arrayrad*parm.stretch];
+    if (strcmp (lower(parm.arrayconfig), 'lba_outer')    == 0 && ...
+        strcmp (lower(parm.arrayconfig), 'lba_inner')    == 0 && ...
+        strcmp (lower(parm.arrayconfig), 'lba_outer_12') == 0)
+	    x = [-parm.arrayrad:parm.elemspace:parm.arrayrad]; 
+        y = [-parm.arrayrad*parm.stretch:...
+                            parm.elemspace:parm.arrayrad*parm.stretch];
         % Slope is always along the X dimension only.
-        arraysampling_z = linspace (0, parm.zslope, length (arraysampling_x));
-        normal = [0,0,1].';
-    else
-        normal = [0.598753, 0.072099, 0.797682].'; % Normal to CS002
+        z = linspace (0, parm.zslope, length (x));
+
+        % NOTE: The above array is currently at the south pole, rotate it 
+        % to the location of CS002, which is where we want to place 
+        % all our synthetic arrays. Rotation matrix taken from the 
+        % CS002 antenna configuration file.
+        cs002_rotmat = [ -0.1195950000,  -0.7919540000,   0.5987530000;
+                          0.9928230000,  -0.0954190000,   0.0720990000;
+                          0.0000330000,   0.6030780000,   0.7976820000];
+        
+        rot = [x; y; z;]' * cs002_rotmat;
+        arraysampling_x = rot(:,1);
+        arraysampling_y = rot(:,2);
+        arraysampling_z = rot(:,3);
     end;
+    normal = [0.598753, 0.072099, 0.797682].'; % Normal to CS002
 
     out.tobs = parm.tobs;
     out.freq = parm.freq;
-    fprintf (2, '<-- Simulation for timestamp %s, freq %f.\n', datestr(out.tobs), out.freq);
+    fprintf (2, '<-- Simulation for timestamp %s, freq %f.\n', ...
+            datestr(out.tobs), out.freq);
 
     %%  Put in the Ateam sources for the given time.
     if (parm.ateam == 1)
@@ -143,10 +161,12 @@ function [out, parm] = simvis (parm)
 	    ateam_dec= [srclist3CR(ateam_ind).delta]; % DEC
 	    ateam_fl = [srclist3CR(ateam_ind).flux];  % Jy
 	    epoch = true ([1, length(ateam_ind)]);
+        tobs_jd = datenum2mjdsec (out.tobs)/86400. + 2400000.5;
 	
 
         % Add Solar flux to the ateam
-        [ateam_ra(length(ateam_ind)+1), ateam_dec(length(ateam_ind)+1)] = SunRaDec (datenum2mjdsec(out.tobs)/86400. + 2400000.5);
+        [ateam_ra(length(ateam_ind)+1), ateam_dec(length(ateam_ind)+1)] = ...
+                        SunRaDec (tobs_jd);
 
         % Flux of the quiet Sun in Jy.
         % from  [http://www.astro.phys.ethz.ch/astro1/Users/benz/papers/\
@@ -155,15 +175,19 @@ function [out, parm] = simvis (parm)
         ateam_fl(length(ateam_ind)+1) = (1.94) * (out.freq/1e6)^1.992; 
         epoch(length(ateam_ind)+1) = false;
 
-        [l, m] = radectolm(ateam_ra, ateam_dec, JulianDay(out.tobs), 6.869837540, 52.915122495,  epoch);
-        fprintf (2, '<-- Sun located at RA/DEC: %.4f, %.4f, [l,m]: %.4f,%.4f\n', ateam_ra(end), ateam_dec(end), l(end), m(end));
+        [l, m] = radectolm(ateam_ra, ateam_dec, tobs_jd, 6.869837540, ...
+                            52.915122495,  epoch);
+        fprintf (2, ...
+            '<-- Sun located at RA/DEC: %.4f, %.4f, [l,m]: %.4f,%.4f\n',...
+            ateam_ra(end), ateam_dec(end), l(end), m(end));
+
 	    % Convert ra/dec from catalog to ITRF coordinates
-	    srcpos = radectoITRF(ateam_ra, ateam_dec, epoch, JulianDay (out.tobs));
+	    srcpos = radectoITRF(ateam_ra, ateam_dec, epoch, tobs_jd);
 	    up = srcpos * normal > 0.1; % Sources visible at this time.
-        parm.l0 = l(up);
-        parm.m0 = m(up);
-        parm.flux = ateam_fl(up);
-        parm.srcname = ateam_name(up);
+        parm.l0 = l;
+        parm.m0 = m;
+        parm.flux = ateam_fl;
+        parm.srcname = ateam_name;
         
 	    % A = exp(-(2 * pi * 1i * obs.freq / 299792458)*(posITRF* srcpos(up).'));
 	    % RAteam = A * diag(ateam_fl(sel)) * A';
@@ -175,11 +199,14 @@ function [out, parm] = simvis (parm)
     assert (length(parm.flux) == length (parm.l0));
     fprintf (1, '<-- Simulated source properties (l,m,Jy(frac.power),Name): \n');
     for ind = 1:length(parm.l0)
-        fprintf (1, '   [%5.2f, %5.2f, %8.2f (%6.4f), %s]\n', parm.l0(ind), parm.m0(ind), parm.flux(ind), parm.flux(ind)/sum(parm.flux),parm.srcname{ind});
+        fprintf (1, '   [%5.2f, %5.2f, %8.2f (%6.4f), %s]\n', parm.l0(ind),...
+                parm.m0(ind), parm.flux(ind), parm.flux(ind)/sum(parm.flux),...
+                parm.srcname{ind});
     end 
     fprintf (1,'\n');
-	l0 = parm.l0;
-	m0 = parm.m0;
+	l0 = parm.l0(up);
+	m0 = parm.m0(up);
+    flux = parm.flux(up);
 
     % Generate the rotation matrix (only in 2D) for the given position angle.
     rotmat = [cosd(parm.pa) -sind(parm.pa);
@@ -256,12 +283,13 @@ function [out, parm] = simvis (parm)
             zpos = poslocal(:,3);
 
 		otherwise
-			error (sprintf ('### Config %s is unimplemented!\n', parm.arrayconfig));
+			error (sprintf ('### Config %s is unimplemented!\n', ...
+                    parm.arrayconfig));
 	end;
 
     
 
-    % Rotate the configuration
+    % Rotate the array configuration
     tmp = rotmat * [xpos(:) ypos(:)]';
     xpos = reshape (tmp (1,:), size (xpos));
     ypos = reshape (tmp (2,:), size (ypos));
@@ -284,24 +312,32 @@ function [out, parm] = simvis (parm)
     
     % Visibilities with an extra w-term, meant for phase-tracking
     % interferometers
-    % V = sum(repmat ((parm.flux), size(uloc(:)),1) .* exp (-(2*pi*1i*parm.freq/299792458)*(uloc(:)*l0 + vloc(:)*m0 + wloc(:)*(sqrt(1-l0.^2-m0.^2) - 1))), 2);
+    % V = sum(repmat ((parm.flux), size(uloc(:)),1) .* ...
+    %       exp (-(2*pi*1i*parm.freq/299792458)*(uloc(:)*l0 + ...
+    %           vloc(:)*m0 + wloc(:)*(sqrt(1-l0.^2-m0.^2) - 1))), 2);
 
     % Vis. as seen by arrays including a w-term
-    % V = sum(repmat ((parm.flux), size(uloc(:)),1) .* exp (-(2*pi*1i*parm.freq/299792458)*(uloc(:)*l0 + vloc(:)*m0 + wloc(:)*(sqrt(1-l0.^2-m0.^2)))), 2);
+    % V = sum(repmat ((parm.flux), size(uloc(:)),1) .* ...
+    %       exp (-(2*pi*1i*parm.freq/299792458)*(uloc(:)*l0 + ...
+    %           vloc(:)*m0 + wloc(:)*(sqrt(1-l0.^2-m0.^2)))), 2);
 
     % Vis. from arrays without a w-term.
-    V = sum(repmat ((parm.flux), size(uloc(:)),1) .* exp (-(2*pi*1i*parm.freq/299792458)*(uloc(:)*l0 + vloc(:)*m0 )), 2);
+    V = sum(repmat ((flux), size(uloc(:)),1) .* ...
+            exp (-(2*pi*1i*parm.freq/299792458)*(uloc(:)*l0 + vloc(:)*m0 )), 2);
 
     V = conj (reshape (V, [length(xpos(:)), length(ypos(:))]));
 
     % Add noise to the visibilities
     if (parm.snr ~= 0)
-        V = V + (mean(real(V(:)))/parm.snr) * randn (size (V)) +i*(mean(imag(V(:)))/parm.snr) * randn (size (V));
+        V = V + (mean(real(V(:)))/parm.snr) * randn (size (V)) + ...
+                                i*(mean(imag(V(:)))/parm.snr) * randn (size (V));
     end;
     
     % Another approach of first generating phasors in position coordinates.
     % Generate phasor due to location of each element
-    % we = repmat ((parm.flux), size (xpos(:)), 1) .* (exp (-(2*pi*1i*parm.freq/299792458) *(xpos(:)*l0 + ypos(:)*m0) + zpos(:)*sqrt(1-l0.^2-m0.^2))); 
+    % we = repmat ((parm.flux), size (xpos(:)), 1) .* ...
+    %       (exp (-(2*pi*1i*parm.freq/299792458) *(xpos(:)*l0 + ypos(:)*m0)...
+    %        + zpos(:)*sqrt(1-l0.^2-m0.^2))); 
 	% V = we * we'; % Generate the visibilities for the system at hand.
 
     if (parm.fft == 0)
@@ -310,7 +346,8 @@ function [out, parm] = simvis (parm)
 	    out.img_l = [-1:0.01:1];
     	out.img_m = out.img_l;
         mask = meshgrid(out.img_l).^2 + meshgrid(out.img_m).'.^2 < 1;
-        out.map = acm2skyimage (V, xpos(:), ypos(:), zpos(:), out.freq, out.img_l, out.img_m);
+        out.map = acm2skyimage (V, xpos(:), ypos(:), zpos(:), out.freq, ...
+                                out.img_l, out.img_m);
         out.map = flipud(rot90 (out.map)); % To match the locations of the
                                            % simulated point sources.
         scalefac = length (V(:));
@@ -319,10 +356,10 @@ function [out, parm] = simvis (parm)
 	    % Create a map using FFT imaging.
 		gparm.type = 'pillbox';
 	    gparm.lim  = 0;
-	    gparm.duv = 0.5;				% Default, reassigned from freq. of obs. to
-										% image just the full Fov (-1<l<1)
-	    gparm.Nuv = 1500;				% size of gridded visibility matrix
-	    gparm.uvpad = 1536;				% specifies if any padding needs to be added
+	    gparm.duv = 0.5;			% Default, reassigned from freq. of obs. to
+									% image just the full Fov (-1<l<1)
+	    gparm.Nuv = 1500;			% size of gridded visibility matrix
+	    gparm.uvpad = 1536;			% specifies if any padding needs to be added
 	    gparm.fft  = 1;
 
 	    % uloc = meshgrid (poslocal(:,1)) - meshgrid (poslocal (:,1)).';
@@ -349,9 +386,17 @@ function [out, parm] = simvis (parm)
 		% imagesc (out.img_l, out.img_m, 10*log10(real(out.map)).*mask); 
         % colorbar; axis tight;
 		imagesc (out.img_l, out.img_m, (real(out.map)).*mask); 
+	    axis equal
+   		axis tight
+   		set (gca, 'YDir', 'Normal'); % To match orientation with station images
+   		set (gca, 'XDir', 'Reverse'); % To match orientation with station images
+
+    	ylabel('South $\leftarrow$ m $\rightarrow$ North', 'interpreter', 'latex');
+    	xlabel('East $\leftarrow$ l $\rightarrow$ West', 'interpreter', 'latex');
         colorbar; axis tight;
-		xlabel ('l'); ylabel ('m');
-		title (sprintf ('Simulated map for %s array, max bline %.2f lambda, Ampl', parm.arrayconfig, max(uvdist(:))/(299792458/parm.freq)));
+		title (sprintf ...
+                ('Simulated map for %s array, max bline %.2f lambda, Ampl', ...
+                parm.arrayconfig, max(uvdist(:))/(299792458/parm.freq)));
         
 %        figure();
 %        subplot (121);
