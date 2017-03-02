@@ -109,9 +109,6 @@ function [mod, rarng, decrng, modimg] = readlofarskymodel (fname, freq, res, ext
     	    end;
         end;
 
-    % rarng = {};
-    % decrng = {};
-    % modimg={};
     % Now create a spatial grid with the specified resolution for holding all
     % components of a patch cumulatively.
     for patch = 1:length(mod)
@@ -119,6 +116,9 @@ function [mod, rarng, decrng, modimg] = readlofarskymodel (fname, freq, res, ext
                 mod(patch).name{1}, length(mod(patch).patch{1}));
         meanra  = mean (mod(patch).patch{17}); % In rad.
         meandec = mean (mod(patch).patch{18}); % In rad.
+        mod(patch).meanra = meanra;
+        mod(patch).meandec = meandec;
+
         extent_rad = (extent/2)*(pi/180/3600); % Convert extent to rad.
         extent_pix = extent/res;
         res_rad = ((res/3600)*pi/180);
@@ -126,10 +126,6 @@ function [mod, rarng, decrng, modimg] = readlofarskymodel (fname, freq, res, ext
         decrng {patch}= meandec - extent_rad:res_rad:meandec + extent_rad;
         modimg {patch} = zeros (length(rarng{patch}));
 
-        % nrows = size (pos, 1);
-        % ncols = size (pos, 2);
-        % [l,m] = radectolm (meanra, meandec, tobs_jd, rodata.lon*180/pi, ...
-        %                     rodata.lat*180/pi, false);
         fprintf (1, '<-- Patch mean ra/dec:%.4f, %.4f\n',meanra, meandec);
 
         tot_flux = 0;
@@ -163,7 +159,6 @@ function [mod, rarng, decrng, modimg] = readlofarskymodel (fname, freq, res, ext
                 [rapos, decpos, flux] = gengaussiansrc (comp{17}(jind), ...
                    comp{18}(jind), true, comp{8}(jind), rasig, decsig, ...
                    comp{16}(jind), (res/3600)*(pi/180));
-                % pos = radectoITRF ((rapos(:)), (decpos(:)), true, tobs_jd);
 
                 decstart = offdec-int32(size (flux, 1)/2) + int32(extent_pix/2); 
                 rastart  = offra -int32(size (flux, 2)/2) + int32(extent_pix/2);
@@ -176,18 +171,6 @@ function [mod, rarng, decrng, modimg] = readlofarskymodel (fname, freq, res, ext
 
 
             tot_flux = tot_flux + comp{8}(jind);
-            
-            % simsky_up = pos * rodata.normal > 0;
-            % if (sum (simsky_up) == 0)
-            %     fprintf (2, 'Not visible.');
-            %    continue;
-            % end;
-
-	        % simsky_A = exp(-(2*pi*1i*freq/rodata.C)*(rodata.posITRF_fl*pos.'));
-	        % simsky_acc = simsky_acc +  diag(antgains) * simsky_A*diag(flux(simsky_up))* ...
-		    % 		simsky_A' * diag (antgains)' + sigman;
-	        % simsky_acc = simsky_acc +  simsky_A*diag(flux(simsky_up))* ...
-		% 		simsky_A';
             
             % fprintf (1, '%d grid(%d,%d)   ', jind, size(flux,1), size(flux,2));
             fprintf (1, '%d ', jind);
