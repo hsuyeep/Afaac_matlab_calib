@@ -131,82 +131,79 @@ function [gridvis, gridviscnt, padgridrng, kern] = genvisgrid (acc, u, v, parm, 
 		missed_vis = 0;   % cumulative count of ignored visibilities due to 
 						  % gridded value exeeding grid size.
 	    %W = zeros(Nuv);
-	    for idx = 1:length(u(:))            % For every recorded visibility
-	    
-	    	% Get amp. and direction vector of visibility
-	        ampl = abs(acc(idx));			
-	        phasor = acc(idx) / ampl;
-	    
-	    	% Determine the grid along U-axis in which observed visibility falls.
-	        uidx = u(idx) / parm.duv + parm.Nuv / 2;  
-	        uidxl = floor(uidx);		% Find the lower and higher gridded U-value.
-	        uidxh = ceil(uidx);
-	    
-	        % Find absolute distance of measured visibility from grid points, in the
-	    	% U-direction only.
-	        dul = abs(uidx - uidxl);		
-	        duh = abs(uidx - uidxh);
-	    
-	        % Distribute the visiblity amplitude among the two grid points on the 
-			% U-axis in proportion to their distance from the observed visiblity.
-	        sul = duh * ampl;
-	        suh = dul * ampl;
-	        
-	    	% Determine the grid along V-axis in which observed visibility falls.
-	        vidx = v(idx) / parm.duv + parm.Nuv / 2;
-	        vidxl = floor(vidx);		% Find the lower and higher gridded V-value.
-	        vidxh = ceil(vidx);
-	    
-	        % Find absolute distance of measured visibility from grid points, in the
-	    	% V-direction only.
-	        dvl = abs(vidx - vidxl);
-	        dvh = abs(vidx - vidxh);
-	    
-	    	% Distribute the HIGHER u-grid point's share of the observed visibility
-			% amp. between the higher and lower V-grid point.
-	        sull = dvh * sul;
-	        suhl = dvh * suh;
-	    
-	    	% Distribute the LOWER u-grid point's share of the observed visibility 
-			% amp. between the higher and lower V-grid point.
-	        sulh = dvl * sul;
-	        suhh = dvl * suh;
-	        
-	    	% Now that the observed visiblity amplitude is distributed among its 
-	    	% surrounding 4 grid points, fill the gridded visibility matrix with
-	    	% vectors with the same phase as the original observed visibility.
-	    	% NOTE: Adding the 4 vectors at the corners of the grid square will give
-	    	% back the original ungridded observed visibility.
-	    	% NOTE: We need to accumulate this to prevent overwriting the gridded 
-			% values from a visibility from a neighbouring grid square.
-			% fprintf (1, 'bline: %06d (%03.2f,%6.2f), uidx: %03d %03d, vidx: %03d, %03d\n', idx, u(idx), v(idx), uidxl, uidxh, vidxl, vidxh);
-			if ((uidxl < 1) || (uidxh < 1) || (uidxl > parm.Nuv) || (uidxh > parm.Nuv))
-				missed_vis = missed_vis + 1;
-				continue;
-			end;
-	
-			if ((vidxl < 1) || (vidxh < 1) || (vidxl > parm.Nuv) || (vidxh > parm.Nuv))
-				missed_vis = missed_vis + 1;
-				continue;
-			end;
-	
-			% Deal with the autocorrelations explicitly, else they are set to 0 and lost.
-			if (u(idx) == 0 && v(idx) == 0)
-				gridvis(uidx, vidx) = gridvis(uidx, vidx) + ampl;
-				continue;
-			end;
-				
-	        gridvis(uidxl, vidxl) = gridvis(uidxl, vidxl) + sull * phasor;
-	        gridvis(uidxl, vidxh) = gridvis(uidxl, vidxh) + sulh * phasor;
-	        gridvis(uidxh, vidxl) = gridvis(uidxh, vidxl) + suhl * phasor;
-	        gridvis(uidxh, vidxh) = gridvis(uidxh, vidxh) + suhh * phasor;
 
-			gridviscnt(uidxl, vidxl) = gridviscnt(uidxl, vidxl) + 1;
-			gridviscnt(uidxl, vidxh) = gridviscnt(uidxl, vidxh) + 1;
-			gridviscnt(uidxh, vidxl) = gridviscnt(uidxh, vidxl) + 1;
-			gridviscnt(uidxh, vidxh) = gridviscnt(uidxh, vidxh) + 1;        
-	        %W(uidx, vidx) = W(uidx, vidx)
-   		 end
+        % Vectorised version of the pillbox gridding process
+	    % Get amp. and direction vector of visibility
+        ampl = abs (acc);
+        phasor = acc ./ ampl;
+
+	   	% Determine the grid along U-axis in which observed visibility falls.
+        uidx = u ./ parm.duv + parm.Nuv/2;
+        uidxl = floor (uidx);
+        uidxh = ceil (uidx);
+
+        % Find absolute distance of measured visibility from grid points, in the
+    	% U-direction only.
+	    dul = abs(uidx - uidxl);		
+	    duh = abs(uidx - uidxh);
+
+        % Distribute the visiblity amplitude among the two grid points on the 
+		% U-axis in proportion to their distance from the observed visiblity.
+	    sul = duh .* ampl;
+	    suh = dul .* ampl;
+        
+    	% Determine the grid along V-axis in which observed visibility falls.
+	    vidx = v ./ parm.duv + parm.Nuv / 2;
+	    vidxl = floor(vidx);		% Find the lower and higher gridded V-value.
+	    vidxh = ceil(vidx);
+
+        % Find absolute distance of measured visibility from grid points, in the
+    	% V-direction only.
+	    dvl = abs(vidx - vidxl);
+	    dvh = abs(vidx - vidxh);
+
+    	% Distribute the HIGHER u-grid point's share of the observed visibility
+		% amp. between the higher and lower V-grid point.
+	    sull = dvh .* sul;
+	    suhl = dvh .* suh;
+	    
+	    % Distribute the LOWER u-grid point's share of the observed visibility 
+		% amp. between the higher and lower V-grid point.
+	    sulh = dvl .* sul;
+	    suhh = dvl .* suh;
+
+    	% Now that the observed visiblity amplitude is distributed among its 
+    	% surrounding 4 grid points, fill the gridded visibility matrix with
+    	% vectors with the same phase as the original observed visibility.
+    	% NOTE: Adding the 4 vectors at the corners of the grid square will give
+    	% back the original ungridded observed visibility.
+    	% NOTE: We need to accumulate this to prevent overwriting the gridded 
+		% values from a visibility from a neighbouring grid square.
+        missed_vis =  sum (uidxl < 1)        + sum (uidxh < 1)       + ...
+                      sum (uidxl > parm.Nuv) + sum (uidxh > parm.Nuv)+ ...
+                      sum (uidxl < 1)        + sum (uidxh < 1)       + ...
+                      sum (uidxl > parm.Nuv) + sum (uidxh > parm.Nuv);
+
+
+		% Deal with the autocorrelations explicitly, else they are set to 0 and lost.
+        ac_ind = (u == 0 && v == 0)
+		gridvis(ac_ind) = gridvis(ac_ind) + ampl (ac_ind);
+
+        lin_ind_ll = sub2ind (size (gridvis), uidxl, vidxl);
+        lin_ind_lh = sub2ind (size (gridvis), uidxl, vidxh);
+        lin_ind_hl = sub2ind (size (gridvis), uidxh, vidxl);
+        lin_ind_hh = sub2ind (size (gridvis), uidxh, vidxh);
+
+        gridvis (lin_ind_ll) = gridvis (lin_ind_ll) + sull .* phasor;
+        gridvis (lin_ind_lh) = gridvis (lin_ind_lh) + sulh .* phasor;
+        gridvis (lin_ind_hl) = gridvis (lin_ind_hl) + suhl .* phasor;
+        gridvis (lin_ind_hh) = gridvis (lin_ind_hh) + suhh .* phasor;
+
+        gridviscnt (lin_ind_ll) = gridviscnt (lin_ind_ll) + 1;
+        gridviscnt (lin_ind_lh) = gridviscnt (lin_ind_lh) + 1;
+        gridviscnt (lin_ind_hl) = gridviscnt (lin_ind_hl) + 1;
+        gridviscnt (lin_ind_hh) = gridviscnt (lin_ind_hh) + 1;
+
 		if (missed_vis > 0)
 		 	fprintf (2, 'Missed vis: %d\n', missed_vis); 
 		end;
