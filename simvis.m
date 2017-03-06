@@ -49,6 +49,7 @@ function [out, parm] = simvis (parm)
         parm.pa        = 0;
         parm.stretch   = 1;
         parm.ateam     = 0;  % Switch off A-team simulation.
+        parm.lofarskymodel = [];
         parm.snr       = 5;  % WGN to add to the visibilities.
         parm.flagant   = []; % None flagged.
         parm.tobs      = now(); % datenum
@@ -105,6 +106,7 @@ function [out, parm] = simvis (parm)
         
         if (isfield (parm,'ateam') == 0)
             parm.ateam = 1;
+            parm.lofarskymodel = 'A-Team_4.sky'; % Use specified sky model.
         end;
         
         if (isfield (parm,'snr') == 0)
@@ -120,7 +122,73 @@ function [out, parm] = simvis (parm)
         end;
 
     end;
+    out.tobs = parm.tobs;
+    out.freq = parm.freq;
+    normal = [0.598753, 0.072099, 0.797682].'; % Normal to CS002
 
+    % ---------------------------------------------------------------%
+    % ----------------------- Create model sky ----------------------%
+    % ---------------------------------------------------------------%
+    %%  Put in the Ateam sources for the given time.
+    if (parm.ateam == 1)
+
+        if (isempty (parm.lofarskymodel))
+    	    % load the 3CR catalog for positions and fluxes
+    	    load 'srclist3CR.mat';
+    	    ateam_ind =  [324, 283, 179, 88];
+            nsrc      = length (ateam_ind);
+            ateam_name = {'Cas.A', 'Cyg.A', 'Vir.A', 'Tau.A', 'Sun'};
+    	    ateam_ra = [srclist3CR(ateam_ind).alpha]; % RA
+    	    ateam_dec= [srclist3CR(ateam_ind).delta]; % DEC
+    	    ateam_fl = [srclist3CR(ateam_ind).flux];  % Jy
+    	    epoch = true ([1, length(ateam_ind)]);
+        else
+            [mod, rarng, decrng, modimg] = readlofarskymodel ...
+                            (parm.lofarskymodel, parm.freq, 10, 4200, 0);
+            nsrc = length(mod);
+            for ind = 1:length (mod)
+                ateam_name {ind} = mod(ind).name{1};
+                ateam_ra (ind)   = mod(ind).meanra;
+                ateam_dec (ind)  = mod(ind).meandec;
+                ateam_fl (ind)   = mod(ind).meanflux;
+            end;
+            ateam_name{nsrc+1} = 'Sun';
+        end;
+
+        tobs_jd = datenum2mjdsec (out.tobs)/86400. + 2400000.5;
+	
+
+        % Add Solar flux to the ateam
+        [ateam_ra(nsrc+1), ateam_dec(nsrc+1)] = SunRaDec (tobs_jd);
+
+        % Flux of the quiet Sun in Jy.
+        % from  [http://www.astro.phys.ethz.ch/astro1/Users/benz/papers/\
+        % LBReview_thermal.pdf]
+        % Valid 30<x<350MHz, freq. in MHz
+        ateam_fl(nsrc+1) = (1.94) * (out.freq/1e6)^1.992; 
+        epoch(nsrc+1) = false;
+
+        [l, m] = radectolm(ateam_ra, ateam_dec, tobs_jd, 6.869837540, ...
+                            52.915122495,  epoch);
+        fprintf (2, ...
+            '<-- Sun located at RA/DEC: %.4f, %.4f, [l,m]: %.4f,%.4f\n',...
+            ateam_ra(end), ateam_dec(end), l(end), m(end));
+
+	    % Convert ra/dec from catalog to ITRF coordinates
+	    srcpos = radectoITRF(ateam_ra, ateam_dec, epoch, tobs_jd);
+	    up = srcpos * normal > 0.1; % Sources visible at this time.
+        parm.l0 = l;
+        parm.m0 = m;
+        parm.flux = ateam_fl;
+        parm.srcname = ateam_name;
+        
+	    % A = exp(-(2 * pi * 1i * obs.freq / 299792458)*(posITRF* srcpos(up).'));
+	    % RAteam = A * diag(ateam_fl(sel)) * A';
+    end;
+
+    % ---------------------------------------------------------------%
+    % ----------------------- Create Array --------------------------%
+    % ---------------------------------------------------------------%
     % Need these parameters only for theoretical arrays
     if (strcmp (lower(parm.arrayconfig), 'lba_outer')    == 0 && ...
         strcmp (lower(parm.arrayconfig), 'lba_inner')    == 0 && ...
@@ -144,63 +212,19 @@ function [out, parm] = simvis (parm)
         arraysampling_y = rot(:,2);
         arraysampling_z = rot(:,3);
     end;
-    normal = [0.598753, 0.072099, 0.797682].'; % Normal to CS002
 
-    out.tobs = parm.tobs;
-    out.freq = parm.freq;
     fprintf (2, '<-- Simulation for timestamp %s, freq %f.\n', ...
             datestr(out.tobs), out.freq);
 
-    %%  Put in the Ateam sources for the given time.
-    if (parm.ateam == 1)
-	    % load the 3CR catalog for positions and fluxes
-	    load 'srclist3CR.mat';
-	    ateam_ind =  [324, 283, 88, 179];
-        ateam_name = {'Cas.A', 'Cyg.A', 'Vir.A', 'Tau.A', 'Sun'};
-	    ateam_ra = [srclist3CR(ateam_ind).alpha]; % RA
-	    ateam_dec= [srclist3CR(ateam_ind).delta]; % DEC
-	    ateam_fl = [srclist3CR(ateam_ind).flux];  % Jy
-	    epoch = true ([1, length(ateam_ind)]);
-        tobs_jd = datenum2mjdsec (out.tobs)/86400. + 2400000.5;
-	
-
-        % Add Solar flux to the ateam
-        [ateam_ra(length(ateam_ind)+1), ateam_dec(length(ateam_ind)+1)] = ...
-                        SunRaDec (tobs_jd);
-
-        % Flux of the quiet Sun in Jy.
-        % from  [http://www.astro.phys.ethz.ch/astro1/Users/benz/papers/\
-        % LBReview_thermal.pdf]
-        % Valid 30<x<350MHz, freq. in MHz
-        ateam_fl(length(ateam_ind)+1) = (1.94) * (out.freq/1e6)^1.992; 
-        epoch(length(ateam_ind)+1) = false;
-
-        [l, m] = radectolm(ateam_ra, ateam_dec, tobs_jd, 6.869837540, ...
-                            52.915122495,  epoch);
-        fprintf (2, ...
-            '<-- Sun located at RA/DEC: %.4f, %.4f, [l,m]: %.4f,%.4f\n',...
-            ateam_ra(end), ateam_dec(end), l(end), m(end));
-
-	    % Convert ra/dec from catalog to ITRF coordinates
-	    srcpos = radectoITRF(ateam_ra, ateam_dec, epoch, tobs_jd);
-	    up = srcpos * normal > 0.1; % Sources visible at this time.
-        parm.l0 = l;
-        parm.m0 = m;
-        parm.flux = ateam_fl;
-        parm.srcname = ateam_name;
-        
-	    % A = exp(-(2 * pi * 1i * obs.freq / 299792458)*(posITRF* srcpos(up).'));
-	    % RAteam = A * diag(ateam_fl(sel)) * A';
-    end;
     
     
 	deb = parm.deb;
     assert (length(parm.l0) == length (parm.m0));
     assert (length(parm.flux) == length (parm.l0));
-    fprintf (1, '<-- Simulated source properties (l,m,Jy(frac.power),Name): \n');
+    fprintf (1, '<-- Simulated source properties (l,m, ra, dec, Jy(frac.power),Name): \n');
     for ind = 1:length(parm.l0)
-        fprintf (1, '   [%5.2f, %5.2f, %8.2f (%6.4f), %s]\n', parm.l0(ind),...
-                parm.m0(ind), parm.flux(ind), parm.flux(ind)/sum(parm.flux),...
+        fprintf (1, '   [%5.2f, %5.2f, %5.2f, %5.2f, %8.2f (%6.4f), %s]\n', parm.l0(ind),...
+                parm.m0(ind), ateam_ra(ind), ateam_dec(ind), parm.flux(ind), parm.flux(ind)/sum(parm.flux),...
                 parm.srcname{ind});
     end 
     fprintf (1,'\n');
@@ -226,7 +250,10 @@ function [out, parm] = simvis (parm)
 
 			% Create a rectangular grid of antenna, equi-spaced
 			[xpos, ypos] = meshgrid (arraysampling_x, arraysampling_y);
-            zpos = meshgrid (arraysampling_z, zeros (size (arraysampling_x)));
+            zpos = meshgrid (arraysampling_z, zeros (size (arraysampling_x)))';
+            xpos = xpos (:);
+            ypos = ypos (:);
+            zpos = zpos (:);
 
 		case 'disk'
             % Example parameter structure:
@@ -238,7 +265,7 @@ function [out, parm] = simvis (parm)
 			discsel = (sqrt(xpos.^2 + ypos.^2./parm.stretch) < parm.arrayrad);
 			xpos = xpos (discsel);
 			ypos = ypos (discsel);
-            zpos = zeros (1, length (xpos));
+            zpos = zeros (length (xpos), 1);
 
 		case 'ring'
             % Example parameter structure:
@@ -256,7 +283,7 @@ function [out, parm] = simvis (parm)
 			ringsel = discsel - innerdiscsel;
 			xpos = xpos(ringsel==1);
 			ypos = ypos(ringsel==1);
-            zpos = zeros (1, length (xpos));
+            zpos = zeros (length (xpos), 1);
 
 		case 'lba_outer'
 			% load ('poslocal_outer_cs07w1.mat', 'poslocal');
@@ -310,6 +337,9 @@ function [out, parm] = simvis (parm)
     wloc = (meshgrid (zpos(:)) - meshgrid (zpos(:)).'); % W in m
     uvdist = sqrt (uloc(:).^2 + vloc(:).^2 + wloc(:).^2);
     
+    % ---------------------------------------------------------------%
+    % ----------------------- Create visibilities--------------------%
+    % ---------------------------------------------------------------%
     % Visibilities with an extra w-term, meant for phase-tracking
     % interferometers
     % V = sum(repmat ((parm.flux), size(uloc(:)),1) .* ...
@@ -321,11 +351,35 @@ function [out, parm] = simvis (parm)
     %       exp (-(2*pi*1i*parm.freq/299792458)*(uloc(:)*l0 + ...
     %           vloc(:)*m0 + wloc(:)*(sqrt(1-l0.^2-m0.^2)))), 2);
 
-    % Vis. from arrays without a w-term.
-    V = sum(repmat ((flux), size(uloc(:)),1) .* ...
-            exp (-(2*pi*1i*parm.freq/299792458)*(uloc(:)*l0 + vloc(:)*m0 )), 2);
+    V = zeros (length(xpos));
+    C = 299792458; % m/s
+    posITRF = [xpos ypos zpos];
 
-    V = conj (reshape (V, [length(xpos(:)), length(ypos(:))]));
+    if (isempty (parm.lofarskymodel))
+        % Vis. from arrays without a w-term.
+        V = sum(repmat ((flux), size(uloc(:)),1) .* ...
+            exp (-(2*pi*1i*parm.freq/299792458)*(uloc(:)*l0 + vloc(:)*m0 )), 2);
+        V = conj (reshape (V, [length(xpos(:)), length(ypos(:))]));
+    else
+        % Accumulate the visibilities due to every model source.
+        for patch = 1:1 %length (rarng) % For every patch in the model.
+            pos  = radectoITRF (rarng{patch}, decrng{patch}, ...
+                true, tobs_jd);
+            simsky_up = pos * normal > 0;
+            pos (1:10,:)
+            if (sum (simsky_up) == 0)
+                fprintf (2, ...
+                 'simvis: %s patch not visible for time %s.\n', ...
+                    mod(patch).name{1}, datestr (out.tobs));
+                continue;
+            end;
+    
+    	    simsky_A = exp(-(2*pi*1i*parm.freq/C)*(posITRF*pos.'));
+    	    V = V +  simsky_A*modimg{patch}*simsky_A';
+        end;
+    end;
+
+
 
     % Add noise to the visibilities
     if (parm.snr ~= 0)
@@ -340,6 +394,9 @@ function [out, parm] = simvis (parm)
     %        + zpos(:)*sqrt(1-l0.^2-m0.^2))); 
 	% V = we * we'; % Generate the visibilities for the system at hand.
 
+    % ---------------------------------------------------------------%
+    % ----------------------- Create images -------------------------%
+    % ---------------------------------------------------------------%
     if (parm.fft == 0)
 
 	    % Create an image using acm2skymap:
@@ -380,6 +437,9 @@ function [out, parm] = simvis (parm)
     out.vloc = vloc;
     out.wloc = wloc;
 
+    % ---------------------------------------------------------------%
+    % ----------------------- Create plots if reqd-------------------%
+    % ---------------------------------------------------------------%
 	if (deb > 0)
         figure();
         mask = meshgrid(out.img_l).^2 + meshgrid(out.img_m).'.^2 < 1;

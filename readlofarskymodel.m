@@ -116,8 +116,10 @@ function [mod, rarng, decrng, modimg] = readlofarskymodel (fname, freq, res, ext
                 mod(patch).name{1}, length(mod(patch).patch{1}));
         meanra  = mean (mod(patch).patch{17}); % In rad.
         meandec = mean (mod(patch).patch{18}); % In rad.
+
         mod(patch).meanra = meanra;
         mod(patch).meandec = meandec;
+        mod(patch).meanflux = mean (mod(patch).patch{8}); % In Jy.
 
         extent_rad = (extent/2)*(pi/180/3600); % Convert extent to rad.
         extent_pix = extent/res;
