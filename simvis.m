@@ -24,7 +24,13 @@
 %  parm.flagant    : Indices in the antenna array to be flagged.
 %  parm.tobs       : Simulated time of the observation (as a datenum)
 %  parm.ateam      : Flag controlling simulation of a sky with the A-team+Sun
+%  parm.lofarskymodel: Filename of the lofarsky model to use. If empty, a
+%                    point source model will be used.
 %  parm.snr        : Controls the SNR of the visibilities.
+%  parm.gain       : Complex gains to be associated with the antennas.
+%                    [nant x 1]
+%  parm.sigman     : Complex coloured noise to be added to the visibilities.
+%                    [nant x nant]
 % pep/28Apr15
 
 function [out, parm] = simvis (parm)
@@ -35,24 +41,25 @@ function [out, parm] = simvis (parm)
 		parm.arrayrad = 25;  % meters
 		parm.elemspace = 2.5; % Default lambda / 2;
         parm.zslope = 0;
-		parm.deb       = 1;
+        parm.pa        = 0;
+        parm.stretch   = 1;
+        parm.flux = [5, 6];
 
         % Locate sources of unit amplitude at the locations (in l,m units) as
         % specified above.
-        parm.flux = [5, 6];
 		parm.l0 = [0.2, 0.25];
         parm.m0 = [0.3, -0.45];
 		parm.deb       = 1;
 		parm.arrayconfig = 'rect';
         parm.fft       = 1;
         parm.freq      = def_freq;
-        parm.pa        = 0;
-        parm.stretch   = 1;
+        parm.flagant   = []; % None flagged.
+        parm.tobs      = now(); % datenum
         parm.ateam     = 0;  % Switch off A-team simulation.
         parm.lofarskymodel = [];
         parm.snr       = 5;  % WGN to add to the visibilities.
-        parm.flagant   = []; % None flagged.
-        parm.tobs      = now(); % datenum
+        parm.gain      = [];
+        parm.sigman    = [];
 	else
         % Check if all required parameters are available, else put in defaults,
         % even if unsed.
@@ -109,6 +116,10 @@ function [out, parm] = simvis (parm)
             parm.lofarskymodel = 'A-Team_4.sky'; % Use specified sky model.
         end;
         
+        if (isfield (parm,'lofarskymodel') == 0)
+            parm.lofarskymodel = [];
+        end;
+
         if (isfield (parm,'snr') == 0)
             parm.snr = 10;
         end;
@@ -121,6 +132,13 @@ function [out, parm] = simvis (parm)
             parm.tobs = now;
         end;
 
+        if (isfield (parm,'gain') == 0)
+            parm.gain = [];
+        end;
+
+        if (isfield (parm,'sigman') == 0)
+            parm.sigman = [];
+        end;
     end;
     out.tobs = parm.tobs;
     out.freq = parm.freq;
@@ -184,6 +202,11 @@ function [out, parm] = simvis (parm)
         
 	    % A = exp(-(2 * pi * 1i * obs.freq / 299792458)*(posITRF* srcpos(up).'));
 	    % RAteam = A * diag(ateam_fl(sel)) * A';
+    else
+        for ind = 1:length (parm.l0)
+            parm.srcname {ind} = sprintf ('Src_%d', ind);
+        end;
+        up = ones (1, length (parm.l0));
     end;
 
     % ---------------------------------------------------------------%
@@ -223,9 +246,16 @@ function [out, parm] = simvis (parm)
     assert (length(parm.flux) == length (parm.l0));
     fprintf (1, '<-- Simulated source properties (l,m, ra, dec, Jy(frac.power),Name): \n');
     for ind = 1:length(parm.l0)
-        fprintf (1, '   [%5.2f, %5.2f, %5.2f, %5.2f, %8.2f (%6.4f), %s]\n', parm.l0(ind),...
-                parm.m0(ind), ateam_ra(ind), ateam_dec(ind), parm.flux(ind), parm.flux(ind)/sum(parm.flux),...
-                parm.srcname{ind});
+        if (parm.ateam == 1)
+            fprintf (1, '   [%5.2f, %5.2f, %5.2f, %5.2f, %8.2f (%6.4f), %s]\n',...
+                    parm.l0(ind), parm.m0(ind), ateam_ra(ind), ateam_dec(ind),...
+                    parm.flux(ind), parm.flux(ind)/sum(parm.flux),...
+                    parm.srcname{ind});
+        else
+            fprintf (1, '   [%5.2f, %5.2f, %8.2f (%6.4f)]\n',...
+                    parm.l0(ind), parm.m0(ind), parm.flux(ind),...
+                    parm.flux(ind)/sum(parm.flux));
+        end;
     end 
     fprintf (1,'\n');
 	l0 = parm.l0(up);
@@ -354,6 +384,10 @@ function [out, parm] = simvis (parm)
     V = zeros (length(xpos));
     C = 299792458; % m/s
     posITRF = [xpos ypos zpos];
+    if (isempty (parm.gain))
+        parm.gain = ones (size (uloc, 1)) + 1i*ones (size (uloc, 1));
+        parm.sigman = zeros (size (uloc));
+    end;
 
     if (isempty (parm.lofarskymodel))
         % Vis. from arrays without a w-term.
@@ -386,6 +420,9 @@ function [out, parm] = simvis (parm)
         V = V + (mean(real(V(:)))/parm.snr) * randn (size (V)) + ...
                                 i*(mean(imag(V(:)))/parm.snr) * randn (size (V));
     end;
+
+    % Add the supplied antenna gains and colored noise.
+    % V = V .* (parm.gain*parm.gain')/size (uloc, 1) + parm.sigman;
     
     % Another approach of first generating phasors in position coordinates.
     % Generate phasor due to location of each element

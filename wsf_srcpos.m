@@ -49,9 +49,7 @@ function [thsrc_cat, phisrc_cat, thsrc_wsf, phisrc_wsf, fval, out] = ...
 	% Carry out maximization of the log likelihood function.
      if (exist ('OCTAVE_VERSION') ~= 0) % Are running on octave
         optimset(opt);
-        theta=fminsearch(@(x)
-        WSFcostfunITRF(x,EsWEs,diag(conj(1./cal1)),freq,rodata.posITRF_fl),...
-            [phisrc0; thsrc0]);
+        theta=fminsearch(@(x) WSFcostfunITRF(x,EsWEs,diag(conj(1./cal1)),freq,rodata.posITRF_fl), [phisrc0; thsrc0]);
         fval = 0; % fval is unused in pelican_sunAteamsub.m
     else % Running matlab
         [theta, fval, exitflag, out] = ...

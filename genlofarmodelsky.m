@@ -70,7 +70,7 @@ function genlofarmodelsky (t_obs, freq, nant, skymodfname, rodata, ...
 
         fprintf (1, 'genlofarmodelsky: Loading local antenna positions.\n');
         if (nant == 288)
-            load ('poslocal.mat', 'posITRF', 'poslocal'); 
+            load ('poslocal_outer.mat', 'posITRF', 'poslocal'); 
         elseif (nant == 576)
             load ('poslocal_afaac12_outer.mat', 'posITRF', 'poslocal'); 
         end;

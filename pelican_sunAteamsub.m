@@ -403,6 +403,15 @@ function [currsol] = pelican_sunAteamsub (acc, t_obs, ...
 
 	if (debug > 3)
 		disp ('--> Creating instantaneous sky images');
+
+        if (exist('gparm') == 0)
+			gparm.type = 'pillbox';
+			gparm.lim = 0;
+			gparm.duv = 0.5; 
+			gparm.Nuv = 500;
+			gparm.uvpad = 512; 
+			gparm.fft = 1;
+        end;
 		% Image model sky: FOR DEBUG!
 	    % flagant = [1:12, 51, 206]; 
 	    % load ('poslocal.mat', 'posITRF', 'poslocal'); 
@@ -447,82 +456,82 @@ function [currsol] = pelican_sunAteamsub (acc, t_obs, ...
     % toc
 
 
-    if (ptSun == 0)
-      %% Sun subtraction
-      % The Sun is modeled using a 3-sparse grid of pixels around the estimated
-      % position of the Sun. 
-      % tic
-      phi0sun = atan2(srcposhat(visibleAteamsun == 0, 2), ... 
-    				  srcposhat(visibleAteamsun == 0, 1));
-      th0sun = asin(srcposhat(visibleAteamsun == 0, 3));
-      % define grid of pixels
-      delta = 0.01;
-      res = 2 * delta / 8;
-      [phisun, thsun] = meshgrid(phi0sun-delta:res:phi0sun+delta, ... 
-    							  th0sun-delta:res:th0sun+delta);
-      phith_dist = sqrt((phisun(:) - phi0sun).^2 + (thsun(:) - th0sun).^2);
-      phisun = phisun(phith_dist < delta);
-      thsun  = thsun(phith_dist < delta);
-      sunpos = [cos(phisun) .* cos(thsun), ... 
-    			sin(phisun) .* cos(thsun), ...
-    		    sin(thsun)];
-      
-      % solar component estimation using sparse reconstruction
-      A = exp(-(2 * pi * 1i * freq / rodata.C) * ... 
-			 (rodata.posITRF_fl * sunpos.'));
-      accsubAteam = double (accsubAteam);
-      % fluxSun = 1.20 * sigmas2(visibleAteamsun == 0);
-      fluxSun = 1.20 * currsol.sigmas(visibleAteamsun == 0);
-      cvx_begin
-          variable sigmaSun(size(A, 2));
-          minimize norm(accsubAteam(:) - khatrirao(conj(A), A) * sigmaSun, 2);
-          subject to
-          norm(sigmaSun, 1) <= fluxSun;
-      cvx_end
-      
-      % iterate, increasing resolution
-      sigmaSun(sigmaSun < 1e-3) = 0;
-      phi0sun = phisun(sigmaSun ~= 0);
-      th0sun  = thsun(sigmaSun ~= 0);
-      res2    = res / 3;
-      [phigrid, thgrid] = meshgrid(-res2:res2:res2);
-      phisun2 = kron(phi0sun, ones(9, 1)) +  ...
-    			kron(ones(length(phi0sun), 1), phigrid(:));
-      thsun2  = kron(th0sun, ones(9, 1)) + ...
-    			kron(ones(length(th0sun), 1), thgrid(:));
-      sunpos2 = [cos(phisun2) .* cos(thsun2), ...
-    			 sin(phisun2) .* cos(thsun2), ...
-    			 sin(thsun2)];
-
-      A = exp(-(2 * pi * 1i * freq / rodata.C) * ... 
-			(rodata.posITRF_fl * sunpos2.'));
-      % fluxSun = 1.20 * sigmas2(visibleAteamsun == 0);
-      fluxSun = 1.20 * currsol.sigmas(visibleAteamsun == 0);
-      cvx_begin
-          variable sigmaSun(size(A, 2));
-          minimize norm(accsubAteam(:) - khatrirao(conj(A), A) * sigmaSun, 2);
-          subject to
-          norm(sigmaSun, 1) <= fluxSun;
-      cvx_end
-      
-      % try subtraction
-      sigmaSun(sigmaSun < 1e-3) = 0;
-      RSunS = A * diag(sigmaSun) * A';
-      accsubSunS = acccal - RAteam - RSunS;
-      if (calim.debug > 0)
-    	  disp('Sun subtracted using Sparse reconstruction.');
-      end
-      %toc
-
-      % Storing both fluxes and positions as az/ele
-      currsol.suncomps = zeros (size (sigmaSun, 1), 3); 
-      currsol.suncomps (:, 1) = sigmaSun;
-      currsol.suncomps (:, 2) = atan2 (sunpos2 (:,2), sunpos2 (:, 1));  % Azi.
-      currsol.suncomps (:, 3) = acos (sunpos2 (:,3));
-    else
+%    if (ptSun == 0)
+%      %% Sun subtraction
+%      % The Sun is modeled using a 3-sparse grid of pixels around the estimated
+%      % position of the Sun. 
+%      % tic
+%      phi0sun = atan2(srcposhat(visibleAteamsun == 0, 2), ... 
+%    				  srcposhat(visibleAteamsun == 0, 1));
+%      th0sun = asin(srcposhat(visibleAteamsun == 0, 3));
+%      % define grid of pixels
+%      delta = 0.01;
+%      res = 2 * delta / 8;
+%      [phisun, thsun] = meshgrid(phi0sun-delta:res:phi0sun+delta, ... 
+%    							  th0sun-delta:res:th0sun+delta);
+%      phith_dist = sqrt((phisun(:) - phi0sun).^2 + (thsun(:) - th0sun).^2);
+%      phisun = phisun(phith_dist < delta);
+%      thsun  = thsun(phith_dist < delta);
+%      sunpos = [cos(phisun) .* cos(thsun), ... 
+%    			sin(phisun) .* cos(thsun), ...
+%    		    sin(thsun)];
+%      
+%      % solar component estimation using sparse reconstruction
+%      A = exp(-(2 * pi * 1i * freq / rodata.C) * ... 
+%			 (rodata.posITRF_fl * sunpos.'));
+%      accsubAteam = double (accsubAteam);
+%      % fluxSun = 1.20 * sigmas2(visibleAteamsun == 0);
+%      fluxSun = 1.20 * currsol.sigmas(visibleAteamsun == 0);
+%      cvx_begin
+%          variable sigmaSun(size(A, 2));
+%          minimize norm(accsubAteam(:) - khatrirao(conj(A), A) * sigmaSun, 2);
+%          subject to
+%          norm(sigmaSun, 1) <= fluxSun;
+%      cvx_end
+%      
+%      % iterate, increasing resolution
+%      sigmaSun(sigmaSun < 1e-3) = 0;
+%      phi0sun = phisun(sigmaSun ~= 0);
+%      th0sun  = thsun(sigmaSun ~= 0);
+%      res2    = res / 3;
+%      [phigrid, thgrid] = meshgrid(-res2:res2:res2);
+%      phisun2 = kron(phi0sun, ones(9, 1)) +  ...
+%    			kron(ones(length(phi0sun), 1), phigrid(:));
+%      thsun2  = kron(th0sun, ones(9, 1)) + ...
+%    			kron(ones(length(th0sun), 1), thgrid(:));
+%      sunpos2 = [cos(phisun2) .* cos(thsun2), ...
+%    			 sin(phisun2) .* cos(thsun2), ...
+%    			 sin(thsun2)];
+%
+%      A = exp(-(2 * pi * 1i * freq / rodata.C) * ... 
+%			(rodata.posITRF_fl * sunpos2.'));
+%      % fluxSun = 1.20 * sigmas2(visibleAteamsun == 0);
+%      fluxSun = 1.20 * currsol.sigmas(visibleAteamsun == 0);
+%      cvx_begin
+%          variable sigmaSun(size(A, 2));
+%          minimize norm(accsubAteam(:) - khatrirao(conj(A), A) * sigmaSun, 2);
+%          subject to
+%          norm(sigmaSun, 1) <= fluxSun;
+%      cvx_end
+%      
+%      % try subtraction
+%      sigmaSun(sigmaSun < 1e-3) = 0;
+%      RSunS = A * diag(sigmaSun) * A';
+%      accsubSunS = acccal - RAteam - RSunS;
+%      if (calim.debug > 0)
+%    	  disp('Sun subtracted using Sparse reconstruction.');
+%      end
+%      %toc
+%
+%      % Storing both fluxes and positions as az/ele
+%      currsol.suncomps = zeros (size (sigmaSun, 1), 3); 
+%      currsol.suncomps (:, 1) = sigmaSun;
+%      currsol.suncomps (:, 2) = atan2 (sunpos2 (:,2), sunpos2 (:, 1));  % Azi.
+%      currsol.suncomps (:, 3) = acos (sunpos2 (:,3));
+%    else
       currsol.suncomps = zeros (1, 3);  % Placeholder for when a pt. src sun 
 										% subtraction is adequate.
-    end  % if (ptSun == 1) ... 
+%    end  % if (ptSun == 1) ... 
 
 	% calvis (antmask == 0) = single(accsubSunS); % Convert to float
     currsol.calvis      = single(accsubSunS); % Convert to float
