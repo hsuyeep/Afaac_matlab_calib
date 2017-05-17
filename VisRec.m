@@ -64,7 +64,7 @@ classdef VisRec < handle
 			if (isfield (info, 'deb'   ) == 0) obj.deb   =   0; else obj.deb = info.deb; end;
 						
 			% obj.recdat = RecDat(); % Self contained data structure to hold a single records' data.
-			obj.getVisMeta (info); % Initialize internal data based on input data.
+			% obj.getVisMeta (info); % Initialize internal data based on input data.
 		end;
 
 
@@ -121,8 +121,7 @@ classdef VisRec < handle
             % 0x4141525446414143, calibrated visibilities magic number.
             elseif (meta.magic == 0x41415254) % Looking at first 32 bits only
             % elseif (meta.magic == 0x4141525446414143)
-                fprintf (1, '<-- Found Magic number 0x%x in first
-record.\n',meta.magic);
+                fprintf (1, '<-- Found Magic number 0x%x in first record.\n',meta.magic);
                 fprintf (1, '<-- File contains CALIBRATED Correlations.\n');
                 obj.tfilestart = meta.tstart;
                 obj.trecstart = meta.tstart;
@@ -372,8 +371,7 @@ record.\n',meta.magic);
                 fmt = sprintf ('%d*single', length(vis)*2); % for complex
                 fwrite (fid, vis, fmt); % Write out float complex.
             catch ME
-                fprintf (2, '### VisRec.m:writeRec(): Error in writing to file
-id %d.\n', fid);
+                fprintf (2, '### VisRec.m:writeRec(): Error in writing to file id %d.\n', fid);
                 status = 1;
             end;
 
@@ -432,9 +430,8 @@ id %d.\n', fid);
 				obj.yy = complex (squeeze(flagdat(1,2,:)), squeeze(flagdat(2,2,:)));
 			end;
 
-            if (pol(2) | pol(3))
-                fprintf (2, '### Ignoring XY and YX pols not present in incoming
-data. Ignoring.\n');
+            if (pol(2) || pol(3))
+                fprintf (2, '### Ignoring XY and YX pols not present in incoming data. Ignoring.\n');
             end;
 
             obj.dat2acm();

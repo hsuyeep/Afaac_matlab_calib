@@ -291,6 +291,9 @@ function [currsol] = pelican_sunAteamsub (acc, t_obs, ...
 
     % Determine which sources are above the local horizon (visible to us).
     up = srcpos0 * rodata.normal > 0.1;
+    fprintf (1, 'Sources above the horizon:');
+    disp (srcpos0(up));
+    disp (up);
 
     % NOTE: We only estimate source positions for sources with an apparent flux
     % larger than 1% of the apparent flux of Cas A. 'sel' holds this subset of
@@ -412,14 +415,23 @@ function [currsol] = pelican_sunAteamsub (acc, t_obs, ...
 			gparm.uvpad = 512; 
 			gparm.fft = 1;
         end;
+        % Uncalibrated image
+	    [radecmap, uncalmap, calvis, l, m] = ... 
+			fft_imager_sjw_radec (acc (:), uloc_flag(:), vloc_flag(:), ... 
+									gparm, [], [], t_obs, freq, 0);
+
+        figure (modsky)
+		mask = zeros (size (calmap));
+		mask (meshgrid (l).^2 + meshgrid(m).'.^2 < 0.9) = 1;
+        imagesc (l, m, real (uncalmap .* mask));
+        pause ();
+        
 		% Image model sky: FOR DEBUG!
 	    % flagant = [1:12, 51, 206]; 
 	    % load ('poslocal.mat', 'posITRF', 'poslocal'); 
 	    [radecmap, calmap, calvis, l, m] = ... 
 			fft_imager_sjw_radec (RAteam (:), uloc_flag(:), vloc_flag(:), ... 
 									gparm, [], [], t_obs, freq, 0);
-		mask = zeros (size (calmap));
-		mask (meshgrid (l).^2 + meshgrid(m).'.^2 < 0.9) = 1;
 		figure(modsky);
 		imagesc (l, m, real(calmap .* mask));
 		colorbar;

@@ -385,7 +385,7 @@ function [out, parm] = simvis (parm)
     C = 299792458; % m/s
     posITRF = [xpos ypos zpos];
     if (isempty (parm.gain))
-        parm.gain = ones (size (uloc, 1)) + 1i*ones (size (uloc, 1));
+        parm.gain = ones (size (uloc, 1)) + 1i*zeros (size (uloc, 1));
         parm.sigman = zeros (size (uloc));
     end;
 
