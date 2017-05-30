@@ -21,9 +21,11 @@
 %  decrng: Range of positions corresponding to the cumulative model for each src.
 %  modimg: Array of model images generated over the extent and res. specified by
 %  the user.
+%  modnormimg: Array of model images normalized by the maximum value, in order 
+%         to use with apparent fluxes during calibration.  
 %  
 
-function [mod, rarng, decrng, modimg] = readlofarskymodel (fname, freq, res, extent,  debug)
+function [mod, rarng, decrng, modimg, modnormimg] = readlofarskymodel (fname, freq, res, extent,  debug)
 
     fid = fopen (fname);
     mod = [];
@@ -33,7 +35,7 @@ function [mod, rarng, decrng, modimg] = readlofarskymodel (fname, freq, res, ext
     end;
 
     if (isempty (res))
-        res = 10 ; % arcsec, resolution of composite image plane patch.
+        res = 1 ; % arcsec, resolution of composite image plane patch.
     end;
 
     % Get rid of empty lines and comments.
@@ -112,28 +114,28 @@ function [mod, rarng, decrng, modimg] = readlofarskymodel (fname, freq, res, ext
         % Rescale the component fluxes using the spectral index.
         % Add extracted RA/DEC 
         if (~isempty(freq))
-    	    for ind = 1:patch_ind
+    	    for ind = 1:patch_ind - 1
     
                 % Convert DEC to radians
                 % For each individual component
-    	        for comp = 1:length(mod(ind).patch)
+    	        for comp = 1:length(mod(ind).patch{1})
                     % Flux scaled by spectral index.
-                    mod(ind).patch(comp).I = [mod(ind).patch(comp).I]...
-                                   .*(freq./[mod(ind).patch(comp).reffreq]) .^ [mod(ind).patch(comp).alpha];
+                    mod(ind).patch{17}(comp) = [mod(ind).patch{8}(comp)]...
+                                   .*(freq./[mod(ind).patch{12}(comp)]) .^ [mod(ind).patch{13}(comp)];
                     % RA now in radians.
-                    mod(ind).patch(comp).ra_rad = (mod(ind).patch(comp).rah ...
-                      + mod(ind).patch(comp).ram/60.  + mod(ind).patch(comp).ras/3600.) .* (pi/12);
-                        rem = mod(ind).patch(comp).dec{1};
+                    mod(ind).patch{18}(comp)= (mod(ind).patch{4}(comp) ...
+                      + mod(ind).patch{5}(comp)/60.  + mod(ind).patch{6}(comp)/3600.) .* (pi/12);
+                    rem = mod(ind).patch{7}(comp);
                     dec = 0;
                     % split () and strsplit () do not exist in R2012!
                     for jind = 1:2
                         [tok, rem] = strtok (rem, '.');
                         dec = dec + str2double (tok)/60^(jind-1);
                         if jind == 2
-                            dec = dec + str2double (rem(2:end))/60^(jind);
+                            dec = dec + str2double (rem{1}(2:end))/60^(jind);
                         end
                     end;
-    	            mod(ind).patch(comp).dec_rad = dec*(pi/180);
+    	            mod(ind).patch{19}(comp) = dec*(pi/180);
                 end;
     	    end;
         end;
@@ -141,14 +143,16 @@ function [mod, rarng, decrng, modimg] = readlofarskymodel (fname, freq, res, ext
     % Now create a spatial grid with the specified resolution for holding all
     % components of a patch cumulatively.
     for patch = 1:length(mod)
-        fprintf (1, '<-- Working on modeling response to patch %s (%.0f components).\n', ...
-                mod(patch).name{1}, length(mod(patch).patch));
-        meanra  = mean ([mod(patch).patch.ra_rad]);  % In rad.
-        meandec = mean ([mod(patch).patch.dec_rad]); % In rad.
+        fprintf (1, '\n<-- Working on modeling response to patch %s (%.0f components).\n', ...
+                mod(patch).name{1}, length(mod(patch).patch{1}));
+        % meanra  = mean ([mod(patch).patch.ra_rad]);  % In rad.
+        % meandec = mean ([mod(patch).patch.dec_rad]); % In rad.
+        meanra  = mean ([mod(patch).patch{18}]); % In rad.
+        meandec = mean ([mod(patch).patch{19}]); % In rad.
 
         mod(patch).meanra = meanra;
         mod(patch).meandec = meandec;
-        mod(patch).meanflux = mean ([mod(patch).patch.I]); % In Jy.
+        mod(patch).meanflux = mean ([mod(patch).patch{17}]); % In Jy.
 
         extent_rad = (extent/2)*(pi/180/3600); % Convert extent to rad.
         extent_pix = extent/res;
@@ -157,26 +161,32 @@ function [mod, rarng, decrng, modimg] = readlofarskymodel (fname, freq, res, ext
         decrng {patch}= meandec - extent_rad:res_rad:meandec + extent_rad;
         modimg {patch} = zeros (length(rarng{patch}));
 
-        fprintf (1, '<-- Patch mean ra/dec:%.4f, %.4f\n',meanra, meandec);
+        fprintf (1, '<-- Patch mean ra/dec:%.4f, %.4f (rad)\n',meanra, meandec);
 
         tot_flux = 0;
-        for jind = 1:length(mod(patch).patch) % Get number of components.
-            comp = mod(patch).patch(jind);
+        for jind = 1:length(mod(patch).patch{1}) % Get number of components.
+            % comp = mod(patch).patch(jind);
 
             % Offset of this component from the patch mean, in pixel units.
-            offra    = int32(((comp.ra_rad - meanra)*180*3600/pi)/res);
-            offdec   = int32(((comp.dec_rad- meandec)*180*3600/pi)/res);
+            % offra    = int32(((comp.ra_rad - meanra)*180*3600/pi)/res);
+            % offdec   = int32(((comp.dec_rad- meandec)*180*3600/pi)/res);
+            offra    = int32(((mod(patch).patch{18}(jind) - meanra)*180*3600/pi)/res);
+            offdec   = int32(((mod(patch).patch{19}(jind) - meandec)*180*3600/pi)/res);
 
             % Generate the positions of all the points making up the source.
-            if (strcmp (comp.type{1},'POINT'))
+            % if (strcmp (comp.type{1},'POINT'))
+            if (strcmp (mod(patch).patch{2}(jind),'POINT'))
                 modimg{patch} (offdec + int32(extent_pix/2), ...
                        offra  + int32(extent_pix/2)) = ...
                 modimg{patch} (offdec + int32(extent_pix/2), ...
-                       offra  + int32(extent_pix/2)) + comp.I;
+                       offra  + int32(extent_pix/2)) + mod(patch).patch{17}(jind);
 
-            elseif (strcmp (comp.type{1},'GAUSSIAN'))
-                rasig  = (comp.maj/3600)*(pi/180);
-                decsig = (comp.min/3600)*(pi/180);
+            % elseif (strcmp (comp.type{1},'GAUSSIAN'))
+            elseif (strcmp (mod(patch).patch{2}(jind),'GAUSSIAN'))
+                % rasig  = (comp.maj/3600)*(pi/180);
+                % decsig = (comp.min/3600)*(pi/180);
+                rasig  = (mod(patch).patch{14}(jind)/3600)*(pi/180);
+                decsig = (mod(patch).patch{15}(jind)/3600)*(pi/180);
                 if (rasig == 0 && decsig == 0)
                     rasig  = (1/3600)*(pi/180); % Set to 1 arcsec (arbit)
                     decsig = (1/3600)*(pi/180); % Set to 1 arcsec (arbit)
@@ -186,9 +196,12 @@ function [mod, rarng, decrng, modimg] = readlofarskymodel (fname, freq, res, ext
                     decsig = rasig;
                 end;
                 
-                [rapos, decpos, flux] = gengaussiansrc (comp.ra_rad, ...
-                   comp.dec_rad, true, comp.I, rasig, decsig, ...
-                   comp.pa, (res/3600)*(pi/180));
+                % [rapos, decpos, flux] = gengaussiansrc (comp.ra_rad, ...
+                %    comp.dec_rad, true, comp.I, rasig, decsig, ...
+                %    comp.pa, (res/3600)*(pi/180));
+                [rapos, decpos, flux] = gengaussiansrc (mod(patch).patch{18}(jind), ...
+                   mod(patch).patch{19}(jind), true, mod(patch).patch{17}(jind), rasig, decsig, ...
+                   mod(patch).patch{16}(jind), (res/3600)*(pi/180));
 
                 decstart = offdec-int32(size (flux, 1)/2) + int32(extent_pix/2); 
                 rastart  = offra -int32(size (flux, 2)/2) + int32(extent_pix/2);
@@ -200,11 +213,18 @@ function [mod, rarng, decrng, modimg] = readlofarskymodel (fname, freq, res, ext
             end;
 
 
-            tot_flux = tot_flux + comp.I;
+            % tot_flux = tot_flux + comp.I;
+            tot_flux = tot_flux + mod(patch).patch{17}(jind);
             
             % fprintf (1, '%d grid(%d,%d)   ', jind, size(flux,1), size(flux,2));
-            fprintf (1, '%d ', jind);
+            % fprintf (1, '%d ', jind);
         end;
+
+        % Normalized flux, used for amplitude calibration purposes.
+        modnormimg{patch} = modimg{patch}/max(max(modimg{patch}));
+
+        % To substitute detailed models with simple point sources, uncomment the following.
+        % modimg{patch} (int32(size(rarng{1},1)/2), int32(size(rarng{1},2)/2)) = tot_flux;
 
         if (debug > 4)
             figure ;
@@ -212,6 +232,7 @@ function [mod, rarng, decrng, modimg] = readlofarskymodel (fname, freq, res, ext
             title (sprintf ('Model of %s', mod(patch).name{1}));
         end;
         fprintf (1, '..Done.\n Total flux: %f.\n', tot_flux);
+        mod(patch).total_flux = tot_flux;
     end;
 end;
 end
@@ -224,18 +245,38 @@ end
 % tobs_jd : Time of observation in JD
 % pk_flux : Peak flux of component, Jy.
 % sigr/d  : Gaussian width in RA and DEC, in radians.
-% pa      : Position angle in deg, in radians.
+% pa      : Position angle in radians.
 % res     : Resolution at which the Gaussian is to be constructed, in radians.
 %
 % Returns:
 %   ragrid,decgrid: The positions of all parts of the component in radians    
 function [ragrid, decgrid, flux] = gengaussiansrc (ra_cen, dec_cen, epoch, pk_flux, sigr, sigd, pa, res)
 
+    pa = pa * pi/180; % convert to rad.
     extent = 3; % Extent of gaussian in sigma units.
     % Create a grid of points with resolution res radians, to cover the gaussian
     rarng = ra_cen + [-extent*sigr:res:extent*sigr];
     decrng = dec_cen + [-extent*sigd:res:extent*sigd];
     [ragrid, decgrid] = meshgrid (rarng, decrng);
-    flux = pk_flux * exp (-( (ragrid-ra_cen).^2/(2*sigr^2) + (decgrid-dec_cen).^2/(2*sigd^2) ));
+
+    a =  cos(pa)^2/(2*sigr^2) + sin(pa)^2/(2*sigd^2);
+    b = -sin(2*pa)/(4*sigr^2) + sin(2*pa)/(4*sigd^2);
+    c =  sin(pa)^2/(2*sigr^2) + cos(pa)^2/(2*sigd^2);
+
+    flux = pk_flux*exp( - (a*(ragrid-ra_cen).^2 - 2*b*(ragrid-ra_cen).*(decgrid-dec_cen) + c*(decgrid-dec_cen).^2)) ;
+
+    % surf(ragrid, decgrid, flux);shading interp;view(-36,36)
     % return ragrid, decgrid, flux;
 end
+
+%%% Original gaussian generation function.
+%function [ragrid, decgrid, flux] = gengaussiansrc (ra_cen, dec_cen, epoch, pk_flux, sigr, sigd, pa, res)
+%
+%    extent = 3; % Extent of gaussian in sigma units.
+%    % Create a grid of points with resolution res radians, to cover the gaussian
+%    rarng = ra_cen + [-extent*sigr:res:extent*sigr];
+%    decrng = dec_cen + [-extent*sigd:res:extent*sigd];
+%    [ragrid, decgrid] = meshgrid (rarng, decrng);
+%    flux = pk_flux * exp (-( (ragrid-ra_cen).^2/(2*sigr^2) + (decgrid-dec_cen).^2/(2*sigd^2) ));
+%    % return ragrid, decgrid, flux;
+%end

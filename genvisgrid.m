@@ -186,7 +186,7 @@ function [gridvis, gridviscnt, padgridrng, kern] = genvisgrid (acc, u, v, parm, 
 
 
 		% Deal with the autocorrelations explicitly, else they are set to 0 and lost.
-        ac_ind = (u == 0 && v == 0)
+        ac_ind = (u == 0 & v == 0);
 		gridvis(ac_ind) = gridvis(ac_ind) + ampl (ac_ind);
 
         lin_ind_ll = sub2ind (size (gridvis), uidxl, vidxl);

@@ -117,6 +117,17 @@ function [currsol] = pelican_sunAteamsub (acc, t_obs, ...
         % a flux associated with each position. The resolution and extent 
         % of the grid can be specified.
 
+        % Generate the skymodel, the generated images are available in modimg.
+        res = 10; % Hardcoded resolution (arcsec) for gaussian model building.
+        extent = 4200; % Extent of model sources to be modelled.
+        [calim.mod, calim.rarng, calim.decrng, calim.modimg, calim.modnormimg] = readlofarskymodel ('A-Team_4.sky',  freq, res, extent, 0);
+        calim.ncomp2src = []; % Number of valid components per model source.
+
+        for src = 1:length (calim.modimg)
+            calim.val_comp{src} = find (calim.modnormimg{src}(:) ~= 0); % Use only non-zero components for modeling.
+            calim.ncomp2src(src) = length (calim.val_comp{src});
+        end;
+
         
  	    % Calibration stopping conditions
    	    calim.diffstop = 1e-3;         % difference bet. calib. solutions
@@ -149,8 +160,8 @@ function [currsol] = pelican_sunAteamsub (acc, t_obs, ...
 			gparm.type = 'pillbox';
 			gparm.lim = 0;
 			gparm.duv = 0.5; 
-			gparm.Nuv = 500;
-			gparm.uvpad = 512; 
+			gparm.Nuv = 2000;
+			gparm.uvpad = 2048; 
 			gparm.fft = 1;
 
 			modsky = figure;
@@ -324,11 +335,54 @@ function [currsol] = pelican_sunAteamsub (acc, t_obs, ...
     
     % Use updated source positions to improve calibration
     % tic
+
+    % Now the model visibilities corresponding to the detailed src models are 
+    % available in A_lofarmodel.
+    fprintf (1, 'pelican_sunAteamsub: Creating vis for visible patches\n');
+    pos = []; 
+    for patch = 1:length (calim.rarng) % For every patch in the model.
+
+        [decgrid, ragrid] = meshgrid (calim.rarng{patch}, calim.decrng{patch});
+
+        pos_patch  =  radectoITRF (ragrid(calim.val_comp{patch}), decgrid(calim.val_comp{patch}), true, t_obs);
+        simsky_up = pos_patch * rodata.normal > 0;
+        if (sum (simsky_up) == 0)
+            fprintf (2, ...
+             'genlofarmodelsky: %s patch not visible for time %d.\n', ...
+                calim.mod(patch).name{1}, t_obs);
+            continue;
+        end;
+        pos = [pos; pos_patch];
+
+    
+%        if (debug > 4)
+%            figure ;
+%            imagesc (calim.rarng{patch}, calim.decrng{patch}, calim.modimg{patch}); colorbar;
+%            xlabel ('DEC (rad)');
+%            ylabel ('RA  (rad)');
+%            title (sprintf ('Model of %s', calim.mod(patch).name{1}));
+%        end;
+
+        [l,m] = radectolm (calim.mod(patch).meanra, calim.mod(patch).meandec, t_obs, rodata.lon*180/pi, ...
+                                rodata.lat*180/pi, false);
+       fprintf (1, 'genlofarcalim.modelsky: %s at (ra/dec): [ %7.4f/%7.4f], (l/m): [%7.4f/%7.4f], flux: %f accumulated.\n', ...
+                calim.mod(patch).name{1}, calim.mod(patch).meanra, calim.mod(patch).meandec, l, m, calim.mod(patch).total_flux);
+    end;
+	A_lofarmodel = exp(-(2*pi*1i*freq/rodata.C)*(rodata.posITRF_fl*pos.'));
+
+
+    
     A = exp(-(2 * pi * 1i * freq / rodata.C)*(rodata.posITRF_fl * srcposhat.'));
     %[ghat, sigmas2, Sigman2] = cal_ext_stefcal(acc, A, sigmas1(sel), ...
     %							squeeze(abs(Sigman1)) > 0, calim);
-    [sol, stefsol] = cal_ext_stefcal(acc, A, sigmas1(sel), ...
-    							squeeze(abs(Sigman1)) > 0, calim.uvflag, calim);
+    % Use with regular A
+    % [sol, stefsol] = cal_ext_stefcal(acc, A, sigmas1(sel), ...
+    % 							squeeze(abs(Sigman1)) > 0, calim.uvflag, calim);
+
+    % Use with A_lofarmodel
+    [sol, stefsol] = cal_ext_stefcal(acc, A_lofarmodel, sigmas1(sel), ...
+      							squeeze(abs(Sigman1)) > 0, calim.uvflag, calim, 0, sel);
+
 	% Need to make a temporary storage in sol,to prevent cal_ext.. from 
 	% overwriting previous solution contents..
 	currsol.flagant = flagant;
@@ -411,8 +465,8 @@ function [currsol] = pelican_sunAteamsub (acc, t_obs, ...
 			gparm.type = 'pillbox';
 			gparm.lim = 0;
 			gparm.duv = 0.5; 
-			gparm.Nuv = 500;
-			gparm.uvpad = 512; 
+			gparm.Nuv = 2000;
+			gparm.uvpad = 2048; 
 			gparm.fft = 1;
         end;
         % Uncalibrated image
@@ -421,10 +475,9 @@ function [currsol] = pelican_sunAteamsub (acc, t_obs, ...
 									gparm, [], [], t_obs, freq, 0);
 
         figure (modsky)
-		mask = zeros (size (calmap));
+		mask = zeros (size (uncalmap));
 		mask (meshgrid (l).^2 + meshgrid(m).'.^2 < 0.9) = 1;
         imagesc (l, m, real (uncalmap .* mask));
-        pause ();
         
 		% Image model sky: FOR DEBUG!
 	    % flagant = [1:12, 51, 206]; 
@@ -447,7 +500,7 @@ function [currsol] = pelican_sunAteamsub (acc, t_obs, ...
 
 		title (sprintf ('Calibrated visibilities before model subtraction. Time: %f', t_obs_mjdsec));
 	
-		acc_taper = accsubAteam(:) .* calim.mask_fl;
+		acc_taper = accsubAteam .* calim.mask_fl;
 	    [radecmap, calmap, calvis] = ... 
 			fft_imager_sjw_radec (acc_taper(:), uloc_flag(:), vloc_flag(:), ... 
 									gparm, [], [], t_obs, freq, 0);

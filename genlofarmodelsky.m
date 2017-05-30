@@ -1,4 +1,4 @@
-% Script to generate a model sky based on a LOFAR sky model, given a time and
+%Script to generate a model sky based on a LOFAR sky model, given a time and
 % frequency specification.
 % pep/20Feb17
 
@@ -11,7 +11,7 @@
 % sigman : Noise contribution to visibilities.
 %antgains: Complex gains associated with each antenna.
 % abovejy: Flux cutoff of the population of sources in the model sky.
-% debug  : Debug level of the script.
+% deb  : Debug level of the script.
 
 % Returns:
 % simsky_acc: simulated sky visibilities.
@@ -22,7 +22,7 @@
 
 % function [simsky_acc, simsky_A,  simsky_up] = ... 
 function genlofarmodelsky (t_obs, freq, nant, skymodfname, rodata, ...
-					calim, sigman, antgains,  abovejy, debug)
+					calim, sigman, antgains,  abovejy, deb)
 
     res = 10; % Hardcoded resolution (arcsec) for gaussian model building.
     extent = 4200; % Extent of model sources to be modelled.
@@ -104,10 +104,11 @@ function genlofarmodelsky (t_obs, freq, nant, skymodfname, rodata, ...
 	t_obs_mjdsec = t_obs;
     tobs_jd = t_obs/86400. + 2400000.5; 
 
-    simsky_acc = zeros (nant);
+    simsky_acc = zeros (rem_ants);
 
     fprintf (1, 'genlofarmodelsky: Creating vis for visible patches\n');
     for patch = 1:length (rarng) % For every patch in the model.
+    % for patch = 2:length (rarng) % For every patch in the model.
         pos  = radectoITRF (rarng{patch}, decrng{patch}, true, tobs_jd);
         simsky_up = pos * rodata.normal > 0;
         if (sum (simsky_up) == 0)
@@ -122,7 +123,7 @@ function genlofarmodelsky (t_obs, freq, nant, skymodfname, rodata, ...
 		    % 		simsky_A' * diag (antgains)' + sigman;
 	    simsky_acc = simsky_acc +  simsky_A*modimg{patch}*simsky_A';
     
-        if (debug > 4)
+        if (deb > 4)
             figure ;
             imagesc (rarng{patch}, decrng{patch}, modimg{patch}); colorbar;
             xlabel ('DEC (rad)');
@@ -130,14 +131,14 @@ function genlofarmodelsky (t_obs, freq, nant, skymodfname, rodata, ...
             title (sprintf ('Model of %s', mod(patch).name{1}));
         end;
 
-        [l,m] = radectolm (mod(patch).meanra, mod(patch).meandec, tobs_jd, rodata.lon, ...
-                                rodata.lat, false);
-       fprintf (1, 'genlofarmodelsky: %s at (ra/dec): [ %7.4f/%7.4f], (l/m): [%7.4f/%7.4f] accumulated.\n', ...
-                mod(patch).name{1}, mod(patch).meanra, mod(patch).meandec, l, m);
+        [l,m] = radectolm (mod(patch).meanra, mod(patch).meandec, tobs_jd, rodata.lon*180/pi, ...
+                                rodata.lat*180/pi, false);
+       fprintf (1, 'genlofarmodelsky: %s at (ra/dec): [ %7.4f/%7.4f], (l/m): [%7.4f/%7.4f], flux: %f accumulated.\n', ...
+                mod(patch).name{1}, mod(patch).meanra, mod(patch).meandec, l, m, mod(patch).total_flux);
     end;
 
 
-	if (debug > 3)
+	if (deb > 3)
     	load srclist3CR;
     	rodata.catalog = srclist3CR;  		% Sky catalog to use.
        	rodata.srcsel =  [324, 283, 88, 179]; 
@@ -151,9 +152,9 @@ function genlofarmodelsky (t_obs, freq, nant, skymodfname, rodata, ...
                             rodata.lat*180/pi, true);
         fprintf (1, '<-- A-team 3C positions: \n');
         for ind=1:length(rasrc)
-            fprintf (1, '    <-- %s: %.5f, %.4f, l,m: %.4f, %.4f\n', ...
+            fprintf (1, '    <-- %s: %.5f, %.4f, l,m: %.4f, %.4f,  flux:%f\n', ...
             rodata.catalog(rodata.srcsel(ind)).name, rasrc(ind), decsrc(ind),...
-            l3c(ind), m3c(ind)); 
+            l3c(ind), m3c(ind), rodata.catalog(rodata.srcsel(ind)).flux); 
         end;
     	A = exp(-(2 * pi * 1i * freq / rodata.C) * ... 
 				(rodata.posITRF_fl * srcpos0.')); 
@@ -184,10 +185,12 @@ function genlofarmodelsky (t_obs, freq, nant, skymodfname, rodata, ...
 
         mask = meshgrid(l).^2 + meshgrid(m).'.^2 < 1;
 		figure;
-		imagesc (l, m, abs(calmap).*mask);
+		%imagesc (l, m, 10*log10(abs(calmap)).*mask);
+		% imagesc (l, m, abs(calmap).*mask);
+		imagesc (l, m, abs(calmap));
 		colorbar;
 		title (sprintf ('Recovered Simulated sky. %s, Freq: %.2f', ... 
-			   datestr (mjdsec2datenum (t_obs_mjdsec)), freq));
+	       datestr (mjdsec2datenum (t_obs_mjdsec)), freq));
 	    axis equal
    		axis tight
    		set (gca, 'YDir', 'Normal'); % To match orientation with station images
@@ -196,10 +199,10 @@ function genlofarmodelsky (t_obs, freq, nant, skymodfname, rodata, ...
     	ylabel('South $\leftarrow$ m $\rightarrow$ North', 'interpreter', 'latex');
     	xlabel('East $\leftarrow$ l $\rightarrow$ West', 'interpreter', 'latex');
 		figure;
-		imagesc (l, l, abs(calmap_3c));
+		imagesc (l, l, abs(calmap_3c).*mask);
 		colorbar;
 		title (sprintf ('Recovered 3C Simulated sky. %s, Freq: %.2f', ... 
-			   datestr (mjdsec2datenum (t_obs_mjdsec)), freq));
+	     		   datestr (mjdsec2datenum (t_obs_mjdsec)), freq));
 	    axis equal
    		axis tight
    		set (gca, 'YDir', 'Normal'); % To match orientation with station images

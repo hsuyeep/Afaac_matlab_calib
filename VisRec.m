@@ -33,7 +33,7 @@ classdef VisRec < handle
         acm_yy      = [];
         dt          = 0;
 
-	end; % End of properties.
+	end % End of properties.
 
 	methods 
 
@@ -56,7 +56,7 @@ classdef VisRec < handle
 			if (isfield (info, 'nchan' ) == 0) obj.nchan =  63; else obj.nchan = info.nchan; end;
 			if (isfield (info, 'npol'  ) == 0) obj.npol  =   2; else obj.npol = info.npol; end;
 			if (isfield (info, 'nelem' ) == 0) obj.nelem = 288; else obj.nelem = info.nelem; end;
-			if (isfield (info, 'nbline') == 0) obj.nbline= 41616; else obj.nbline = info.nbline; end;
+            obj.nbline = obj.nelem * (obj.nelem+1)/2;
 			if (isfield (info, 'freqflag') == 0) obj.freqflag= 0; else obj.freqflag = info.freqflag; end;
 			if (isfield (info, 'timeflag') == 0) obj.timeflag= 0; else obj.timeflag = info.timeflag; end;
 			if (isfield (info, 'freq') == 0) obj.freq = 0; else obj.freq = info.freq; end;
@@ -119,14 +119,13 @@ classdef VisRec < handle
 				obj.recbytesize = 512 + obj.datfloatsize*4; % Note: In bytes
 
             % 0x4141525446414143, calibrated visibilities magic number.
-            elseif (meta.magic == 0x41415254) % Looking at first 32 bits only
-            % elseif (meta.magic == 0x4141525446414143)
+            elseif (meta.magic == 1094799956) % Looking at first 32 bits only
+            % elseif (meta.magic == 0x41415254 0x46414143)
                 fprintf (1, '<-- Found Magic number 0x%x in first record.\n',meta.magic);
                 fprintf (1, '<-- File contains CALIBRATED Correlations.\n');
                 obj.tfilestart = meta.tstart;
                 obj.trecstart = meta.tstart;
-                fprintf (1, '<-- First record start time: %s.\n', datestr
-(mjdsec2datenum(obj.tfilestart)));
+                fprintf (1, '<-- First record start time: %s.\n', datestr(mjdsec2datenum(obj.tfilestart)));
                 if (isfield (info, 'nchan')) obj.nchan = info.nchan; end;
                 if (isfield (info, 'nelem')) obj.nelem = info.nelem; end;
                 if (isfield (info, 'npol')) obj.npol  = info.npol; end;
@@ -193,7 +192,7 @@ classdef VisRec < handle
             if (meta.magic == 999878658)
                 meta.tstart = unixtime2mjdsec (hdr(2));
                 meta.tend   = unixtime2mjdsec (hdr(3));
-            elseif (meta.magic == 0x41415254)
+            elseif (meta.magic == 1094799956) % 0x41415254
                 meta.tstart = unixtime2mjdsec (hdr(3));
                 meta.tend   = unixtime2mjdsec (hdr(4));
             end;
@@ -345,7 +344,8 @@ classdef VisRec < handle
 
             % Create metadata hdr in correct format
             % hdr.magic       = uint64 (0x4141525446414143);
-            hdr.magic       = uint64 (0x4141525400000000, 'b');
+            % hdr.magic       = uint64 (0x4141525400000000, 'b');
+            hdr.magic       = uint64 (1094799956);
             hdr.start_time  = obj.trecstart;
             hdr.end_time    = obj.trecend;
             hdr.subband     = int32 (obj.freq/195312.5);

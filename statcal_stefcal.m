@@ -113,7 +113,7 @@ function [cal, sigmas, Sigman, flux] = statcal_stefcal(acc, t_obs, freq, ...
 		if (calim.debug > 1)
 			fprintf (1, 'statcal_stefcal: Carrying out cal_ext.\n');
 		end;
-	    [sol, stefsol] = cal_ext_stefcal(Rhat, A, flux, (1-calim.intap_fl), uvflag, calim);
+	    [sol, stefsol] = cal_ext_stefcal(Rhat, A, flux, (1-calim.intap_fl), uvflag, calim, 1, up);
 	    
 %	    cal(idx, :) = conj(1./ghat);
 %	    sigmas(idx, up) = sigmahat; % Returning sigmahat

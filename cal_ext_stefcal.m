@@ -60,9 +60,11 @@
 %  Modified to return a structured gain solution, including stefcal gains.
 
 % function [g, sigmas, Sigma_n] = cal_ext_stefcal(Rhat, A, sigmas, mask, calim)
-function [sol, sol_gainsolv] = cal_ext_stefcal(Rhat, A, sigmas, mask, uvflag, calim)
+function [sol, sol_gainsolv] = cal_ext_stefcal(Rhat, A, sigmas, mask, uvflag, calim, ptsrc, up)
 	% parameters
-	[Nelem, Nsrc] = size(A);
+	Nelem = size(A,1);
+    Nsrc  = length (sigmas);
+    Ndir  = size (calim.ncomp2src);
 	
 	% initialization
 	ghat = zeros(Nelem, calim.maxiter+1);    % Scalar gain
@@ -103,7 +105,25 @@ function [sol, sol_gainsolv] = cal_ext_stefcal(Rhat, A, sigmas, mask, uvflag, ca
 		%------------ Per sensor gain estimation -------------
 	    % gain estimation using StefCal - experimental
 		%--------- Comment this part to get to the full WALS solver --------%
- 	    sol_gainsolv = gainsolv (1e-6, (A * diag(sigmahat(:, iter-1)) * A')...
+
+        % Assuming same number of components per model source.
+        % srcflux = reshape (repmat (sigmahat(:, iter-1), [1,Ndir])', [1,Ndir*Nsrc]);
+
+        srcflux = [];
+        if (ptsrc == 0)
+            for src = 1:length (up)
+                if (up(src) == 1)
+                    valid_components = calim.val_comp{src};
+                    apparentmodelflux = sigmahat(src, iter-1) .* calim.modnormimg{src}(valid_components);
+                    srcflux = [srcflux; apparentmodelflux];
+                end;
+            end;
+        else
+            srcflux = sigmahat (:, iter-1);
+        end;
+
+        Rmodel = (A * diag(srcflux) * A'); 
+ 	    sol_gainsolv = gainsolv (1e-6, Rmodel ...
  			.* vismask, Rhat .* vismask, ghat(:, iter-1),...  
 			calim.maxiter_gainsolv, calim.debug);
 		total_stefcal_iters = total_stefcal_iters + sol_gainsolv.iter;
@@ -131,7 +151,20 @@ function [sol, sol_gainsolv] = cal_ext_stefcal(Rhat, A, sigmas, mask, uvflag, ca
 		% 			iter, rank(Rhat), rcond(Rhat));
 	    invR = inv(Rhat);
         
-	    GA = diag(ghat(:, iter)) * A; % new line, use normalized G
+        diravgA = [];
+        if (ptsrc == 0)
+            cnt = 1;
+            for src = 1:Nsrc
+                diravgA = [diravgA; mean (A(:,cnt:calim.ncomp2src(src), 2))];
+                cnt = cnt + calim.ncomp2src(src);
+            end;
+        else
+            diravgA = A;
+        end;
+        
+        % Used if the number of directions is exactly the same for all sources.
+        % diravgA = squeeze(mean (reshape (A, [Nelem, Ndir, Nsrc]), 2));
+	    GA = diag(ghat(:, iter)) * diravgA; % new line, use normalized G
 %	    sigmahat(:, iter) = real(inv(abs(conj(GA' * invR * GA)).^2) ... 
 %  						* diag(GA' * invR * (Rhat - Sigma_n) * invR * GA));
 %%  						* diag(GA' * invR * (Rhat .* (1-mask)) * invR * GA));
